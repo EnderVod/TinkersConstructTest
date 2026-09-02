@@ -1,8 +1,6 @@
 package slimeknights.tconstruct.gadgets.entity;
 
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
@@ -10,15 +8,12 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Explosion.BlockInteraction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
+import net.neoforged.neoforge.entity.IEntityWithComplexSpawn;
 import slimeknights.tconstruct.gadgets.TinkerGadgets;
-
-import javax.annotation.Nonnull;
 
 /** @deprecated use {@link slimeknights.tconstruct.tools.entity.ThrownShuriken} */
 @Deprecated
-public class EFLNEntity extends ThrowableItemProjectile implements IEntityAdditionalSpawnData {
+public class EFLNEntity extends ThrowableItemProjectile implements IEntityWithComplexSpawn {
   public EFLNEntity(EntityType<? extends EFLNEntity> type, Level level) {
     super(type, level);
   }
@@ -46,18 +41,12 @@ public class EFLNEntity extends ThrowableItemProjectile implements IEntityAdditi
   }
 
   @Override
-  public void writeSpawnData(FriendlyByteBuf buffer) {
+  public void writeSpawnData(RegistryFriendlyByteBuf buffer) {
     buffer.writeItem(this.getItemRaw());
   }
 
   @Override
-  public void readSpawnData(FriendlyByteBuf additionalData) {
+  public void readSpawnData(RegistryFriendlyByteBuf additionalData) {
     this.setItem(additionalData.readItem());
-  }
-
-  @Nonnull
-  @Override
-  public Packet<ClientGamePacketListener> getAddEntityPacket() {
-    return NetworkHooks.getEntitySpawningPacket(this);
   }
 }
