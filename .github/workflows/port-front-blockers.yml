@@ -34,6 +34,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           root = Path('src/main/java')
           replacements = {
@@ -42,8 +43,6 @@ jobs:
               'import net.minecraftforge.fml.ModLoader;': 'import net.neoforged.fml.ModLoader;',
               'import net.minecraftforge.fml.event.IModBusEvent;': 'import net.neoforged.fml.event.IModBusEvent;',
               'import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;': 'import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;',
-              # The port already contains a local legacy LazyOptional bridge under net.minecraftforge.
-              # A previous namespace sweep accidentally pointed these imports at a nonexistent NeoForge class.
               'import net.neoforged.neoforge.common.util.LazyOptional;': 'import net.minecraftforge.common.util.LazyOptional;',
           }
 
@@ -60,105 +59,77 @@ jobs:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          # ModifierManager: NeoForge conditions are codec-based; Mantle already exposes the bridge.
           modifier = root / 'slimeknights/tconstruct/library/modifiers/ModifierManager.java'
-          text = modifier.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraftforge.common.crafting.CraftingHelper;\n', '')
+          original = modifier.read_text(encoding='utf-8')
+          text = original.replace('import net.minecraftforge.common.crafting.CraftingHelper;\n', '')
           if 'import slimeknights.mantle.recipe.condition.ConditionHelper;' not in text:
               text = text.replace('import slimeknights.mantle.data.loadable.field.ContextKey;\n', 'import slimeknights.mantle.data.loadable.field.ContextKey;\nimport slimeknights.mantle.recipe.condition.ConditionHelper;\n')
           text = text.replace('ModLoader.get().runEventGenerator(ModifierRegistrationEvent::new);', 'ModLoader.runEventGenerator(ModifierRegistrationEvent::new);')
           text = text.replace('CraftingHelper.getCondition(GsonHelper.getAsJsonObject(json, "condition"))', 'ConditionHelper.deserialize(GsonHelper.getAsJsonObject(json, "condition"))')
-          if text != modifier.read_text(encoding='utf-8'):
+          if text != original:
               modifier.write_text(text, encoding='utf-8')
               if str(modifier) not in changed:
                   changed.append(str(modifier))
 
-          # Core compile intentionally excludes the unported datagen packages in build.gradle.
-          # Keep runtime modules from compile-time linking against those excluded providers until datagen is ported.
-          commons = root / 'slimeknights/tconstruct/shared/TinkerCommons.java'
-          text = commons.read_text(encoding='utf-8')
-          commons_imports = [
-              'import net.minecraft.data.DataGenerator;\n',
-              'import net.minecraft.data.PackOutput;\n',
-              'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n',
-              'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-              'import slimeknights.tconstruct.common.data.model.ModelSpriteProvider;\n',
-              'import slimeknights.tconstruct.common.data.model.TinkerBlockStateProvider;\n',
-              'import slimeknights.tconstruct.common.data.model.TinkerItemModelProvider;\n',
-              'import slimeknights.tconstruct.common.data.model.TinkerSpriteSourceProvider;\n',
-              'import slimeknights.tconstruct.common.data.render.RenderFluidProvider;\n',
-              'import slimeknights.tconstruct.common.data.render.RenderItemProvider;\n',
-              'import slimeknights.tconstruct.shared.data.CommonRecipeProvider;\n',
-          ]
-          for imp in commons_imports:
-              text = text.replace(imp, '')
-          commons_datagen = '''  @SubscribeEvent
-          void gatherData(final GatherDataEvent event) {
-            DataGenerator generator = event.getGenerator();
-            PackOutput output = generator.getPackOutput();
-            ExistingFileHelper existingFileHelper = event.getExistingFileHelper();
-            boolean client = event.includeClient();
-            generator.addProvider(client, new ModelSpriteProvider(output, existingFileHelper));
-            generator.addProvider(client, new TinkerSpriteSourceProvider(output, existingFileHelper));
-            generator.addProvider(client, new TinkerItemModelProvider(output, existingFileHelper));
-            generator.addProvider(client, new TinkerBlockStateProvider(output, existingFileHelper));
-            generator.addProvider(client, new RenderFluidProvider(output));
-            generator.addProvider(client, new RenderItemProvider(output));
-            generator.addProvider(event.includeServer(), new CommonRecipeProvider(output));
-          }
+          def isolate_datagen(path, imports):
+              original = path.read_text(encoding='utf-8')
+              text = original
+              for imp in imports:
+                  text = text.replace(imp, '')
+              pattern = re.compile(r'\n  @SubscribeEvent\n  void gatherData\(final GatherDataEvent event\) \{\n.*?\n  \}\n', re.S)
+              text, count = pattern.subn('\n', text, count=1)
+              if 'void gatherData(final GatherDataEvent event)' in original and count != 1:
+                  raise SystemExit(f'Failed to isolate gatherData safely in {path}')
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
 
-          '''
-          # Dedent the literal exactly to source indentation.
-          commons_datagen = '\n'.join(line[10:] if line.startswith('          ') else line for line in commons_datagen.splitlines()) + '\n'
-          text = text.replace(commons_datagen, '')
-          if text != commons.read_text(encoding='utf-8'):
-              commons.write_text(text, encoding='utf-8')
-              changed.append(str(commons))
+          isolate_datagen(
+              root / 'slimeknights/tconstruct/shared/TinkerCommons.java',
+              [
+                  'import net.minecraft.data.DataGenerator;\n',
+                  'import net.minecraft.data.PackOutput;\n',
+                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n',
+                  'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.tconstruct.common.data.model.ModelSpriteProvider;\n',
+                  'import slimeknights.tconstruct.common.data.model.TinkerBlockStateProvider;\n',
+                  'import slimeknights.tconstruct.common.data.model.TinkerItemModelProvider;\n',
+                  'import slimeknights.tconstruct.common.data.model.TinkerSpriteSourceProvider;\n',
+                  'import slimeknights.tconstruct.common.data.render.RenderFluidProvider;\n',
+                  'import slimeknights.tconstruct.common.data.render.RenderItemProvider;\n',
+                  'import slimeknights.tconstruct.shared.data.CommonRecipeProvider;\n',
+              ]
+          )
 
-          fluids = root / 'slimeknights/tconstruct/fluids/TinkerFluids.java'
-          text = fluids.read_text(encoding='utf-8')
-          fluid_imports = [
-              'import net.minecraft.data.DataGenerator;\n',
-              'import net.minecraft.data.PackOutput;\n',
-              'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-              'import slimeknights.mantle.fluid.texture.FluidTextureCameraProvider;\n',
-              'import slimeknights.tconstruct.fluids.data.FluidBlockstateModelProvider;\n',
-              'import slimeknights.tconstruct.fluids.data.FluidBucketModelProvider;\n',
-              'import slimeknights.tconstruct.fluids.data.FluidTextureProvider;\n',
-              'import slimeknights.tconstruct.fluids.data.FluidTooltipProvider;\n',
-          ]
-          for imp in fluid_imports:
-              text = text.replace(imp, '')
-          fluids_datagen = '''  @SubscribeEvent
-          void gatherData(final GatherDataEvent event) {
-            DataGenerator generator = event.getGenerator();
-            PackOutput packOutput = generator.getPackOutput();
-            boolean client = event.includeClient();
-            generator.addProvider(client, new FluidTooltipProvider(packOutput));
-            FluidTextureProvider textureProvider = new FluidTextureProvider(packOutput);
-            generator.addProvider(client, textureProvider);
-            generator.addProvider(client, new FluidTextureCameraProvider(packOutput, event.getExistingFileHelper(), textureProvider));
-            generator.addProvider(client, new FluidBucketModelProvider(packOutput, TConstruct.MOD_ID));
-            generator.addProvider(client, new FluidBlockstateModelProvider(packOutput, TConstruct.MOD_ID));
-          }
+          isolate_datagen(
+              root / 'slimeknights/tconstruct/fluids/TinkerFluids.java',
+              [
+                  'import net.minecraft.data.DataGenerator;\n',
+                  'import net.minecraft.data.PackOutput;\n',
+                  'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.mantle.fluid.texture.FluidTextureCameraProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidBlockstateModelProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidBucketModelProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidTextureProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidTooltipProvider;\n',
+              ]
+          )
 
-          '''
-          fluids_datagen = '\n'.join(line[10:] if line.startswith('          ') else line for line in fluids_datagen.splitlines()) + '\n'
-          text = text.replace(fluids_datagen, '')
-          if text != fluids.read_text(encoding='utf-8'):
-              fluids.write_text(text, encoding='utf-8')
-              changed.append(str(fluids))
-
-          print(f'Updated {len(changed)} Java files')
-          for path in changed:
+          print(f'Updated {len(set(changed))} Java files')
+          for path in sorted(set(changed)):
               print(path)
           PY
 
       - name: Verify isolation targets
         run: |
-          ! grep -R "net.neoforged.neoforge.common.util.LazyOptional" -n src/main/java
-          ! grep -n "void gatherData(final GatherDataEvent" src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          ! grep -n "void gatherData(final GatherDataEvent" src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          if grep -R "net.neoforged.neoforge.common.util.LazyOptional" -n src/main/java; then
+            echo 'Found stale NeoForge LazyOptional imports.'
+            exit 1
+          fi
+          if grep -n "void gatherData(final GatherDataEvent" src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java; then
+            echo 'Datagen handler isolation did not complete.'
+            exit 1
+          fi
 
       - name: Commit targeted migration
         run: |
