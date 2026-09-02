@@ -10,10 +10,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.templates.EmptyFluidHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.capability.templates.EmptyFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import slimeknights.mantle.fluid.FluidTransferHelper;
 import slimeknights.mantle.fluid.transfer.IFluidContainerTransfer.TransferDirection;
 import slimeknights.mantle.fluid.transfer.IFluidContainerTransfer.TransferResult;
@@ -37,7 +37,6 @@ public class AlloyerContainerMenu extends TriggeringBaseContainerMenu<AlloyerBlo
   public AlloyerContainerMenu(int id, @Nullable Inventory inv, @Nullable AlloyerBlockEntity alloyer) {
     super(TinkerSmeltery.alloyerContainer.get(), id, inv, alloyer);
 
-    // create slots
     if (alloyer != null) {
       // refresh cache of neighboring tanks
       Level world = alloyer.getLevel();
@@ -53,12 +52,10 @@ public class AlloyerContainerMenu extends TriggeringBaseContainerMenu<AlloyerBlo
       // add fuel slot if present
       BlockPos down = alloyer.getBlockPos().below();
       if (world != null && world.getBlockState(down).is(TinkerTags.Blocks.FUEL_TANKS)) {
-        BlockEntity te = world.getBlockEntity(down);
-        if (te != null) {
-          hasFuelSlot = te.getCapability(ForgeCapabilities.ITEM_HANDLER).filter(handler -> {
-            this.addSlot(new SmartItemHandlerSlot(handler, 0, 151, 32));
-            return true;
-          }).isPresent();
+        IItemHandler handler = world.getCapability(Capabilities.ItemHandler.BLOCK, down, null);
+        if (handler != null) {
+          this.addSlot(new SmartItemHandlerSlot(handler, 0, 151, 32));
+          hasFuelSlot = true;
         }
       }
 
@@ -90,9 +87,7 @@ public class AlloyerContainerMenu extends TriggeringBaseContainerMenu<AlloyerBlo
           // index 2 and onwards is a handler tank
           handler = tile.getAlloyTank().getFluidHandler(index - 2);
         }
-        // invalid index would make the handler empty through the alloy tank
         if (handler != EmptyFluidHandler.INSTANCE) {
-          // even numbers are fill, odd are drain
           TransferResult result = FluidTransferHelper.interactWithStack(handler, held, (id & 1) == 0 ? TransferDirection.FILL_ITEM : TransferDirection.EMPTY_ITEM);
           setCarried(FluidTransferHelper.handleUIResult(player, held, result));
         }
