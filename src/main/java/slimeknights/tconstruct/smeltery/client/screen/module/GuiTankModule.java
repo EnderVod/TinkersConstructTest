@@ -9,8 +9,8 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import slimeknights.mantle.Mantle;
 import slimeknights.mantle.fluid.tooltip.FluidTooltipHandler;
 import slimeknights.tconstruct.library.client.GuiUtil;
@@ -107,28 +107,21 @@ public class GuiTankModule implements IScreenWithFluidTank, ClickableTankModule 
    * @param checkY    Mouse Y position, screen relative
    */
   public void highlightHoveredFluid(GuiGraphics graphics, int checkX, int checkY) {
-    // highlight hovered fluid
     if (isHovered(checkX, checkY)) {
       if (horizontal) {
         int fluidWidth = scaleFluid(width);
         int middle = x + fluidWidth;
-
-        // highlight just fluid
         if (checkX <= middle) {
           GuiUtil.renderHighlight(graphics, x, y, fluidWidth, height);
         } else {
-          // or highlight empty
           GuiUtil.renderHighlight(graphics, x + fluidWidth, y, width - fluidWidth, height);
         }
       } else {
         int fluidHeight = scaleFluid(height);
         int middle = y + height - fluidHeight;
-
-        // highlight just fluid
         if (checkY > middle) {
           GuiUtil.renderHighlight(graphics, x, middle, width, fluidHeight);
         } else {
-          // or highlight empty
           GuiUtil.renderHighlight(graphics, x, y, width, height - fluidHeight);
         }
       }
@@ -150,17 +143,13 @@ public class GuiTankModule implements IScreenWithFluidTank, ClickableTankModule 
       int amount = fluid.getAmount();
       int capacity = tank.getTankCapacity(TANK_INDEX);
 
-      // if hovering over the fluid, display with name
       final List<Component> tooltip;
       if (capacity > 0 && isFluidHovered(horizontal ? checkX : checkY)) {
         tooltip = FluidTooltipHandler.getFluidTooltip(fluid);
       } else {
-        // function to call for amounts
         BiConsumer<Integer, List<Component>> formatter = Screen.hasShiftDown()
                                                               ? FluidTooltipHandler.BUCKET_FORMATTER
                                                               : this.formatter;
-
-        // add tooltips
         tooltip = new ArrayList<>();
         tooltip.add(GuiSmelteryTank.TOOLTIP_CAPACITY);
         if (capacity == 0) {
@@ -171,14 +160,12 @@ public class GuiTankModule implements IScreenWithFluidTank, ClickableTankModule 
             tooltip.add(GuiSmelteryTank.TOOLTIP_AVAILABLE);
             formatter.accept(capacity - amount, tooltip);
           }
-          // add shift message
           if (formatter != FluidTooltipHandler.BUCKET_FORMATTER) {
             FluidTooltipHandler.appendShift(tooltip);
           }
         }
       }
 
-      // TODO: renderComponentTooltip->renderTooltip
       graphics.renderComponentTooltip(screen.font, tooltip, mouseX, mouseY);
     }
   }
