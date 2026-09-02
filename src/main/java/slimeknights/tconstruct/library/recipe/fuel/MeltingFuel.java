@@ -7,7 +7,7 @@ import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
-import net.minecraftforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import slimeknights.mantle.data.loadable.field.ContextKey;
 import slimeknights.mantle.data.loadable.primitive.IntLoadable;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
@@ -31,7 +31,6 @@ public class MeltingFuel implements ICustomOutputRecipe<IFluidContainer> {
     IntLoadable.FROM_ONE.requiredField("temperature", MeltingFuel::getTemperature),
     IntLoadable.FROM_ONE.requiredField("rate", MeltingFuel::getRate),
     MeltingFuel::new).validate((fuel, error) -> {
-      // duration is optional (and ignored) for solid
       if (fuel.input != FluidIngredient.EMPTY && fuel.duration == 0) {
         throw error.create("Missing JSON field duration");
       }
@@ -50,53 +49,29 @@ public class MeltingFuel implements ICustomOutputRecipe<IFluidContainer> {
     this.duration = duration;
     this.temperature = temperature;
     this.rate = rate;
-    // register this recipe with the lookup
     MeltingFuelLookup.addFuel(this);
   }
-
-  /* Recipe methods */
 
   @Override
   public boolean matches(IFluidContainer inv, Level worldIn) {
     return matches(inv.getFluid());
   }
 
-  /**
-   * Checks if this fuel matches the given fluid
-   * @param fluid  Fluid
-   * @return  True if matches
-   */
   public boolean matches(Fluid fluid) {
     return input.test(fluid);
   }
 
-  /**
-   * Gets the amount of fluid consumed for the given fluid
-   * @param inv  Inventory instance
-   * @return  Amount of fluid consumed
-   */
   public int getAmount(IFluidContainer inv) {
     return getAmount(inv.getFluid());
   }
 
-  /**
-   * Gets the amount of fluid consumed for the given fluid
-   * @param fluid  Fluid
-   * @return  Amount of fluid consumed
-   */
   public int getAmount(Fluid fluid) {
     return input.getAmount(fluid);
   }
 
-  /**
-   * Gets a list of all valid input fluids for this recipe
-   * @return  Input fluids
-   */
   public List<FluidStack> getInputs() {
     return input.getFluids();
   }
-
-  /* Recipe type methods */
 
   @Override
   public RecipeType<?> getType() {
