@@ -1,40 +1,32 @@
 package slimeknights.tconstruct.gadgets.capability;
 
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.CapabilityManager;
-import net.minecraftforge.common.capabilities.CapabilityToken;
-import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
-import net.minecraftforge.event.AttachCapabilitiesEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import slimeknights.tconstruct.TConstruct;
 
-/** Capability logic */
-public class PiggybackCapability {
-  private static final ResourceLocation ID = TConstruct.getResource("piggyback");
-  public static final Capability<PiggybackHandler> PIGGYBACK = CapabilityManager.get(new CapabilityToken<>() {});
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.WeakHashMap;
+
+/**
+ * Transient piggyback state.
+ * <p>
+ * The original Forge capability never serialized any data; it existed only to keep a passenger-sync helper attached
+ * to players. On NeoForge 1.21 we can model that intent directly without depending on the removed Forge capability API.
+ */
+public final class PiggybackCapability {
+  private static final Map<Player,PiggybackHandler> HANDLERS = Collections.synchronizedMap(new WeakHashMap<>());
 
   private PiggybackCapability() {}
 
-  /** Registers this capability */
-  public static void register() {
-    FMLJavaModLoadingContext.get().getModEventBus().addListener(EventPriority.NORMAL, false, RegisterCapabilitiesEvent.class, PiggybackCapability::register);
-    MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, PiggybackCapability::attachCapability);
-  }
+  /** Kept as a bootstrap hook for compatibility with the existing gadget module. */
+  public static void register() {}
 
-  /** Registers the capability with the event bus */
-  private static void register(RegisterCapabilitiesEvent event) {
-    event.register(PiggybackHandler.class);
-  }
-
-  /** Event listener to attach the capability */
-  private static void attachCapability(AttachCapabilitiesEvent<Entity> event) {
-    if (event.getObject() instanceof Player) {
-      event.addCapability(ID, new PiggybackHandler((Player) event.getObject()));
+  /** Gets the passenger-sync helper when the living entity is a player. */
+  public static Optional<PiggybackHandler> get(LivingEntity entity) {
+    if (entity instanceof Player player) {
+      return Optional.of(HANDLERS.computeIfAbsent(player, PiggybackHandler::new));
     }
+    return Optional.empty();
   }
 }
