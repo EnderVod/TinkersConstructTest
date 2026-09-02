@@ -8,6 +8,8 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import slimeknights.tconstruct.common.TinkerModule;
@@ -92,6 +94,7 @@ public class TConstruct {
     TinkerNetwork.setup();
     TinkerTags.init();
     bus.addListener(TConstruct::commonSetup);
+    bus.addListener(TConstruct::registerCapabilities);
 
     // init client logic without the removed Forge DistExecutor helper
     if (FMLEnvironment.dist == Dist.CLIENT) {
@@ -110,6 +113,11 @@ public class TConstruct {
   static void commonSetup(final FMLCommonSetupEvent event) {
     ToolDefinitionLoader.init();
     StationSlotLayoutLoader.init();
+  }
+
+  /** Registers native NeoForge capabilities for Tinkers block entities. */
+  static void registerCapabilities(final RegisterCapabilitiesEvent event) {
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
   }
 
   /* Utils */
