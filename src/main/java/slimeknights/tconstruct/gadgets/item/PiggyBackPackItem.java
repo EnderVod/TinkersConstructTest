@@ -1,11 +1,10 @@
 package slimeknights.tconstruct.gadgets.item;
 
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Multimap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.EffectRenderingInventoryScreen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,14 +15,13 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.client.extensions.common.IClientMobEffectExtensions;
-import net.minecraftforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import slimeknights.mantle.item.TooltipItem;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerEffect;
@@ -49,7 +47,6 @@ public class PiggyBackPackItem extends TooltipItem {
 
     // need enough space to exchange the chest armor
     if (chestArmor.getItem() != this && playerIn.getInventory().getFreeSlot() == -1) {
-      // not enough inventory space
       return InteractionResult.PASS;
     }
 
@@ -68,19 +65,13 @@ public class PiggyBackPackItem extends TooltipItem {
         stack.split(1);
         chestArmor.grow(1);
       }
-      // successfully picked up an entity
       return InteractionResult.SUCCESS;
     }
 
     return InteractionResult.CONSUME;
   }
 
-  /**
-   * Checks if the passed entity is a vehicle of the other
-   * @param entity           Entity to query
-   * @param possibleVehicle  Possible vehicle of the entity
-   * @return  True if it's a vehicle, or a vehicle of a vehicle
-   */
+  /** Checks if the passed entity is a vehicle of the other, recursively. */
   private static boolean isVehicle(Entity entity, Entity possibleVehicle) {
     for (Entity vehicle = entity.getVehicle(); vehicle != null; vehicle = vehicle.getVehicle()) {
       if (vehicle == possibleVehicle) {
@@ -94,7 +85,6 @@ public class PiggyBackPackItem extends TooltipItem {
     if (player.getCommandSenderWorld().isClientSide || target.getType().is(TinkerTags.EntityTypes.PIGGYBACKPACK_BLACKLIST)) {
       return false;
     }
-    // silly players, clicking on entities they're already carrying or riding
     if (isVehicle(player, target) || isVehicle(target, player)) {
       return false;
     }
@@ -104,15 +94,13 @@ public class PiggyBackPackItem extends TooltipItem {
     while (toRide.isVehicle() && count < MAX_ENTITY_STACK) {
       toRide = toRide.getPassengers().get(0);
       count++;
-      // don't allow more than 1 player, that can easily cause endless loops with riding detection for some reason.
+      // don't allow more than one player in the chain; that can cause riding-detection loops
       if (toRide instanceof Player && target instanceof Player) {
         return false;
       }
     }
 
-    // can only ride one entity each
     if (!toRide.isVehicle() && count < MAX_ENTITY_STACK) {
-      // todo: possibly throw off all passengers of the target
       if (target.startRiding(toRide, true)) {
         if (player instanceof ServerPlayer) {
           TinkerNetwork.getInstance().sendVanillaPacket(player, new ClientboundSetPassengersPacket(player));
@@ -130,18 +118,15 @@ public class PiggyBackPackItem extends TooltipItem {
       count++;
       ridden = ridden.getPassengers().get(0);
     }
-
     return count;
   }
 
   public void matchCarriedEntitiesToCount(LivingEntity player, int maxCount) {
     int count = 0;
-    // get top rider
     Entity ridden = player;
     while (ridden.isVehicle()) {
       ridden = ridden.getPassengers().get(0);
       count++;
-
       if (count > maxCount) {
         ridden.stopRiding();
       }
@@ -152,14 +137,8 @@ public class PiggyBackPackItem extends TooltipItem {
   public void inventoryTick(ItemStack stack, Level worldIn, Entity entityIn, int itemSlot, boolean isSelected) {
     if (entityIn instanceof LivingEntity livingEntity && livingEntity.getItemBySlot(EquipmentSlot.CHEST) == stack && entityIn.isVehicle()) {
       int amplifier = this.getEntitiesCarriedCount(livingEntity) - 1;
-      livingEntity.addEffect(new MobEffectInstance(TinkerGadgets.carryEffect.get(), 2, amplifier, true, false, true));
+      livingEntity.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(TinkerGadgets.carryEffect.get()), 2, amplifier, true, false, true));
     }
-  }
-
-  @SuppressWarnings("deprecation")
-  @Override
-  public Multimap<Attribute, AttributeModifier> getDefaultAttributeModifiers(EquipmentSlot equipmentSlot) {
-    return ImmutableMultimap.of(); // no attributes, the potion effect handles them
   }
 
   public static class CarryPotionEffect extends TinkerEffect {
@@ -167,26 +146,26 @@ public class PiggyBackPackItem extends TooltipItem {
 
     public CarryPotionEffect() {
       super(MobEffectCategory.NEUTRAL, true);
-
-      this.addAttributeModifier(Attributes.MOVEMENT_SPEED, UUID, -0.05D, AttributeModifier.Operation.MULTIPLY_TOTAL);
+      this.addAttributeModifier(Attributes.MOVEMENT_SPEED, UUID, -0.05D, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
     }
 
     @Override
-    public boolean isDurationEffectTick(int duration, int amplifier) {
-      return true; // check every tick
+    public boolean shouldApplyEffectTickThisTick(int duration, int amplifier) {
+      return true;
     }
 
     @Override
-    public void applyEffectTick(@Nonnull LivingEntity livingEntityIn, int p_76394_2_) {
+    public boolean applyEffectTick(@Nonnull LivingEntity livingEntityIn, int amplifier) {
       ItemStack chestArmor = livingEntityIn.getItemBySlot(EquipmentSlot.CHEST);
       if (chestArmor.isEmpty() || chestArmor.getItem() != TinkerGadgets.piggyBackpack.get()) {
         TinkerGadgets.piggyBackpack.get().matchCarriedEntitiesToCount(livingEntityIn, 0);
       } else {
         TinkerGadgets.piggyBackpack.get().matchCarriedEntitiesToCount(livingEntityIn, chestArmor.getCount());
         if (!livingEntityIn.getCommandSenderWorld().isClientSide) {
-          livingEntityIn.getCapability(PiggybackCapability.PIGGYBACK, null).ifPresent(PiggybackHandler::updatePassengers);
+          PiggybackCapability.get(livingEntityIn).ifPresent(PiggybackHandler::updatePassengers);
         }
       }
+      return true;
     }
 
     @Override
@@ -199,13 +178,10 @@ public class PiggyBackPackItem extends TooltipItem {
           TConstruct.getResource("carry_3")
         };
 
-        /** Common logic to render the icon */
+        /** Common logic to render the icon. */
         private void renderIcon(MobEffectInstance effect, GuiGraphics graphics, int x, int y) {
-          int amplifier = effect.getAmplifier();
-          if (amplifier > 2) {
-            amplifier = 2;
-          }
-          graphics.blit(x, y, 0, 18, 18, mc.getMobEffectTextures().getSprite(ICONS[amplifier]));
+          int amplifier = Math.min(effect.getAmplifier(), 2);
+          graphics.blitSprite(ICONS[amplifier], x, y, 18, 18);
         }
 
         @Override
