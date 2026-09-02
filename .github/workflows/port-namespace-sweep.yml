@@ -19,7 +19,7 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Apply one-to-one NeoForge namespace moves
+      - name: Apply verified NeoForge namespace moves
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -39,11 +39,21 @@ jobs:
               'net.minecraftforge.registries.': 'net.neoforged.neoforge.registries.',
               'net.minecraftforge.server.': 'net.neoforged.neoforge.server.',
               'net.minecraftforge.fml.common.Mod.EventBusSubscriber': 'net.neoforged.fml.common.EventBusSubscriber',
+              'net.minecraftforge.fml.common.Mod': 'net.neoforged.fml.common.Mod',
               'net.minecraftforge.fml.event.lifecycle.': 'net.neoforged.fml.event.lifecycle.',
               'net.minecraftforge.fml.loading.': 'net.neoforged.fml.loading.',
               'net.minecraftforge.fml.config.': 'net.neoforged.fml.config.',
               'net.minecraftforge.fml.ModList': 'net.neoforged.fml.ModList',
               'net.minecraftforge.fml.ModContainer': 'net.neoforged.fml.ModContainer',
+              'net.minecraftforge.common.Tags': 'net.neoforged.neoforge.common.Tags',
+              'net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent': 'net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent',
+              'net.minecraftforge.energy.': 'net.neoforged.neoforge.energy.',
+              'net.minecraftforge.entity.': 'net.neoforged.neoforge.entity.',
+              'net.minecraftforge.common.world.': 'net.neoforged.neoforge.common.world.',
+              'net.minecraftforge.common.loot.': 'net.neoforged.neoforge.common.loot.',
+              'net.minecraftforge.common.brewing.': 'net.neoforged.neoforge.common.brewing.',
+              'import net.minecraftforge.common.MinecraftForge;': 'import net.neoforged.neoforge.common.NeoForge;',
+              'MinecraftForge.EVENT_BUS': 'NeoForge.EVENT_BUS',
           }
 
           changed = []
@@ -71,5 +81,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate safe Forge namespaces to NeoForge'
+          git commit -m 'Migrate verified Forge namespaces to NeoForge'
           git push origin HEAD:1.21.1-neoforge
