@@ -30,134 +30,59 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Apply targeted front blocker migrations
+      - name: Apply explosion subscriber and spawn migrations
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           root = Path('src/main/java')
-          replacements = {
-              'import net.minecraftforge.common.crafting.conditions.ICondition;': 'import net.neoforged.neoforge.common.conditions.ICondition;',
-              'import net.minecraftforge.common.crafting.conditions.ICondition.IContext;': 'import net.neoforged.neoforge.common.conditions.ICondition.IContext;',
-              'import net.minecraftforge.fml.ModLoader;': 'import net.neoforged.fml.ModLoader;',
-              'import net.minecraftforge.fml.event.IModBusEvent;': 'import net.neoforged.fml.event.IModBusEvent;',
-              'import net.minecraftforge.fml.ModLoadingContext;': 'import net.neoforged.fml.ModLoadingContext;',
-              'import net.neoforged.neoforge.common.util.LazyOptional;': 'import net.minecraftforge.common.util.LazyOptional;',
-          }
-
-          if not (root / 'net/minecraftforge/common/util/LazyOptional.java').exists():
-              raise SystemExit('Legacy LazyOptional compatibility shim is missing; refusing import migration.')
-
           changed = []
           for path in root.rglob('*.java'):
               original = path.read_text(encoding='utf-8')
               text = original
-              for old, new in replacements.items():
-                  text = text.replace(old, new)
 
-              # NeoForge 1.21 injects the mod bus into TConstruct; use the bridge already added to the port.
-              if 'FMLJavaModLoadingContext.get().getModEventBus()' in text:
-                  text = text.replace('FMLJavaModLoadingContext.get().getModEventBus()', 'slimeknights.tconstruct.TConstruct.getModBus()')
-              text = text.replace('import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;\n', '')
-              text = text.replace('import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;\n', '')
+              # ForgeEventFactory explosion hooks moved to NeoForge EventHooks with the same call shape.
+              text = text.replace('import net.neoforged.neoforge.event.ForgeEventFactory;',
+                                  'import net.neoforged.neoforge.event.EventHooks;')
+              text = text.replace('ForgeEventFactory.onExplosionStart(', 'EventHooks.onExplosionStart(')
+              text = text.replace('ForgeEventFactory.onExplosionDetonate(', 'EventHooks.onExplosionDetonate(')
 
-              # ForgeConfigSpec was renamed to ModConfigSpec in NeoForge 1.21.
-              if 'net.minecraftforge.common.ForgeConfigSpec' in text:
-                  text = text.replace('net.minecraftforge.common.ForgeConfigSpec', 'net.neoforged.neoforge.common.ModConfigSpec')
-                  text = text.replace('ForgeConfigSpec', 'ModConfigSpec')
+              # NeoForge 1.21 uses a standalone EventBusSubscriber annotation.
+              if '@Mod.EventBusSubscriber' in text:
+                  text = text.replace('Mod.EventBusSubscriber.Bus.FORGE', 'EventBusSubscriber.Bus.GAME')
+                  text = text.replace('Mod.EventBusSubscriber.Bus.MOD', 'EventBusSubscriber.Bus.MOD')
+                  text = text.replace('@Mod.EventBusSubscriber', '@EventBusSubscriber')
+                  if 'import net.neoforged.fml.common.EventBusSubscriber;' not in text:
+                      marker = 'import net.neoforged.fml.common.Mod;\n'
+                      if marker in text:
+                          text = text.replace(marker, 'import net.neoforged.fml.common.EventBusSubscriber;\n' + marker)
+                      else:
+                          insert = text.find('\n\n', text.find('package '))
+                          text = text[:insert+2] + 'import net.neoforged.fml.common.EventBusSubscriber;\n' + text[insert+2:]
+
+              # 1.21 moved dispenser BlockSource and renamed the spawn placement registration event.
+              text = text.replace('import net.minecraft.core.BlockSource;',
+                                  'import net.minecraft.core.dispenser.BlockSource;')
+              text = text.replace('SpawnPlacementRegisterEvent', 'RegisterSpawnPlacementsEvent')
+              if 'SpawnPlacements.Type.ON_GROUND' in text:
+                  text = text.replace('SpawnPlacements.Type.ON_GROUND', 'SpawnPlacementTypes.ON_GROUND')
+                  if 'import net.minecraft.world.entity.SpawnPlacementTypes;' not in text:
+                      marker = 'import net.minecraft.world.entity.SpawnPlacements;\n'
+                      text = text.replace(marker, marker + 'import net.minecraft.world.entity.SpawnPlacementTypes;\n')
 
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          modifier = root / 'slimeknights/tconstruct/library/modifiers/ModifierManager.java'
-          original = modifier.read_text(encoding='utf-8')
-          text = original.replace('import net.minecraftforge.common.crafting.CraftingHelper;\n', '')
-          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;' not in text:
-              text = text.replace('import slimeknights.mantle.data.loadable.field.ContextKey;\n', 'import slimeknights.mantle.data.loadable.field.ContextKey;\nimport slimeknights.mantle.recipe.condition.ConditionHelper;\n')
-          text = text.replace('ModLoader.get().runEventGenerator(ModifierRegistrationEvent::new);', 'ModLoader.runEventGenerator(ModifierRegistrationEvent::new);')
-          text = text.replace('CraftingHelper.getCondition(GsonHelper.getAsJsonObject(json, "condition"))', 'ConditionHelper.deserialize(GsonHelper.getAsJsonObject(json, "condition"))')
-          if text != original:
-              modifier.write_text(text, encoding='utf-8')
-              if str(modifier) not in changed:
-                  changed.append(str(modifier))
-
-          def isolate_datagen(path, imports):
-              original = path.read_text(encoding='utf-8')
-              text = original
-              for imp in imports:
-                  text = text.replace(imp, '')
-              pattern = re.compile(r'\n  @SubscribeEvent\n  void gatherData\(final GatherDataEvent event\) \{\n.*?\n  \}\n', re.S)
-              text, count = pattern.subn('\n', text, count=1)
-              if 'void gatherData(final GatherDataEvent event)' in original and count != 1:
-                  raise SystemExit(f'Failed to isolate gatherData safely in {path}')
-              if text != original:
-                  path.write_text(text, encoding='utf-8')
-                  changed.append(str(path))
-
-          isolate_datagen(
-              root / 'slimeknights/tconstruct/shared/TinkerCommons.java',
-              [
-                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n',
-                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.tconstruct.common.data.model.ModelSpriteProvider;\n', 'import slimeknights.tconstruct.common.data.model.TinkerBlockStateProvider;\n',
-                  'import slimeknights.tconstruct.common.data.model.TinkerItemModelProvider;\n', 'import slimeknights.tconstruct.common.data.model.TinkerSpriteSourceProvider;\n',
-                  'import slimeknights.tconstruct.common.data.render.RenderFluidProvider;\n', 'import slimeknights.tconstruct.common.data.render.RenderItemProvider;\n',
-                  'import slimeknights.tconstruct.shared.data.CommonRecipeProvider;\n',
-              ]
-          )
-          isolate_datagen(
-              root / 'slimeknights/tconstruct/fluids/TinkerFluids.java',
-              [
-                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.mantle.fluid.texture.FluidTextureCameraProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidBlockstateModelProvider;\n', 'import slimeknights.tconstruct.fluids.data.FluidBucketModelProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidTextureProvider;\n', 'import slimeknights.tconstruct.fluids.data.FluidTooltipProvider;\n',
-              ]
-          )
-          isolate_datagen(
-              root / 'slimeknights/tconstruct/smeltery/TinkerSmeltery.java',
-              [
-                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.tconstruct.smeltery.data.FluidContainerTransferProvider;\n',
-                  'import slimeknights.tconstruct.smeltery.data.SmelteryRecipeProvider;\n',
-              ]
-          )
-          isolate_datagen(
-              root / 'slimeknights/tconstruct/world/TinkerWorld.java',
-              [
-                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.tconstruct.world.data.MobEquipmentProvider;\n', 'import slimeknights.tconstruct.world.data.WorldRecipeProvider;\n',
-              ]
-          )
-          isolate_datagen(
-              root / 'slimeknights/tconstruct/world/TinkerStructures.java',
-              [
-                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n',
-                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.tconstruct.world.data.StructureRepalleter;\n',
-              ]
-          )
-
-          print(f'Updated {len(set(changed))} Java files')
-          for path in sorted(set(changed)):
+          print(f'Updated {len(changed)} Java files')
+          for path in changed:
               print(path)
           PY
 
       - name: Verify migration targets
         run: |
-          if grep -R "net.neoforged.neoforge.common.util.LazyOptional\|FMLJavaModLoadingContext.get().getModEventBus()\|net.minecraftforge.common.ForgeConfigSpec" -n src/main/java; then
-            echo 'Found stale front blocker API references.'
-            exit 1
-          fi
-          if grep -n "void gatherData(final GatherDataEvent" \
-            src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java \
-            src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java \
-            src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java \
-            src/main/java/slimeknights/tconstruct/world/TinkerWorld.java \
-            src/main/java/slimeknights/tconstruct/world/TinkerStructures.java; then
-            echo 'Datagen handler isolation did not complete.'
+          if grep -R "ForgeEventFactory.onExplosion\|@Mod.EventBusSubscriber\|SpawnPlacementRegisterEvent\|SpawnPlacements.Type.ON_GROUND\|import net.minecraft.core.BlockSource;" -n src/main/java; then
+            echo 'Found stale explosion/subscriber/spawn references.'
             exit 1
           fi
 
@@ -170,7 +95,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate mod bus config and remaining datagen hooks'
+          git commit -m 'Migrate explosion events and subscriber spawn APIs'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
