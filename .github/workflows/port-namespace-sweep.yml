@@ -1,0 +1,75 @@
+name: Tinkers Safe Namespace Sweep
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-namespace-sweep.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Apply one-to-one NeoForge namespace moves
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'net.minecraftforge.api.distmarker.': 'net.neoforged.api.distmarker.',
+              'net.minecraftforge.client.event.': 'net.neoforged.neoforge.client.event.',
+              'net.minecraftforge.client.extensions.': 'net.neoforged.neoforge.client.extensions.',
+              'net.minecraftforge.client.model.': 'net.neoforged.neoforge.client.model.',
+              'net.minecraftforge.common.data.': 'net.neoforged.neoforge.common.data.',
+              'net.minecraftforge.common.util.': 'net.neoforged.neoforge.common.util.',
+              'net.minecraftforge.data.event.': 'net.neoforged.neoforge.data.event.',
+              'net.minecraftforge.eventbus.api.': 'net.neoforged.bus.api.',
+              'net.minecraftforge.event.': 'net.neoforged.neoforge.event.',
+              'net.minecraftforge.fluids.': 'net.neoforged.neoforge.fluids.',
+              'net.minecraftforge.items.': 'net.neoforged.neoforge.items.',
+              'net.minecraftforge.registries.': 'net.neoforged.neoforge.registries.',
+              'net.minecraftforge.server.': 'net.neoforged.neoforge.server.',
+              'net.minecraftforge.fml.common.Mod.EventBusSubscriber': 'net.neoforged.fml.common.EventBusSubscriber',
+              'net.minecraftforge.fml.event.lifecycle.': 'net.neoforged.fml.event.lifecycle.',
+              'net.minecraftforge.fml.loading.': 'net.neoforged.fml.loading.',
+              'net.minecraftforge.fml.config.': 'net.neoforged.fml.config.',
+              'net.minecraftforge.fml.ModList': 'net.neoforged.fml.ModList',
+              'net.minecraftforge.fml.ModContainer': 'net.neoforged.fml.ModContainer',
+          }
+
+          changed = []
+          root = Path('src/main/java')
+          for path in root.rglob('*.java'):
+              original = path.read_text(encoding='utf-8')
+              text = original
+              for old, new in replacements.items():
+                  text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
+
+          print(f'Updated {len(changed)} Java files')
+          for path in changed:
+              print(path)
+          PY
+
+      - name: Commit namespace migration
+        run: |
+          if git diff --quiet; then
+            echo 'No namespace changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java
+          git commit -m 'Migrate safe Forge namespaces to NeoForge'
+          git push origin HEAD:1.21.1-neoforge
