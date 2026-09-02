@@ -14,7 +14,7 @@ import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.event.entity.living.LivingHurtEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.fml.common.Mod;
 import slimeknights.tconstruct.TConstruct;
 //import slimeknights.tconstruct.library.utils.TagUtil;
 //import slimeknights.tconstruct.tools.common.entity.EntityArrow;

@@ -24,7 +24,7 @@ import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.storage.loot.entries.LootPoolEntryType;
 import net.minecraft.world.level.storage.loot.predicates.LootItemConditionType;
-import net.minecraftforge.common.MinecraftForge;
+import net.neoforged.neoforge.common.NeoForge;
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
@@ -183,7 +183,7 @@ public final class TinkerCommons extends TinkerModule {
 
   public TinkerCommons() {
     TConstructCommand.init();
-    MinecraftForge.EVENT_BUS.addListener(RecipeCacheInvalidator::onReloadListenerReload);
+    NeoForge.EVENT_BUS.addListener(RecipeCacheInvalidator::onReloadListenerReload);
   }
 
   @SubscribeEvent

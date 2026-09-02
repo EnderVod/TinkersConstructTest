@@ -12,7 +12,7 @@ import net.minecraft.util.GsonHelper;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraftforge.common.MinecraftForge;
+import net.neoforged.neoforge.common.NeoForge;
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.minecraftforge.common.crafting.conditions.ICondition.IContext;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
@@ -54,8 +54,8 @@ public class MobEquipmentManager extends SimpleJsonResourceReloadListener {
   /** @apiNote no need for addons to call this */
   @Internal
   public static void init() {
-    MinecraftForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, AddReloadListenerEvent.class, INSTANCE::addDataPackListeners);
-    MinecraftForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, FinalizeSpawn.class, INSTANCE::finalizeSpawn);
+    NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, AddReloadListenerEvent.class, INSTANCE::addDataPackListeners);
+    NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, FinalizeSpawn.class, INSTANCE::finalizeSpawn);
   }
 
   @Override

@@ -25,7 +25,7 @@ import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.client.settings.KeyConflictContext;
-import net.minecraftforge.common.MinecraftForge;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.TickEvent.Phase;
 import net.neoforged.neoforge.event.TickEvent.PlayerTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -164,8 +164,8 @@ public class ToolClientEvents extends ClientEventBase {
 
   @SubscribeEvent
   static void clientSetupEvent(FMLClientSetupEvent event) {
-    MinecraftForge.EVENT_BUS.addListener(ToolClientEvents::handleKeyBindings);
-    MinecraftForge.EVENT_BUS.addListener(ToolClientEvents::handleInput);
+    NeoForge.EVENT_BUS.addListener(ToolClientEvents::handleKeyBindings);
+    NeoForge.EVENT_BUS.addListener(ToolClientEvents::handleInput);
     AbstractArmorModel.init();
 
     // keybinds

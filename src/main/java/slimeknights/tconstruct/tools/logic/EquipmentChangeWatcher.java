@@ -8,12 +8,12 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
-import net.minecraftforge.common.MinecraftForge;
+import net.neoforged.neoforge.common.NeoForge;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.util.LazyOptional;
 import net.neoforged.neoforge.event.AttachCapabilitiesEvent;
 import net.neoforged.neoforge.event.TickEvent.Phase;
@@ -52,12 +52,12 @@ public class EquipmentChangeWatcher {
     FMLJavaModLoadingContext.get().getModEventBus().addListener(EventPriority.NORMAL, false, RegisterCapabilitiesEvent.class, event -> event.register(PlayerLastEquipment.class));
 
     // equipment change is used on both sides
-    MinecraftForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onEquipmentChange);
+    NeoForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onEquipmentChange);
 
     // only need to use the cap and the player tick on the client
     if (FMLEnvironment.dist == Dist.CLIENT) {
-      MinecraftForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onPlayerTick);
-      MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, EquipmentChangeWatcher::attachCapability);
+      NeoForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onPlayerTick);
+      NeoForge.EVENT_BUS.addGenericListener(Entity.class, EquipmentChangeWatcher::attachCapability);
     }
   }
 
@@ -122,7 +122,7 @@ public class EquipmentChangeWatcher {
       }
     }
     // fire event for modifiers that want to watch equipment when not equipped
-    MinecraftForge.EVENT_BUS.post(new ToolEquipmentChangeEvent(context));
+    NeoForge.EVENT_BUS.post(new ToolEquipmentChangeEvent(context));
   }
 
   /* Required methods */
