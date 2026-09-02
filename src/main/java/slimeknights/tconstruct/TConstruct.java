@@ -1,8 +1,10 @@
 package slimeknights.tconstruct;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -31,6 +33,8 @@ import slimeknights.tconstruct.shared.TinkerCommons;
 import slimeknights.tconstruct.shared.TinkerEffects;
 import slimeknights.tconstruct.shared.TinkerMaterials;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
+import slimeknights.tconstruct.smeltery.item.TankItem;
+import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;
 import slimeknights.tconstruct.tables.TinkerTables;
 import slimeknights.tconstruct.tools.TinkerModifiers;
 import slimeknights.tconstruct.tools.TinkerToolParts;
@@ -115,11 +119,19 @@ public class TConstruct {
     StationSlotLayoutLoader.init();
   }
 
-  /** Registers native NeoForge capabilities for Tinkers block entities. */
+  /** Registers native NeoForge capabilities for Tinkers blocks, block entities, and item stacks. */
   static void registerCapabilities(final RegisterCapabilitiesEvent event) {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
+
+    // TankItem is used by tanks, lanterns, casting tanks and fluid cannons. Registering by the actual
+    // item class preserves all of those existing Tinkers variants without maintaining a fragile list.
+    for (Item item : BuiltInRegistries.ITEM) {
+      if (item instanceof TankItem tankItem) {
+        event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);
+      }
+    }
   }
 
   /* Utils */
