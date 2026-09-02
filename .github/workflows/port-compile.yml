@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p libs mantle-artifact
-          gh api /repos/EnderVod/MantleTest/actions/artifacts/9836495590/zip > mantle.zip
+          gh api /repos/EnderVod/MantleTest/actions/artifacts/9840020829/zip > mantle.zip
           unzip -q mantle.zip -d mantle-artifact
           mantle_jar=$(find mantle-artifact -type f -name 'Mantle-*.jar' ! -name '*-sources.jar' | head -n 1)
           if [ -z "$mantle_jar" ]; then
