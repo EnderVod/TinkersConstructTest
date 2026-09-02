@@ -39,7 +39,7 @@ public record ProtectionFormula(ModifierFormula formula, List<ProtectionVariable
   }
 
   /** Builds the arguments from the context */
-  private float[] getArguments(IToolStackView tool, ModifierEntry modifier, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType, float protection) {
+  private float[] getArguments(IToolStackView tool, ModifierEntry modifier, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType, float protection) {
     int size = variables.size();
     float[] arguments = new float[VARIABLES.length + size];
     arguments[ModifierFormula.LEVEL] = formula.processLevel(modifier);
@@ -51,7 +51,7 @@ public record ProtectionFormula(ModifierFormula formula, List<ProtectionVariable
   }
 
   /** Runs this formula */
-  public float apply(IToolStackView tool, ModifierEntry modifier, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable EquipmentSlot slotType, @Nullable DamageSource source, float protection) {
+  public float apply(IToolStackView tool, ModifierEntry modifier, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable EquipmentSlot slotType, @Nullable DamageSource source, float protection) {
     return formula.apply(getArguments(tool, modifier, context, target, source, slotType, protection));
   }
 }

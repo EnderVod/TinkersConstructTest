@@ -35,7 +35,7 @@ public record ToolSlotsModule(Map<SlotType,Integer> slots) implements VolatileDa
   }
 
   @Override
-  public void addVolatileData(IToolContext context, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData) {
     for (Entry<SlotType,Integer> entry : slots.entrySet()) {
       volatileData.addSlots(entry.getKey(), entry.getValue());
     }

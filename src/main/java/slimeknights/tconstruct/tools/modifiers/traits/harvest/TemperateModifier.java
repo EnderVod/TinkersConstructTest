@@ -110,7 +110,7 @@ public class TemperateModifier extends Modifier implements ConditionalStatModifi
   }
 
   @Override
-  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
+  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
     if (DamageSourcePredicate.CAN_PROTECT.matches(source)) {
       LivingEntity target = context.getEntity();
       float bonus = getBonus(target, target.blockPosition());

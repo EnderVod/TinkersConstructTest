@@ -25,7 +25,7 @@ public record LoadConditionAOEIterator(Loadable ifTrue, Loadable ifFalse, ICondi
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
     AreaOfEffectIterator iterator = Util.testConditions(conditions) ? ifTrue : ifFalse;
     return iterator.getBlocks(tool, context, state, matchType);
   }

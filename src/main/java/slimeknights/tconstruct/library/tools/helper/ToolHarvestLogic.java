@@ -79,7 +79,7 @@ public class ToolHarvestLogic {
    * @param context  Harvest context
    * @return  True if the block was removed
    */
-  private static boolean removeBlock(IToolStackView tool, ToolHarvestContext context) {
+  private static boolean removeBlock(IToolStackView tool, ToolHarvestIPayloadContext context) {
     Boolean removed = null;
     if (!tool.isBroken()) {
       for (ModifierEntry entry : tool.getModifierList()) {
@@ -105,13 +105,13 @@ public class ToolHarvestLogic {
 
   /** @deprecated use {@link #breakBlock(ToolStack, ItemStack, ToolHarvestContext, boolean)}*/
   @Deprecated(forRemoval = true)
-  protected static boolean breakBlock(ToolStack tool, ItemStack stack, ToolHarvestContext context) {
+  protected static boolean breakBlock(ToolStack tool, ItemStack stack, ToolHarvestIPayloadContext context) {
     return breakBlock(tool, stack, context, false);
   }
 
   /** @deprecated use {@link #breakBlock(IToolStackView, ItemStack, ToolHarvestContext, boolean)} */
   @Deprecated(forRemoval = true)
-  protected static boolean breakBlock(ToolStack tool, ItemStack stack, ToolHarvestContext context, boolean useLastXP) {
+  protected static boolean breakBlock(ToolStack tool, ItemStack stack, ToolHarvestIPayloadContext context, boolean useLastXP) {
     return breakBlock((IToolStackView) tool, stack, context, useLastXP);
   }
 
@@ -123,7 +123,7 @@ public class ToolHarvestLogic {
    * @param useLastXP If true, fetches the XP from {@link BlockSideHitListener} instead of firing the event. Prevents firing {@link net.neoforged.neoforge.event.level.BlockEvent.BreakEvent} twice.
    * @return  True if broken
    */
-  protected static boolean breakBlock(IToolStackView tool, ItemStack stack, ToolHarvestContext context, boolean useLastXP) {
+  protected static boolean breakBlock(IToolStackView tool, ItemStack stack, ToolHarvestIPayloadContext context, boolean useLastXP) {
     // have to rerun the event to get the EXP, also ensures extra blocks broken get EXP properly
     ServerPlayer player = Objects.requireNonNull(context.getPlayer());
     ServerLevel world = context.getWorld();
@@ -185,7 +185,7 @@ public class ToolHarvestLogic {
    * @param context   Tool harvest context
    * @return true if a block was broken.
    */
-  public static boolean breakExtraBlock(ToolStack tool, ItemStack stack, ToolHarvestContext context) {
+  public static boolean breakExtraBlock(ToolStack tool, ItemStack stack, ToolHarvestIPayloadContext context) {
     return breakExtraBlock((IToolStackView) tool, stack, context);
   }
 
@@ -196,7 +196,7 @@ public class ToolHarvestLogic {
    * @param context   Tool harvest context
    * @return true if a block was broken.
    */
-  public static boolean breakExtraBlock(IToolStackView tool, ItemStack stack, ToolHarvestContext context) {
+  public static boolean breakExtraBlock(IToolStackView tool, ItemStack stack, ToolHarvestIPayloadContext context) {
     // break the actual block
     if (breakBlock(tool, stack, context, false)) {
       Level world = context.getWorld();
@@ -251,7 +251,7 @@ public class ToolHarvestLogic {
     if (tool.isBroken()) {
       // no harvest context
       player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-      ToolHarvestContext context = new ToolHarvestContext(world, serverPlayer, state, pos, sideHit,
+      ToolHarvestIPayloadContext context = new ToolHarvestContext(world, serverPlayer, state, pos, sideHit,
         !player.isCreative() && state.canHarvestBlock(world, pos, player), false);
       breakBlock(tool, ItemStack.EMPTY, context, true);
       player.setItemInHand(InteractionHand.MAIN_HAND, stack);
@@ -277,7 +277,7 @@ public class ToolHarvestLogic {
 
     // add in harvest info
     // must not be broken, and the tool definition must be effective
-    ToolHarvestContext context = new ToolHarvestContext(world, player, projectile, state, pos, sideHit,
+    ToolHarvestIPayloadContext context = new ToolHarvestContext(world, player, projectile, state, pos, sideHit,
                                                         !player.isCreative() && state.canHarvestBlock(world, pos, player),
                                                         IsEffectiveToolHook.isEffective(tool, state));
     // tell modifiers we are about to harvest, lets them add for instance modifiers conditioned on harvesting
@@ -331,7 +331,7 @@ public class ToolHarvestLogic {
     if (!worldIn.isClientSide && worldIn instanceof ServerLevel) {
       // must not be broken, and the tool definition must be effective
       boolean isEffective = IsEffectiveToolHook.isEffective(tool, state);
-      ToolHarvestContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);
+      ToolHarvestIPayloadContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);
       for (ModifierEntry entry : tool.getModifierList()) {
         entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);
       }

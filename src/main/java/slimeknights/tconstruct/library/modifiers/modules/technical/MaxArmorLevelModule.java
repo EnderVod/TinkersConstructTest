@@ -40,17 +40,17 @@ public interface MaxArmorLevelModule extends HookProvider, EquipmentChangeModifi
   TagKey<Item> heldTag();
 
   @Override
-  default void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  default void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     updateLevel(tool, modifier, modifier.getEffectiveLevel(), context);
   }
 
   @Override
-  default void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  default void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     updateLevel(tool, modifier, 0, context);
   }
 
   /** Updates the level of this module, properly evaluating the condition and setting the max level */
-  default void updateLevel(IToolStackView tool, ModifierEntry modifier, float effectiveLevel, EquipmentChangeContext context) {
+  default void updateLevel(IToolStackView tool, ModifierEntry modifier, float effectiveLevel, EquipmentChangeIPayloadContext context) {
     if (condition().matches(tool, modifier) && ArmorLevelModule.validSlot(tool, context.getChangedSlot(), heldTag()) && (!tool.isBroken() || allowBroken())) {
       TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
       if (data != null) {
@@ -74,7 +74,7 @@ public interface MaxArmorLevelModule extends HookProvider, EquipmentChangeModifi
    * @param newLevel  New max level
    * @param oldLevel  Old max level
    */
-  void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, TinkerDataCapability.Holder data, float newLevel, float oldLevel);
+  void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, TinkerDataCapability.Holder data, float newLevel, float oldLevel);
 
   /** Checks if the tooltip can be madded for this module */
   static boolean shouldAddTooltip(MaxArmorLevelModule module, IToolStackView tool, ModifierEntry modifier, @Nullable Player player) {

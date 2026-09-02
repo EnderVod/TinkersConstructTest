@@ -105,14 +105,14 @@ public record MeleeInstrumentModule(@Nullable MaterialId material, TagKey<Instru
   }
 
   @Override
-  public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage) {
+  public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage) {
     if (TinkerPredicate.matches(this.target, context.getLivingTarget())) {
       playSound(tool, context.getAttacker(), context.getPlayerAttacker(), context.getTarget());
     }
   }
 
   @Override
-  public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
     if (this.target.matches(target)) {
       LivingEntity attacker = context.getEntity();
       playSound(tool, attacker, ModifierUtil.asPlayer(attacker), target);

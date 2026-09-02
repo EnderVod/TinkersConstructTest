@@ -42,7 +42,7 @@ public class ToolPartLootEntry extends LootPoolSingletonContainer {
 
   @SuppressWarnings("deprecation")
   @Override
-  protected void createItemStack(Consumer<ItemStack> consumer, LootContext context) {
+  protected void createItemStack(Consumer<ItemStack> consumer, LootIPayloadContext context) {
     List<IToolPart> options = RegistryHelper.getTagValueStream(BuiltInRegistries.ITEM, tag)
       .flatMap(item -> item instanceof IToolPart mat ? Stream.of(mat) : Stream.empty()).toList();
     if (!options.isEmpty()) {
@@ -78,7 +78,7 @@ public class ToolPartLootEntry extends LootPoolSingletonContainer {
     }
 
     @Override
-    protected ToolPartLootEntry deserialize(JsonObject json, JsonDeserializationContext context, int weight, int quality, LootItemCondition[] conditions, LootItemFunction[] functions) {
+    protected ToolPartLootEntry deserialize(JsonObject json, JsonDeserializationIPayloadContext context, int weight, int quality, LootItemCondition[] conditions, LootItemFunction[] functions) {
       TagKey<Item> tag = Loadables.ITEM_TAG.getIfPresent(json, "tag");
       RandomMaterial material = RandomMaterial.LOADER.getIfPresent(json, "material");
       return new ToolPartLootEntry(tag, material, weight, quality, conditions, functions);

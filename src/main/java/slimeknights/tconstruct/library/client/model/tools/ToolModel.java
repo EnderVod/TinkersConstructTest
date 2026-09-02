@@ -187,7 +187,7 @@ public class ToolModel implements IUnbakedGeometry<ToolModel> {
   }
 
   /** Deserializes the model from JSON */
-  public static ToolModel deserialize(JsonObject json, JsonDeserializationContext context) {
+  public static ToolModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
     List<ToolPart> parts = Collections.emptyList();
     if (json.has("parts")) {
       parts = JsonHelper.parseList(json, "parts", ToolPart::read);
@@ -358,7 +358,7 @@ public class ToolModel implements IUnbakedGeometry<ToolModel> {
   }
 
   /** Makes a model builder for the given context and overrides */
-  private static IModelBuilder<?> makeModelBuilder(IGeometryBakingContext context, ItemOverrides overrides, TextureAtlasSprite particle) {
+  private static IModelBuilder<?> makeModelBuilder(IGeometryBakingIPayloadContext context, ItemOverrides overrides, TextureAtlasSprite particle) {
     return IModelBuilder.of(context.useAmbientOcclusion(), false, false, context.getTransforms(), overrides, particle, MantleItemLayerModel.getDefaultRenderType(context));
   }
 

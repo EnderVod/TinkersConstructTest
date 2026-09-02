@@ -78,7 +78,7 @@ public record ChannelingModule(float clearChance, float rainChance, float thunde
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     if (context.isFullyCharged() && (allowMelee || context.isProjectile())) {
       tryStrike(context.getLevel(), context.getPlayerAttacker(), context.getTarget().blockPosition());
     }

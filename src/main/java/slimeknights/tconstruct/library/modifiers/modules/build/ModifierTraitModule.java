@@ -63,7 +63,7 @@ public record ModifierTraitModule(ModifierEntry modifier, boolean fixedLevel, Mo
   }
 
   @Override
-  public void addTraits(IToolContext context, ModifierEntry self, TraitBuilder builder, boolean firstEncounter) {
+  public void addTraits(IToolIPayloadContext context, ModifierEntry self, TraitBuilder builder, boolean firstEncounter) {
     if (condition.matches(context, self)) {
       if (fixedLevel) {
         // fixed levels do not need to add again if already added

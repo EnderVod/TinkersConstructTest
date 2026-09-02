@@ -47,7 +47,7 @@ public class IslandPiece extends TemplateStructurePiece {
     this.tree = tree;
   }
 
-  public IslandPiece(StructurePieceSerializationContext context, CompoundTag nbt) {
+  public IslandPiece(StructurePieceSerializationIPayloadContext context, CompoundTag nbt) {
     super(TinkerStructures.islandPiece.get(), nbt, context.structureTemplateManager(), id -> makeSettings(Rotation.valueOf(nbt.getString("Rot")), Mirror.valueOf(nbt.getString("Mi"))));
     RegistryAccess access = context.registryAccess();
     if (find(access.registryOrThrow(Registries.STRUCTURE), nbt.getString("Structure")) instanceof IslandStructure island) {
@@ -64,7 +64,7 @@ public class IslandPiece extends TemplateStructurePiece {
   }
 
   @Override
-  protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
+  protected void addAdditionalSaveData(StructurePieceSerializationIPayloadContext context, CompoundTag tag) {
     super.addAdditionalSaveData(context, tag);
     RegistryAccess access = context.registryAccess();
     ResourceLocation structure = access.registryOrThrow(Registries.STRUCTURE).getKey(this.structure);
@@ -148,7 +148,7 @@ public class IslandPiece extends TemplateStructurePiece {
   /* Registry helpers, perhaps put somewhere better? */
 
   /** Gets a registry, or falls back to builtin */
-  private static <T> Registry<T> getRegistry(ResourceKey<? extends Registry<T>> registryKey, Registry<T> builtIn, StructurePieceSerializationContext context) {
+  private static <T> Registry<T> getRegistry(ResourceKey<? extends Registry<T>> registryKey, Registry<T> builtIn, StructurePieceSerializationIPayloadContext context) {
     Optional<? extends Registry<T>> registry = context.registryAccess().registry(registryKey);
     if (registry.isPresent()) {
       return registry.get();

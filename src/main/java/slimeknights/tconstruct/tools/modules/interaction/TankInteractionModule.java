@@ -48,7 +48,7 @@ public record TankInteractionModule(@Nullable InteractionSource source) implemen
   }
 
   @Override
-  public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
+  public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
     // if source is not null, its a filter and only that source may use this. Used mainly for armor
     if ((this.source != null && this.source != source) || !tool.getHook(ToolHooks.INTERACTION).canInteract(tool, modifier.getId(), source)) {
       return InteractionResult.PASS;

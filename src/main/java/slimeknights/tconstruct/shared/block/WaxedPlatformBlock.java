@@ -23,7 +23,7 @@ public class WaxedPlatformBlock extends PlatformBlock {
 
   @Nullable
   @Override
-  public BlockState getToolModifiedState(BlockState state, UseOnContext context, ToolAction toolAction, boolean simulate) {
+  public BlockState getToolModifiedState(BlockState state, UseOnIPayloadContext context, ToolAction toolAction, boolean simulate) {
     if (ToolActions.AXE_WAX_OFF.equals(toolAction)) {
       return TinkerCommons.copperPlatform.get(age).withPropertiesOf(state);
     }

@@ -49,7 +49,7 @@ public class StructureErrorPositionPacket implements BlockEntityPacket<HeatingSt
   }
 
   @Override
-  public void handleBlockEntity(IPayloadContext context, HeatingStructureBlockEntity be) {
+  public void handleBlockEntity(IPayloadIPayloadContext context, HeatingStructureBlockEntity be) {
     be.setErrorPos(errorPos);
   }
 }

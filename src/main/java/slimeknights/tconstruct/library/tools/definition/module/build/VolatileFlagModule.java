@@ -32,7 +32,7 @@ public record VolatileFlagModule(ResourceLocation flag) implements ToolModule, V
   }
 
   @Override
-  public void addVolatileData(IToolContext context, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData) {
     volatileData.putBoolean(flag, true);
   }
 }

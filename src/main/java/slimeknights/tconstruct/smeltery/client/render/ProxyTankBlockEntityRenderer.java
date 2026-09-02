@@ -21,7 +21,7 @@ import static net.minecraft.world.level.block.state.properties.BlockStatePropert
 /** Renderer for {@link ProxyTankBlockEntity}. Unlike {@link TankInventoryBlockEntityRenderer}, does not use a {@link slimeknights.tconstruct.library.fluid.FluidTankAnimated} */
 public class ProxyTankBlockEntityRenderer implements BlockEntityRenderer<ProxyTankBlockEntity> {
   @SuppressWarnings("unused")  // nicer lambda
-  public ProxyTankBlockEntityRenderer(BlockEntityRendererProvider.Context context) {}
+  public ProxyTankBlockEntityRenderer(BlockEntityRendererProvider.IPayloadContext context) {}
 
   @Override
   public void render(ProxyTankBlockEntity proxyTank, float partialTicks, PoseStack matrices, MultiBufferSource buffer, int light, int combinedOverlayIn) {

@@ -37,7 +37,7 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
   private final SingletonLoader<BlockInteractFluidEffect> loader = new SingletonLoader<>(this);
 
   /** Damages the stack in the context if needed */
-  private static void damageIfNeeded(UseOnContext context) {
+  private static void damageIfNeeded(UseOnIPayloadContext context) {
     ItemStack stack = context.getItemInHand();
     Level level = context.getLevel();
     // vanilla tools tend not to call the proper damage methods if player is null, so just manually damage the stack

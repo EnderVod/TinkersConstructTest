@@ -40,7 +40,7 @@ public class ConfigEnabledCondition implements ICondition, LootItemCondition {
   }
 
   @Override
-  public boolean test(IContext context) {
+  public boolean test(IIPayloadContext context) {
     return supplier.getAsBoolean();
   }
 
@@ -76,12 +76,12 @@ public class ConfigEnabledCondition implements ICondition, LootItemCondition {
     }
 
     @Override
-    public void serialize(JsonObject json, ConfigEnabledCondition condition, JsonSerializationContext context) {
+    public void serialize(JsonObject json, ConfigEnabledCondition condition, JsonSerializationIPayloadContext context) {
       write(json, condition);
     }
 
     @Override
-    public ConfigEnabledCondition deserialize(JsonObject json, JsonDeserializationContext context) {
+    public ConfigEnabledCondition deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
       return read(json);
     }
   }

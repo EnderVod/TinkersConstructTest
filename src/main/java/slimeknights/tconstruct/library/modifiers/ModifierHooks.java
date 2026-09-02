@@ -313,7 +313,7 @@ public class ModifierHooks {
     public void onBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeed event, Direction sideHit, boolean isEffective, float miningSpeedModifier) {}
 
     @Override
-    public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
+    public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
       return speed;
     }
   });

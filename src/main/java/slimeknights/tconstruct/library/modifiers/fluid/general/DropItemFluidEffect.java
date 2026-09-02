@@ -27,7 +27,7 @@ public record DropItemFluidEffect(ItemOutput item) implements FluidEffect<FluidE
   }
 
   @Override
-  public float apply(FluidStack fluid, EffectLevel level, FluidEffectContext context, FluidAction action) {
+  public float apply(FluidStack fluid, EffectLevel level, FluidEffectIPayloadContext context, FluidAction action) {
     int count = (int)(level.value() * item.getCount());
     if (count > 0) {
       if (action.execute()) {

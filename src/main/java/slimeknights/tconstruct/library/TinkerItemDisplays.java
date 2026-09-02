@@ -55,7 +55,7 @@ public class TinkerItemDisplays {
 
   /** Registers a display type */
   @SuppressWarnings("removal")
-  private static void register(IForgeRegistry<ItemDisplayContext> registry, ItemDisplayContext context) {
+  private static void register(IForgeRegistry<ItemDisplayContext> registry, ItemDisplayIPayloadContext context) {
     registry.register(new ResourceLocation(context.getSerializedName()), context);
   }
 }

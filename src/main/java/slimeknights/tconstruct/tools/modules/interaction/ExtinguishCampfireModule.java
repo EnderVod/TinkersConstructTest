@@ -35,12 +35,12 @@ public record ExtinguishCampfireModule(ModifierCondition<IToolStackView> conditi
   }
 
   @Override
-  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
+  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
     return condition.matches(tool, modifier) && state.getBlock() instanceof CampfireBlock && state.getValue(CampfireBlock.LIT);
   }
 
   @Override
-  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
+  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
     if (condition.matches(tool, modifier)) {
       return BlockTransformModule.super.afterBlockUse(tool, modifier, context, source);
     }
@@ -48,7 +48,7 @@ public record ExtinguishCampfireModule(ModifierCondition<IToolStackView> conditi
   }
 
   @Override
-  public boolean transform(IToolStackView tool, UseOnContext context, BlockState original, boolean playSound) {
+  public boolean transform(IToolStackView tool, UseOnIPayloadContext context, BlockState original, boolean playSound) {
     if (original.getBlock() instanceof CampfireBlock && original.getValue(CampfireBlock.LIT)) {
       Level level = context.getLevel();
       BlockPos pos = context.getClickedPos();

@@ -75,7 +75,7 @@ public record MaxArmorAttributeModule(String unique, Attribute attribute, Operat
   }
 
   @Override
-  public void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, Holder data, float newLevel, float oldLevel) {
+  public void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, Holder data, float newLevel, float oldLevel) {
     AttributeInstance instance = context.getEntity().getAttribute(attribute);
     if (instance != null) {
       instance.removeModifier(uuid);

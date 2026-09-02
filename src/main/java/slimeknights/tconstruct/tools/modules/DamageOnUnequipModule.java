@@ -44,7 +44,7 @@ public record DamageOnUnequipModule(float damage, ResourceKey<DamageType> damage
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (condition.matches(tool, modifier)) {
       Level level = context.getLevel();
       if (!level.isClientSide && EquipmentChangeModifierHook.didUnequip(tool, context)) {

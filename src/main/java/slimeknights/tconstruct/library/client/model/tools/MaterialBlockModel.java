@@ -95,7 +95,7 @@ public class MaterialBlockModel implements IUnbakedGeometry<MaterialBlockModel> 
   private final ModelType type;
 
   /** Loads a material block model from JSON */
-  public static MaterialBlockModel deserialize(JsonObject json, JsonDeserializationContext context) {
+  public static MaterialBlockModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
     SimpleBlockModel model = SimpleBlockModel.deserialize(json, context);
 
     // if retextured is set, using the anvil style model
@@ -111,7 +111,7 @@ public class MaterialBlockModel implements IUnbakedGeometry<MaterialBlockModel> 
   }
 
   @Override
-  public void resolveParents(Function<ResourceLocation, UnbakedModel> modelGetter, IGeometryBakingContext context) {
+  public void resolveParents(Function<ResourceLocation, UnbakedModel> modelGetter, IGeometryBakingIPayloadContext context) {
     model.resolveParents(modelGetter, context);
   }
 

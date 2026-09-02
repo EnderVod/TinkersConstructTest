@@ -26,12 +26,12 @@ public interface ToolStatsModifierHook {
    * @param modifier        Modifier level
    * @param builder         Tool stat builder
    */
-  void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder);
+  void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder);
 
   /** Merger that runs all hooks */
   record AllMerger(Collection<ToolStatsModifierHook> modules) implements ToolStatsModifierHook {
     @Override
-    public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+    public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
       for (ToolStatsModifierHook module : modules) {
         module.addToolStats(context, modifier, builder);
       }

@@ -66,7 +66,7 @@ public record MaxArmorStatModule(TinkerDataKey<Float> statKey, LevelingValue amo
   }
 
   @Override
-  public void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, Holder data, float newLevel, float oldLevel) {
+  public void updateValue(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, Holder data, float newLevel, float oldLevel) {
     data.add(statKey, amount.computeForLevel(newLevel) - amount.computeForLevel(oldLevel));
   }
 

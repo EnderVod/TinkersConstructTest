@@ -35,7 +35,7 @@ public class FancyItemFrameItem extends Item {
 
   @Override
   @Nonnull
-  public InteractionResult useOn(UseOnContext context) {
+  public InteractionResult useOn(UseOnIPayloadContext context) {
     BlockPos pos = context.getClickedPos();
     Direction facing = context.getClickedFace();
     BlockPos placeLocation = pos.relative(facing);

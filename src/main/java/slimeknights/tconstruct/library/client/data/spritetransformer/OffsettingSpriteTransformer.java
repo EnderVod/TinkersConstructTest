@@ -82,7 +82,7 @@ public record OffsettingSpriteTransformer(@Nullable ISpriteTransformer base, int
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationContext context) {
+  public JsonObject serialize(JsonSerializationIPayloadContext context) {
     JsonObject json = JsonUtils.withType(NAME);
     if (base != null) {
       json.add("base", base.serialize(context));

@@ -141,7 +141,7 @@ public class ChannelBlock extends Block implements EntityBlock {
   @SuppressWarnings("deprecation")
   @Override
   @Deprecated
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
     return BOUNDS[makeKey(state.getValue(DOWN), state.getValue(NORTH).canFlow(), state.getValue(SOUTH).canFlow(), state.getValue(WEST).canFlow(), state.getValue(EAST).canFlow())];
   }
 
@@ -205,7 +205,7 @@ public class ChannelBlock extends Block implements EntityBlock {
 
   @Override
   @Nullable
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     Level world = context.getLevel();
     BlockPos pos = context.getClickedPos();
     BlockState state = this.defaultBlockState().setValue(POWERED, world.hasNeighborSignal(pos));

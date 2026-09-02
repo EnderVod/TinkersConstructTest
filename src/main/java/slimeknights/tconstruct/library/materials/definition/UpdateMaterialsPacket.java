@@ -70,7 +70,7 @@ public class UpdateMaterialsPacket implements IThreadsafePacket {
   }
 
   @Override
-  public void handleThreadsafe(IPayloadContext context) {
+  public void handleThreadsafe(IPayloadIPayloadContext context) {
     MaterialRegistry.updateMaterialsFromServer(this);
   }
 }

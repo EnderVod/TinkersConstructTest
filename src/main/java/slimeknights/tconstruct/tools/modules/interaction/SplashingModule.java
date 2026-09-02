@@ -63,7 +63,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
   }
 
   @Override
-  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
+  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
     FluidStack fluid = TANK_HELPER.getFluid(tool);
     if (!fluid.isEmpty()) {
       return FluidEffectManager.INSTANCE.find(fluid.getFluid()).hasBlockEffects();
@@ -143,7 +143,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
   }
 
   @Override
-  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
+  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
     if (!tool.isBroken() && tool.getHook(ToolHooks.INTERACTION).canInteract(tool, modifier.getId(), source)) {
       FluidStack fluid = TANK_HELPER.getFluid(tool);
       if (!fluid.isEmpty()) {

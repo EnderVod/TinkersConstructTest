@@ -50,7 +50,7 @@ public class OverslimeModifier extends DurabilityShieldModifier implements ToolS
   /* Tool building */
 
   @Override
-  public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
     // TODO 1.21: encode stat debuffs using JSON?
     OVERSLIME_STAT.add(builder, 50);
     if (!context.getModifiers().has(TinkerTags.Modifiers.OVERSLIME_FRIEND)) {

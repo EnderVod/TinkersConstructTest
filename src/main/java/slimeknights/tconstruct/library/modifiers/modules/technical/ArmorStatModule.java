@@ -75,14 +75,14 @@ public record ArmorStatModule(TinkerDataKey<Float> key, LevelingValue amount, bo
   }
 
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (condition.matches(tool, modifier)) {
       ArmorStatModule.addStatIfArmor(tool, context, key, amount.compute(modifier.getEffectiveLevel()), allowBroken, heldTag);
     }
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (condition.matches(tool, modifier)) {
       ArmorStatModule.addStatIfArmor(tool, context, key, -amount.compute(modifier.getEffectiveLevel()), allowBroken, heldTag);
     }
@@ -117,7 +117,7 @@ public record ArmorStatModule(TinkerDataKey<Float> key, LevelingValue amount, bo
    * @param key      Key to modify
    * @param amount   Amount to add
    */
-  public static void addStat(EquipmentChangeContext context, TinkerDataKey<Float> key, float amount) {
+  public static void addStat(EquipmentChangeIPayloadContext context, TinkerDataKey<Float> key, float amount) {
     context.getTinkerData().ifPresent(data -> {
       float totalLevels = data.get(key, 0f) + amount;
       if (totalLevels <= 0.005f) {
@@ -136,7 +136,7 @@ public record ArmorStatModule(TinkerDataKey<Float> key, LevelingValue amount, bo
    * @param amount   Amount to add
    * @param heldTag  Tag to check to validate held items, null means held disallowed
    */
-  public static void addStatIfArmor(IToolStackView tool, EquipmentChangeContext context, TinkerDataKey<Float> key, float amount, boolean allowBroken, @Nullable TagKey<Item> heldTag) {
+  public static void addStatIfArmor(IToolStackView tool, EquipmentChangeIPayloadContext context, TinkerDataKey<Float> key, float amount, boolean allowBroken, @Nullable TagKey<Item> heldTag) {
     if (ArmorLevelModule.validSlot(tool, context.getChangedSlot(), heldTag) && (!tool.isBroken() || allowBroken)) {
       addStat(context, key, amount);
     }

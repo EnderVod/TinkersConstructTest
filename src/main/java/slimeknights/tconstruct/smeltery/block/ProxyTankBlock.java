@@ -42,7 +42,7 @@ public class ProxyTankBlock extends Block implements EntityBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     return this.defaultBlockState().setValue(HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
   }
 

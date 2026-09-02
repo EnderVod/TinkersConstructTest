@@ -81,7 +81,7 @@ public class CombatFishingHookRenderer extends EntityRenderer<CombatFishingHook>
     return MaterialTexture.EMPTY;
   });
 
-  public CombatFishingHookRenderer(Context context) {
+  public CombatFishingHookRenderer(IPayloadContext context) {
     super(context);
   }
 

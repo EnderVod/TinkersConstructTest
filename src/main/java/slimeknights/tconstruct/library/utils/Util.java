@@ -238,7 +238,7 @@ public class Util {
   }
 
   /** Offsets a use context to the given position. */
-  public static UseOnContext offset(UseOnContext context, BlockPos offset) {
+  public static UseOnContext offset(UseOnIPayloadContext context, BlockPos offset) {
     BlockPos pos = context.getClickedPos();
     if (pos.equals(offset)) {
       return context;

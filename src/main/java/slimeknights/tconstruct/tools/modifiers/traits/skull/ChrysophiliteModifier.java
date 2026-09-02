@@ -29,7 +29,7 @@ public class ChrysophiliteModifier extends NoLevelsModifier {
 
   /** @deprecated use {@link GoldenAttributeModule#hasGold(EquipmentChangeContext, EquipmentSlot)} */
   @Deprecated(forRemoval = true)
-  public static boolean hasGold(EquipmentChangeContext context, EquipmentSlot slotType) {
+  public static boolean hasGold(EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {
     return GoldenAttributeModule.hasGold(context, slotType);
   }
 

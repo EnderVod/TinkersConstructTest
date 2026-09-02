@@ -39,7 +39,7 @@ public record ReduceEffectOnUnequipModule(MobEffectCategory category, LevelingVa
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     // must actually be removing, and run on both sides so we don't need to sync
     if (condition.matches(tool, modifier) && EquipmentChangeModifierHook.didUnequip(tool, context)) {
       LivingEntity entity = context.getEntity();

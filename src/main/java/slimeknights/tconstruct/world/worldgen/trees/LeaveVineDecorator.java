@@ -36,7 +36,7 @@ public class LeaveVineDecorator extends TreeDecorator {
   }
 
   @Override
-  public void place(TreeDecorator.Context context) {
+  public void place(TreeDecorator.IPayloadContext context) {
     RandomSource random = context.random();
     context.leaves().forEach((pos) -> {
       for (Direction direction : Plane.HORIZONTAL) {
@@ -51,12 +51,12 @@ public class LeaveVineDecorator extends TreeDecorator {
   }
 
   /** Places vines at the given position */
-  private void placeVine(BlockPos pos, BooleanProperty property, TreeDecorator.Context context) {
+  private void placeVine(BlockPos pos, BooleanProperty property, TreeDecorator.IPayloadContext context) {
     context.setBlock(pos, vines.defaultBlockState().setValue(property, Boolean.TRUE));
   }
 
   /** Adds a hanging vine around the given position */
-  private void addHangingVine(BlockPos pos, BooleanProperty property, TreeDecorator.Context context) {
+  private void addHangingVine(BlockPos pos, BooleanProperty property, TreeDecorator.IPayloadContext context) {
     placeVine(pos, property, context);
     int i = 4;
 

@@ -44,7 +44,7 @@ public class FancyItemFrameRenderer<T extends FancyItemFrameEntity> extends Item
   private final ItemRenderer itemRenderer;
   private final BlockRenderDispatcher blockRenderer;
 
-  public FancyItemFrameRenderer(EntityRendererProvider.Context context) {
+  public FancyItemFrameRenderer(EntityRendererProvider.IPayloadContext context) {
     super(context);
     this.itemRenderer = context.getItemRenderer();
     this.blockRenderer = context.getBlockRenderDispatcher();

@@ -102,7 +102,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   }
 
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     // adding armor? activate bonus
     EquipmentSlot slot = context.getChangedSlot();
     if (context.getChangedSlot().isArmor()) {
@@ -122,7 +122,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (context.getChangedSlot().isArmor()) {
       IToolStackView newTool = context.getReplacementTool();
       // when replacing with a helmet that lacks this modifier, remove bonus
@@ -142,7 +142,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   }
 
   @Override
-  public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, EquipmentSlot slotType) {
+  public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {
     // adding a helmet? activate bonus
     EquipmentSlot changed = context.getChangedSlot();
     if (slotType.isArmor() && changed.isArmor()) {
@@ -177,7 +177,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   /* Utilities */
 
   /** Checks if the entity has gold in the given slot */
-  public static boolean hasGold(EquipmentChangeContext context, EquipmentSlot slotType) {
+  public static boolean hasGold(EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {
     IToolStackView tool = context.getToolInSlot(slotType);
     if (tool != null) {
       return tool.getVolatileData().getBoolean(ModifiableArmorItem.PIGLIN_NEUTRAL);
@@ -217,7 +217,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
     }
 
     /** Initializes the gold data */
-    public void initialize(EquipmentChangeContext context) {
+    public void initialize(EquipmentChangeIPayloadContext context) {
       totalGold = 0;
       for (EquipmentSlot slotType : ModifiableArmorMaterial.ARMOR_SLOTS) {
         boolean gold = hasGold(context, slotType);

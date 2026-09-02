@@ -53,7 +53,7 @@ public record LootToCapacityModule(Ingredient consume, int amount, LevelingValue
   }
 
   @Override
-  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootContext context) {
+  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootIPayloadContext context) {
     if (!condition.matches(tool, modifier)) {
       return;
     }

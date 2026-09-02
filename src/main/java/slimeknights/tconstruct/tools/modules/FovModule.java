@@ -37,12 +37,12 @@ public record FovModule(LevelingValue value, FovAction action) implements Modifi
   }
 
   /** Gets the key for the given context */
-  private static ResourceLocation getKey(ModifierEntry modifier, EquipmentChangeContext context) {
+  private static ResourceLocation getKey(ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     return modifier.getId().withSuffix('_' + context.getChangedSlot().getName());
   }
 
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (!tool.isBroken()) {
       TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
       if (data != null) {
@@ -52,7 +52,7 @@ public record FovModule(LevelingValue value, FovAction action) implements Modifi
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (!tool.isBroken()) {
       TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
       if (data != null) {

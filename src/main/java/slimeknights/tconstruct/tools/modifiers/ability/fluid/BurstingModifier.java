@@ -30,7 +30,7 @@ public class BurstingModifier extends UseFluidOnHitModifier implements OnAttacke
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     if (isDirectDamage) {
       // don't trigger if no attacker (no one to retaliate to) the attacker is us (self retaliation can cause issues)
       Entity origin = source.getEntity();

@@ -70,7 +70,7 @@ public enum BrushModule implements ModifierModule, GeneralInteractionModifierHoo
   }
 
   @Override
-  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
+  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
     Player player = context.getPlayer();
     // must have a player, and no entity in the way
     if (source == InteractionSource.RIGHT_CLICK && player != null && calculateHitResult(player).getType() == HitResult.Type.BLOCK) {
@@ -143,7 +143,7 @@ public enum BrushModule implements ModifierModule, GeneralInteractionModifierHoo
           }
 
           // brush AOE blocks
-          UseOnContext context = new UseOnContext(level, player, hand, player.getItemInHand(hand), blockHit);
+          UseOnIPayloadContext context = new UseOnContext(level, player, hand, player.getItemInHand(hand), blockHit);
           for (BlockPos extraPos : tool.getDefinition().getHook(ToolHooks.AOE_ITERATOR).getBlocks(tool, context, state, AOEMatchType.TRANSFORM)) {
             if (brushBlock(player, Util.offset(blockHit, extraPos), level.getBlockState(extraPos), arm)) {
               damage += 1;
@@ -167,7 +167,7 @@ public enum BrushModule implements ModifierModule, GeneralInteractionModifierHoo
   }
 
   @Override
-  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
+  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
     return context.getLevel().getBlockEntity(offset) instanceof BrushableBlockEntity;
   }
 }

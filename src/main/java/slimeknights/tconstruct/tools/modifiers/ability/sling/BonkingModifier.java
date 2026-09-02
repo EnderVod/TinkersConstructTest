@@ -39,12 +39,12 @@ public class BonkingModifier extends SlingModifier implements MeleeHitModifierHo
   }
 
   @Override
-  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
+  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
     return BONKING.beforeMeleeHit(tool, modifier, context, damage, baseKnockback, knockback);
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
     return BONKING.getMeleeDamage(tool, modifier, context, baseDamage, damage);
   }
 

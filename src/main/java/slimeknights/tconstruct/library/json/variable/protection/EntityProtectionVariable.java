@@ -22,7 +22,7 @@ public record EntityProtectionVariable(EntityVariable entity, WhichEntity which,
     EntityProtectionVariable::new);
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
+  public float getValue(IToolStackView tool, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
     LivingEntity entity = null;
     if (which == WhichEntity.TARGET)
       entity = target;

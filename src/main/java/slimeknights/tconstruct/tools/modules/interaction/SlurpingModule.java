@@ -201,7 +201,7 @@ public record SlurpingModule(LevelingValue strength, LevelingInt duration) imple
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     IToolStackView replacement = context.getReplacementTool();
     // modifier list changing is a good heuristic for tool changing, avoids deleting during the slurp
     Level level = context.getLevel();

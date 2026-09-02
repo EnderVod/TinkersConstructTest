@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.function.Function;
 
 public class FaucetBlockEntityRenderer implements BlockEntityRenderer<FaucetBlockEntity> {
-  public FaucetBlockEntityRenderer(Context context) {}
+  public FaucetBlockEntityRenderer(IPayloadContext context) {}
 
   @Override
   public void render(FaucetBlockEntity tileEntity, float partialTicks, PoseStack matrices, MultiBufferSource bufferIn, int combinedLightIn, int combinedOverlayIn) {

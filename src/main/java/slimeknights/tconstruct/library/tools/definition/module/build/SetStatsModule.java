@@ -36,7 +36,7 @@ public record SetStatsModule(StatsNBT stats) implements ToolStatsHook, ToolModul
   }
 
   @Override
-  public void addToolStats(IToolContext context, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolIPayloadContext context, ModifierStatsBuilder builder) {
     for (IToolStat<?> stat : stats.getContainedStats()) {
       setStat(stat, builder);
     }

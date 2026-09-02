@@ -94,7 +94,7 @@ public class AnimatedGreyToSpriteTransformer extends GreyToSpriteTransformer {
   /* Serializing */
 
   @Override
-  public JsonObject serialize(JsonSerializationContext context) {
+  public JsonObject serialize(JsonSerializationIPayloadContext context) {
     JsonObject object = super.serialize(context);
     object.addProperty("type", NAME.toString());
     object.addProperty("meta", metaPath.toString());

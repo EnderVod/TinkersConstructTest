@@ -15,7 +15,7 @@ import java.util.List;
 
 /** Renderer for the obisidian gauge block */
 public class GaugeBlockEntityRenderer implements BlockEntityRenderer<GaugeBlockEntity> {
-  public GaugeBlockEntityRenderer(Context context) {}
+  public GaugeBlockEntityRenderer(IPayloadContext context) {}
 
   @Override
   public void render(GaugeBlockEntity tile, float pPartialTick, PoseStack matrices, MultiBufferSource buffer, int light, int pPackedOverlay) {

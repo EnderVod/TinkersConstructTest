@@ -78,7 +78,7 @@ public record LifestealModule(LevelingValue percent, LevelingInt durabilityUsage
   }
 
   @Override
-  public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage) {
+  public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage) {
     LivingEntity attacker = context.getAttacker();
     Entity target = context.getTarget();
     if (damage > 0 && this.modifierLevel.test(modifier.getLevel()) && !context.getTarget().getType().is(TinkerTags.EntityTypes.NECROTIC_BLACKLIST) && this.attacker.matches(attacker) && TinkerPredicate.matches(this.target, target)) {
@@ -98,7 +98,7 @@ public record LifestealModule(LevelingValue percent, LevelingInt durabilityUsage
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     if (context.isFullyCharged() && context.isCritical()) {
       onMonsterMeleeHit(tool, modifier, context, damageDealt);
     }

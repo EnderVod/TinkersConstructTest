@@ -27,10 +27,10 @@ public class BlockOrEntityCondition implements LootItemCondition {
 
   public static class ConditionSerializer implements Serializer<BlockOrEntityCondition> {
     @Override
-    public void serialize(JsonObject json, BlockOrEntityCondition loot, JsonSerializationContext context) { }
+    public void serialize(JsonObject json, BlockOrEntityCondition loot, JsonSerializationIPayloadContext context) { }
 
     @Override
-    public BlockOrEntityCondition deserialize(JsonObject loot, JsonDeserializationContext context) {
+    public BlockOrEntityCondition deserialize(JsonObject loot, JsonDeserializationIPayloadContext context) {
       return BlockOrEntityCondition.INSTANCE;
     }
   }

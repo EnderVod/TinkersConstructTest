@@ -27,7 +27,7 @@ public record ConditionalAOEIterator(IJsonPredicate<BlockState> condition, AreaO
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
     AreaOfEffectIterator iterator = condition.matches(state) ? ifTrue : ifFalse;
     return iterator.getBlocks(tool, context, state, matchType);
   }

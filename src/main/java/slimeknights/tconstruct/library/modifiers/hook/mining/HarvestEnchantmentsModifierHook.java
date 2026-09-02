@@ -40,7 +40,7 @@ public interface HarvestEnchantmentsModifierHook {
    * @see EnchantmentModifierHook#addEnchantment(Map, Enchantment, int)
    * @see EnchantmentModifierHook.SingleHarvestEnchantment
    */
-  void updateHarvestEnchantments(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, EquipmentContext equipment, EquipmentSlot slot, Map<Enchantment,Integer> map);
+  void updateHarvestEnchantments(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, EquipmentContext equipment, EquipmentSlot slot, Map<Enchantment,Integer> map);
 
 
   /* Helpers */
@@ -57,7 +57,7 @@ public interface HarvestEnchantmentsModifierHook {
    * @return  Old tag if enchants were applied
    */
   @Nullable
-  static ListTag updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context) {
+  static ListTag updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestIPayloadContext context) {
     Player player = context.getPlayer();
     if (player == null || !player.isCreative()) {
       // assuming we have a modifiable tool, we iterate all tools other than the main hand (since the main hand is in charge of harvesting the blocks)
@@ -117,7 +117,7 @@ public interface HarvestEnchantmentsModifierHook {
   /** Merger that runs all submodules */
   record AllMerger(Collection<HarvestEnchantmentsModifierHook> modules) implements HarvestEnchantmentsModifierHook {
     @Override
-    public void updateHarvestEnchantments(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, EquipmentContext equipment, EquipmentSlot slot, Map<Enchantment,Integer> map) {
+    public void updateHarvestEnchantments(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, EquipmentContext equipment, EquipmentSlot slot, Map<Enchantment,Integer> map) {
       for (HarvestEnchantmentsModifierHook module : modules) {
         module.updateHarvestEnchantments(tool, modifier, context, equipment, slot, map);
       }

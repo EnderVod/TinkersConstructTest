@@ -43,7 +43,7 @@ public class ModifierLootModifier extends LootModifier {
 
   @Nonnull
   @Override
-  protected ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> generatedLoot, LootContext context) {
+  protected ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> generatedLoot, LootIPayloadContext context) {
     // tool is for harvest
     ItemStack stack = context.getParamOrNull(LootContextParams.TOOL);
 

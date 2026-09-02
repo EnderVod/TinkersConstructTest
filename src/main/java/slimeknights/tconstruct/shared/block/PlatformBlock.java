@@ -100,7 +100,7 @@ public class PlatformBlock extends Block implements SimpleWaterloggedBlock {
   }
 
   @Override
-  public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionIPayloadContext context) {
     return SHAPES[makeShapeIndex(state.getValue(UP), state.getValue(DOWN), state.getValue(NORTH), state.getValue(EAST), state.getValue(SOUTH), state.getValue(WEST))];
   }
 
@@ -140,7 +140,7 @@ public class PlatformBlock extends Block implements SimpleWaterloggedBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     BlockPos pos = context.getClickedPos();
     Level level = context.getLevel();
     BlockPos below = pos.below();

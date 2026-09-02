@@ -35,7 +35,7 @@ public class RecolorSpriteTransformer implements IRecolorSpriteTransformer {
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationContext context) {
+  public JsonObject serialize(JsonSerializationIPayloadContext context) {
     JsonObject object = new JsonObject();
     object.addProperty("type", NAME.toString());
     object.add("color_mapping", context.serialize(colorMapping));
@@ -45,7 +45,7 @@ public class RecolorSpriteTransformer implements IRecolorSpriteTransformer {
   /** Serializer for a recolor sprite transformer */
   protected static class Deserializer implements JsonDeserializer<RecolorSpriteTransformer> {
     @Override
-    public RecolorSpriteTransformer deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+    public RecolorSpriteTransformer deserialize(JsonElement json, Type typeOfT, JsonDeserializationIPayloadContext context) throws JsonParseException {
       JsonObject object = json.getAsJsonObject();
       IColorMapping colorMapping = context.deserialize(JsonHelper.getElement(object, "color_mapping"), IColorMapping.class);
       return new RecolorSpriteTransformer(colorMapping);

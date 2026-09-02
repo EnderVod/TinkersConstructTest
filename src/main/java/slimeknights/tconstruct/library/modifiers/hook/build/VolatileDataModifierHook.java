@@ -23,12 +23,12 @@ public interface VolatileDataModifierHook {
    * @param modifier        Modifier level
    * @param volatileData    Mutable mod NBT data, result of this method
    */
-  void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData);
+  void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData);
 
   /** Merger that runs all hooks */
   record AllMerger(Collection<VolatileDataModifierHook> modules) implements VolatileDataModifierHook {
     @Override
-    public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+    public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
       for (VolatileDataModifierHook module : modules) {
         module.addVolatileData(context, modifier, volatileData);
       }

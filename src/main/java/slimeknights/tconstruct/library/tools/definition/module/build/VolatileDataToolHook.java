@@ -22,12 +22,12 @@ public interface VolatileDataToolHook {
    * @param context         Context about the tool being built. Will not yet contain
    * @param volatileData    Mutable mod NBT data, result of this method
    */
-  void addVolatileData(IToolContext context, ToolDataNBT volatileData);
+  void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData);
 
   /** Merger that runs all hooks */
   record AllMerger(Collection<VolatileDataToolHook> modules) implements VolatileDataToolHook {
     @Override
-    public void addVolatileData(IToolContext context, ToolDataNBT volatileData) {
+    public void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData) {
       for (VolatileDataToolHook module : modules) {
         module.addVolatileData(context, volatileData);
       }

@@ -89,7 +89,7 @@ public class DwarvenModifier extends Modifier implements ConditionalStatModifier
   }
 
   @Override
-  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
+  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
     if (context.isEffective()) {
       BlockPos pos = context.pos();
       if (pos != null) {

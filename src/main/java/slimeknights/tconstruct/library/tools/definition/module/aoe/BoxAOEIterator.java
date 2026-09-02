@@ -80,7 +80,7 @@ public record BoxAOEIterator(BoxSize base, List<BoxSize> expansions, IBoxExpansi
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
     // expanded gives an extra width every odd level, and an extra height every even level
     return calculate(tool, context, sizeFor(tool.getVolatileData().getInt(IModifiable.EXPANDED)), direction, matchType);
   }
@@ -93,7 +93,7 @@ public record BoxAOEIterator(BoxSize base, List<BoxSize> expansions, IBoxExpansi
    * @param matchType     Type of harvest being performed
    * @return  List of block positions
    */
-  public static Iterable<BlockPos> calculate(IToolStackView tool, UseOnContext context, BoxSize extraSize, IBoxExpansion expansionDirection, AOEMatchType matchType) {
+  public static Iterable<BlockPos> calculate(IToolStackView tool, UseOnIPayloadContext context, BoxSize extraSize, IBoxExpansion expansionDirection, AOEMatchType matchType) {
     // skip if no work
     if (extraSize.isZero()) {
       return Collections.emptyList();

@@ -2,7 +2,7 @@ package slimeknights.tconstruct.library.modifiers.fluid;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.network.NetworkEvent.Context;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.mantle.network.packet.IThreadsafePacket;
 import slimeknights.tconstruct.TConstruct;
@@ -47,7 +47,7 @@ public record UpdateFluidEffectsPacket(List<FluidEffects.Entry> fluids) implemen
   }
 
   @Override
-  public void handleThreadsafe(Context context) {
+  public void handleThreadsafe(IPayloadContext context) {
     FluidEffectManager.INSTANCE.updateFromServer(fluids);
   }
 }

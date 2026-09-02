@@ -16,7 +16,7 @@ public interface PotionSubtypeInterpreter<T> extends IIngredientSubtypeInterpret
   CompoundTag getTag(T ingredient);
 
   @Override
-  default String apply(T ingredient, UidContext context) {
+  default String apply(T ingredient, UidIPayloadContext context) {
     CompoundTag tag = getTag(ingredient);
     if (tag == null) {
       return IIngredientSubtypeInterpreter.NONE;

@@ -19,7 +19,7 @@ import slimeknights.tconstruct.smeltery.client.util.CastingItemRenderTypeBuffer;
 import java.util.List;
 
 public class CastingBlockEntityRenderer implements BlockEntityRenderer<CastingBlockEntity> {
-  public CastingBlockEntityRenderer(Context context) {}
+  public CastingBlockEntityRenderer(IPayloadContext context) {}
 
   @Override
   public void render(CastingBlockEntity casting, float partialTicks, PoseStack matrices, MultiBufferSource buffer, int light, int combinedOverlayIn) {

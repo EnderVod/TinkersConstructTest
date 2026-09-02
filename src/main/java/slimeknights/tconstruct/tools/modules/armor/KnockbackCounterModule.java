@@ -76,11 +76,11 @@ public record KnockbackCounterModule(TinkerDataKey<SlotInCharge> slotInCharge, L
 
   @Deprecated
   @Override
-  public void applyEffect(IToolStackView tool, ModifierEntry modifier, float value, EquipmentContext context, Entity attacker, DamageSource source, float damageDealt) {}
+  public void applyEffect(IToolStackView tool, ModifierEntry modifier, float value, EquipmentIPayloadContext context, Entity attacker, DamageSource source, float damageDealt) {}
 
   @SuppressWarnings("PatternVariableHidesField")
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float damageDealt, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float damageDealt, boolean isDirectDamage) {
     // direct damage on the server against a living entity
     // only run once across all pieces, as we want a max effect and knockback doesn't naturally max
     LivingEntity defender = context.getEntity();

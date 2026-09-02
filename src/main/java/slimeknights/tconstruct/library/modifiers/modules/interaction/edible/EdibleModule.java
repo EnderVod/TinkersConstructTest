@@ -148,7 +148,7 @@ public enum EdibleModule implements ModifierModule, GeneralInteractionModifierHo
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     if (!tool.isBroken() && tool.hasTag(TinkerTags.Items.ARMOR)) {
       StatsNBT stats = tool.getStats();
       if (stats.getInt(HUNGER) > 0) {

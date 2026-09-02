@@ -274,7 +274,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     boolean applyBeforeMelee();
 
     @Override
-    default void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage) {
+    default void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage) {
       if (context.isFullyCharged() && condition().matches(tool, modifier) && checkChance(modifier)) {
         LivingEntity attacker = context.getAttacker();
         if (holder().matches(attacker)) {
@@ -284,7 +284,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
+    default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
       if (applyBeforeMelee()) {
         onMonsterMeleeHit(tool, modifier, context, damage);
       }
@@ -292,7 +292,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    default void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+    default void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
       if (!applyBeforeMelee()) {
         onMonsterMeleeHit(tool, modifier, context, damageDealt);
       }
@@ -355,7 +355,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    default void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+    default void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
       if (directDamage().test(isDirectDamage) && condition().matches(tool, modifier) && damageSource().matches(source)) {
         LivingEntity defender = context.getEntity();
         Entity sourceEntity = source.getEntity();
@@ -433,7 +433,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
+    public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
       if (this.directDamage.test(isDirectDamage) && condition.matches(tool, modifier) && this.damageSource.matches(source) && checkChance(modifier)) {
         LivingEntity holder = context.getEntity();
         if (holder != target && this.holder.matches(holder)) {
@@ -463,14 +463,14 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
+    public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
       if (isAoe.test(context.isAOE()) && isProjectile.test(context.isProjectile()) && condition.matches(tool, modifier) && checkChance(modifier)) {
         effect.applyEffect(context.getLiving(), modifier, null);
       }
     }
 
     @Override
-    public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+    public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
       if (context.isFullyCharged() && isAoe.test(context.isExtraAttack()) && isProjectile.test(context.isProjectile()) && condition.matches(tool, modifier) && checkChance(modifier)) {
         effect.applyEffect(context.getAttacker(), modifier, null);
       }
@@ -503,7 +503,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos) {
+    public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos) {
       if (isAoe.test(false) && isProjectile.test(false) && condition.matches(tool, modifier) && checkChance(modifier)) {
         effect.applyEffect(context.getPlayer(), modifier, null);
       }
@@ -571,7 +571,7 @@ public interface MobEffectModule extends ModifierModule, ConditionalModule<ITool
     }
 
     @Override
-    public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+    public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
       // legacy implementation conditioned on only being armor. For the new module we let you set the condition for that.
       if (tool.hasTag(TinkerTags.Items.ARMOR)) {
         CounterCommon.super.onAttacked(tool, modifier, context, slotType, source, amount, isDirectDamage);

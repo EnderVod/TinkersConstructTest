@@ -17,7 +17,7 @@ public interface LootingModifierHook {
    * @param looting    Looting value set from previous modifiers. May be negative, will be normalized post modifier calls.
    * @return New looting value, may be negative
    */
-  int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingContext context, int looting);
+  int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingIPayloadContext context, int looting);
 
 
   /* Helpers */
@@ -29,7 +29,7 @@ public interface LootingModifierHook {
    * @param looting  Original looting value, typically from enchantments
    * @return  Looting value for the tool
    */
-  static int getLooting(IToolStackView tool, LootingContext context, int looting) {
+  static int getLooting(IToolStackView tool, LootingIPayloadContext context, int looting) {
     if (!tool.isBroken()) {
       for (ModifierEntry entry : tool.getModifierList()) {
         looting = entry.getHook(ModifierHooks.WEAPON_LOOTING).updateLooting(tool, entry, context, looting);
@@ -42,7 +42,7 @@ public interface LootingModifierHook {
   /** Constructor for a merger that sums all children */
   record ComposeMerger(Collection<LootingModifierHook> modules) implements LootingModifierHook {
     @Override
-    public int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingContext context, int looting) {
+    public int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingIPayloadContext context, int looting) {
       for (LootingModifierHook module : modules) {
         looting = module.updateLooting(tool, modifier, context, looting);
       }

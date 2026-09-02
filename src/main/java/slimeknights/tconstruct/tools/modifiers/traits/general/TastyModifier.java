@@ -34,7 +34,7 @@ public class TastyModifier extends Modifier implements ProcessLootModifierHook {
   }
 
   @Override
-  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootContext context) {
+  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootIPayloadContext context) {
     // if no damage source, probably not a mob
     // otherwise blocks breaking (where THIS_ENTITY is the player) start dropping bacon
     if (!context.hasParam(LootContextParams.DAMAGE_SOURCE)) {

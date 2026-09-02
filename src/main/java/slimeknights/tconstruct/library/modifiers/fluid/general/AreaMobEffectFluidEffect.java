@@ -34,7 +34,7 @@ public record AreaMobEffectFluidEffect(FluidMobEffect effect, TimeAction action,
   }
 
   @Override
-  public float apply(FluidStack fluid, EffectLevel level, FluidEffectContext context, FluidAction action) {
+  public float apply(FluidStack fluid, EffectLevel level, FluidEffectIPayloadContext context, FluidAction action) {
     float used = 0;
     Entity source = context.getEffectSource();
     for(LivingEntity living : context.getLevel().getEntitiesOfClass(LivingEntity.class, new AABB(context.getBlockPos()))) {

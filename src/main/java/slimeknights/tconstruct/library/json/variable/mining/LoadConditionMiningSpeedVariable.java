@@ -27,7 +27,7 @@ public record LoadConditionMiningSpeedVariable(MiningSpeedVariable ifTrue, Minin
   }
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
+  public float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
     return (Util.testConditions(conditions) ? ifTrue : ifFalse).getValue(tool, context, player);
   }
 

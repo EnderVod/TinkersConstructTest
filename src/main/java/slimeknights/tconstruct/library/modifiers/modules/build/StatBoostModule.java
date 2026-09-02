@@ -39,7 +39,7 @@ public record StatBoostModule(INumericToolStat<?> stat, StatOperation operation,
   public StatBoostModule {}
 
   @Override
-  public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
     if (condition.matches(context, modifier) && stat.supports(context.getItem())) {
       operation.apply(builder, stat, amount.compute(modifier.getEffectiveLevel()));
     }

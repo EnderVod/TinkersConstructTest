@@ -68,7 +68,7 @@ public enum MinimapModule implements ModifierModule, EquipmentChangeModifierHook
   }
 
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (context.getChangedSlot() == EquipmentSlot.HEAD) {
       TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
       if (data != null) {
@@ -84,7 +84,7 @@ public enum MinimapModule implements ModifierModule, EquipmentChangeModifierHook
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
     if (context.getChangedSlot() == EquipmentSlot.HEAD) {
       TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
       if (data != null) {

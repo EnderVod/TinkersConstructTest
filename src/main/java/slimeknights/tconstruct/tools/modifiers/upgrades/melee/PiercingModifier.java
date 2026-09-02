@@ -35,12 +35,12 @@ public class PiercingModifier extends Modifier implements ToolStatsModifierHook,
   }
 
   @Override
-  public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
     ToolStats.ATTACK_DAMAGE.add(builder, -0.5f * modifier.getEffectiveLevel());
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     DamageSource source = TinkerDamageTypes.source(
       context.getLevel().registryAccess(),
       TinkerDamageTypes.PIERCING,

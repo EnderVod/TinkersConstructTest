@@ -279,7 +279,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     // melee hits cook by melee damage
     cookItems(tool, modifier, context.getAttacker(), damageDealt);
   }
@@ -290,7 +290,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   }
 
   @Override
-  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested) {
+  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested) {
     if (tool.hasTag(TinkerTags.Items.HARVEST)) {
       cookItems(tool, modifier, context.getLiving(), harvested);
     }
@@ -311,7 +311,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // damage taken cooks for armor/shields
     if (tool.hasTag(TinkerTags.Items.ARMOR)) {
       cookItems(tool, modifier, context.getEntity(), amount);
@@ -325,7 +325,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   }
 
   @Override
-  public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos) {
+  public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos) {
     cookItems(tool, modifier, context.getLevel(), context.getPlayer(), 1);
   }
 

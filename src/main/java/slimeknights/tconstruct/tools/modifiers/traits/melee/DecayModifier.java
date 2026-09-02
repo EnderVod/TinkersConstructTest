@@ -44,7 +44,7 @@ public class DecayModifier extends Modifier implements ProjectileLaunchModifierH
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     if (context.isFullyCharged()) {
       // note the time of each effect is calculated independently
 
@@ -80,7 +80,7 @@ public class DecayModifier extends Modifier implements ProjectileLaunchModifierH
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // this works like vanilla, effect is capped due to not being able to receive multiple instances
     if (isDirectDamage && tool.hasTag(TinkerTags.Items.ARMOR) && source.getEntity() instanceof LivingEntity attacker) {
       // 10% chance to poison yourself

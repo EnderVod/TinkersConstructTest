@@ -37,7 +37,7 @@ public class EquipmentContext {
 
   /** Creates a context with an existing tool instance */
   public static EquipmentContext withTool(LivingEntity living, IToolStackView tool, EquipmentSlot slot) {
-    EquipmentContext context = new EquipmentContext(living);
+    EquipmentIPayloadContext context = new EquipmentContext(living);
     int index = slot.getFilterFlag();
     context.toolsInSlots[index] = tool;
     context.fetchedTool[index] = true;

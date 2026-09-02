@@ -51,7 +51,7 @@ public class InvariantModifier extends Modifier implements ConditionalStatModifi
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
     return damage + getBonus(context.getAttacker()) * modifier.getEffectiveLevel() * DAMAGE * tool.getMultiplier(ToolStats.ATTACK_DAMAGE);
   }
 
@@ -64,7 +64,7 @@ public class InvariantModifier extends Modifier implements ConditionalStatModifi
   }
 
   @Override
-  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
+  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
     if (DamageSourcePredicate.CAN_PROTECT.matches(source)) {
       modifierValue += getBonus(context.getEntity()) * modifier.getEffectiveLevel();
     }

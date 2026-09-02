@@ -7,7 +7,7 @@ import slimeknights.tconstruct.tools.client.material.ThrownShurikenRenderer;
 /** @deprecated use {@link ThrownShurikenRenderer} */
 @Deprecated(forRemoval = true)
 public class RenderShuriken extends ThrownShurikenRenderer<ShurikenEntityBase> {
-  public RenderShuriken(EntityRendererProvider.Context context) {
+  public RenderShuriken(EntityRendererProvider.IPayloadContext context) {
     super(context);
   }
 }

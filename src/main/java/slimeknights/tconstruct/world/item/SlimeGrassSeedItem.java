@@ -49,7 +49,7 @@ public class SlimeGrassSeedItem extends TooltipItem {
   }
 
   @Override
-  public InteractionResult useOn(UseOnContext context) {
+  public InteractionResult useOn(UseOnIPayloadContext context) {
     BlockPos pos = context.getClickedPos();
     Level world = context.getLevel();
     BlockState state = world.getBlockState(pos);

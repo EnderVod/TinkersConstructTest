@@ -156,12 +156,12 @@ public class StationSlotLayoutLoader extends SimpleJsonResourceReloadListener {
   /** GSON serializer for ingredients */
   private static class IngredientSerializer implements JsonSerializer<Ingredient>, JsonDeserializer<Ingredient> {
     @Override
-    public Ingredient deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+    public Ingredient deserialize(JsonElement json, Type typeOfT, JsonDeserializationIPayloadContext context) throws JsonParseException {
       return Ingredient.fromJson(json);
     }
 
     @Override
-    public JsonElement serialize(Ingredient ingredient, Type typeOfSrc, JsonSerializationContext context) {
+    public JsonElement serialize(Ingredient ingredient, Type typeOfSrc, JsonSerializationIPayloadContext context) {
       return ingredient.toJson();
     }
   }

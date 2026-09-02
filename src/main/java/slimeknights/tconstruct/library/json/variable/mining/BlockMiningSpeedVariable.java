@@ -32,7 +32,7 @@ public record BlockMiningSpeedVariable(BlockVariable block, float fallback) impl
   }
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
+  public float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
     if (context != null) {
       return block.getValue(context.state());
     }

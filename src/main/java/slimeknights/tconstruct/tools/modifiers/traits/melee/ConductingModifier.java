@@ -59,7 +59,7 @@ public class ConductingModifier extends Modifier implements ConditionalStatModif
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
     float bonus = bonusScale(context.getAttacker()) * modifier.getEffectiveLevel() * PERCENT_PER_LEVEL;
     if (bonus > 0) {
       damage *= 1 + bonus;

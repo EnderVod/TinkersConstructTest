@@ -144,7 +144,7 @@ public class InteractionHandler {
   }
 
   /** Runs one of the two blockUse hooks for a chestplate */
-  private static InteractionResult onBlockUse(UseOnContext context, IToolStackView tool, ItemStack stack, Function<ModifierEntry, InteractionResult> callback) {
+  private static InteractionResult onBlockUse(UseOnIPayloadContext context, IToolStackView tool, ItemStack stack, Function<ModifierEntry, InteractionResult> callback) {
     Player player = context.getPlayer();
     Level world = context.getLevel();
     BlockInWorld info = new BlockInWorld(world, context.getClickedPos(), false);
@@ -181,7 +181,7 @@ public class InteractionHandler {
         ToolStack tool = ToolStack.from(chestplate);
         InteractionHand hand = event.getHand();
         BlockHitResult trace = event.getHitVec();
-        UseOnContext context = new UseOnContext(player, hand, trace);
+        UseOnIPayloadContext context = new UseOnContext(player, hand, trace);
 
         // first, before block use (in forge, onItemUseFirst)
         if (event.getUseItem() != Result.DENY) {
@@ -420,7 +420,7 @@ public class InteractionHandler {
     if (direction == null) {
       direction = player.getDirection().getOpposite();
     }
-    UseOnContext context = new UseOnContext(player, hand, new BlockHitResult(Util.toHitVec(pos, direction), direction, pos, false));
+    UseOnIPayloadContext context = new UseOnContext(player, hand, new BlockHitResult(Util.toHitVec(pos, direction), direction, pos, false));
 
     // run modifier hooks
     ToolStack tool = ToolStack.from(stack);

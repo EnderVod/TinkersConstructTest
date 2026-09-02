@@ -17,7 +17,7 @@ import java.util.List;
 
 public class FluidEffectProjectileRenderer extends EntityRenderer<FluidEffectProjectile> {
   private final List<FluidCuboid> fluids;
-  public FluidEffectProjectileRenderer(Context context) {
+  public FluidEffectProjectileRenderer(IPayloadContext context) {
     super(context);
     this.fluids = List.of(
       FluidCuboid.builder().from(-4,  0,  0).to(-2,  2,  2).build(),

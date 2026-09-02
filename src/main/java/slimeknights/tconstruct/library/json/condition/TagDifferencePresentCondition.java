@@ -51,7 +51,7 @@ public class TagDifferencePresentCondition<T> implements ICondition {
   }
 
   @Override
-  public boolean test(IContext context) {
+  public boolean test(IIPayloadContext context) {
     // get the base tag
     Collection<Holder<T>> base = context.getTag(this.base);
     if (base == null || base.isEmpty()) {

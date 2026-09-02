@@ -55,7 +55,7 @@ public class TankModule implements HookProvider, FluidModifierHook, VolatileData
   }
 
   @Override
-  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     ToolFluidCapability.addTanks(modifier, volatileData, this);
   }
 

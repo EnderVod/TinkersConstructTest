@@ -92,7 +92,7 @@ public class EquipmentChangeWatcher {
 
   /** Shared modifier hook logic */
   private static void runModifierHooks(LivingEntity entity, EquipmentSlot changedSlot, ItemStack original, ItemStack replacement) {
-    EquipmentChangeContext context = new EquipmentChangeContext(entity, changedSlot, original, replacement);
+    EquipmentChangeIPayloadContext context = new EquipmentChangeContext(entity, changedSlot, original, replacement);
 
     // first, fire event to notify an item was removed
     IToolStackView tool = context.getOriginalTool();

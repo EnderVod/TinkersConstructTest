@@ -23,7 +23,7 @@ public class FancyArmorStandRenderer extends ArmorStandRenderer {
     }
   }
 
-  public FancyArmorStandRenderer(Context context) {
+  public FancyArmorStandRenderer(IPayloadContext context) {
     super(context);
   }
 

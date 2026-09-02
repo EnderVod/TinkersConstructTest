@@ -48,7 +48,7 @@ public record FieryAttackModule(LevelingValue time) implements ModifierModule, P
   }
 
   @Override
-  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
+  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
     // vanilla hack: apply fire so the entity drops the proper items on instant kill
     LivingEntity target = context.getLivingTarget();
     if (target != null && !target.isOnFire()) {
@@ -58,7 +58,7 @@ public record FieryAttackModule(LevelingValue time) implements ModifierModule, P
   }
 
   @Override
-  public void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageAttempted) {
+  public void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageAttempted) {
     // conclusion of vanilla hack: we don't want the target on fire if we did not hit them
     LivingEntity target = context.getLivingTarget();
     if (target != null && target.getRemainingFireTicks() == 1) {
@@ -67,7 +67,7 @@ public record FieryAttackModule(LevelingValue time) implements ModifierModule, P
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     setFire(modifier, context.getTarget());
   }
 

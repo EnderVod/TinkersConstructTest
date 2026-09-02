@@ -44,7 +44,7 @@ public class OrientableSmelteryBlock extends SearedBlock implements EntityBlock 
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
   }
 

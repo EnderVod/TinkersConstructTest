@@ -24,7 +24,7 @@ public interface BlockHarvestModifierHook {
    * @param modifier  Modifier level
    * @param context   Harvest context
    */
-  default void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {}
+  default void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {}
 
   /**
    * Called after all blocks are broken on the target block. Use to perform effects or to cleanup changes from {@link #startHarvest(IToolStackView, ModifierEntry, ToolHarvestContext)}.
@@ -33,19 +33,19 @@ public interface BlockHarvestModifierHook {
    * @param context    Harvest context
    * @param harvested  Number of blocks harvested
    */
-  void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested);
+  void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested);
 
   /** Merger that runs all submodules */
   record AllMerger(Collection<BlockHarvestModifierHook> modules) implements BlockHarvestModifierHook {
     @Override
-    public void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
+    public void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
       for (BlockHarvestModifierHook module : modules) {
         module.startHarvest(tool, modifier, context);
       }
     }
 
     @Override
-    public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested) {
+    public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested) {
       for (BlockHarvestModifierHook module : modules) {
         module.finishHarvest(tool, modifier, context, harvested);
       }
@@ -62,12 +62,12 @@ public interface BlockHarvestModifierHook {
     ResourceLocation HARVESTING_FLAG = TConstruct.getResource("is_harvesting");
 
     @Override
-    default void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
+    default void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
       tool.getPersistentData().putBoolean(HARVESTING_FLAG, true);
     }
 
     @Override
-    default void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested) {
+    default void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested) {
       tool.getPersistentData().remove(HARVESTING_FLAG);
     }
 

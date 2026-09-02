@@ -59,13 +59,13 @@ public class InsatiableModifier extends Modifier implements ProjectileHitModifie
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
     // gives +0.5 per effect level, for +2.5 per modifier level at max
     return damage + (getEffect(context.getAttacker(), ToolType.MELEE) * modifier.getEffectiveLevel() / 2f * tool.getMultiplier(ToolStats.ATTACK_DAMAGE));
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     // 5 hits gets you to max
     if (!context.isExtraAttack() && context.isFullyCharged()) {
       applyEffect(context.getAttacker(), ToolType.MELEE, 5*20, 1, 4);

@@ -40,7 +40,7 @@ public record TreeAOEIterator(int width, int depth) implements AreaOfEffectItera
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
     int expanded = tool.getVolatileData().getInt(IModifiable.EXPANDED);
     return calculate(context.getLevel(), context.getPlayer(), context.getClickedPos(), context.getClickedFace(), state, width + (expanded + 1) / 2, depth + expanded / 2);
   }

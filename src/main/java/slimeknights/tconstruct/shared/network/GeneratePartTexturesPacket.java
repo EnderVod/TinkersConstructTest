@@ -27,7 +27,7 @@ public class GeneratePartTexturesPacket implements IThreadsafePacket {
   }
 
   @Override
-  public void handleThreadsafe(IPayloadContext context) {
+  public void handleThreadsafe(IPayloadIPayloadContext context) {
     context.enqueueWork(() -> ClientGeneratePartTexturesCommand.generateTextures(operation, modId, materialPath));
   }
 

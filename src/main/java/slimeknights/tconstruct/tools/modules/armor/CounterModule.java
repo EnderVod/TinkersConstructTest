@@ -93,10 +93,10 @@ public interface CounterModule extends ModifierModule, OnAttackedModifierHook, C
    * @param source       Damage that was dealt
    * @param damageDealt  Amount of damage dealt
    */
-  void applyEffect(IToolStackView tool, ModifierEntry modifier, float value, EquipmentContext context, Entity attacker, DamageSource source, float damageDealt);
+  void applyEffect(IToolStackView tool, ModifierEntry modifier, float value, EquipmentIPayloadContext context, Entity attacker, DamageSource source, float damageDealt);
 
   @Override
-  default void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float damageDealt, boolean isDirectDamage) {
+  default void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float damageDealt, boolean isDirectDamage) {
     // must be direct damage, and must be armor (held or
     Entity attacker = source.getEntity();
     LivingEntity defender = context.getEntity();

@@ -35,7 +35,7 @@ public class TagPreferenceLootEntry extends LootPoolSingletonContainer {
   }
 
   @Override
-  protected void createItemStack(Consumer<ItemStack> consumer, LootContext context) {
+  protected void createItemStack(Consumer<ItemStack> consumer, LootIPayloadContext context) {
     TagPreference.getPreference(tag).ifPresent(item -> consumer.accept(new ItemStack(item)));
   }
 
@@ -53,7 +53,7 @@ public class TagPreferenceLootEntry extends LootPoolSingletonContainer {
     }
 
     @Override
-    protected TagPreferenceLootEntry deserialize(JsonObject json, JsonDeserializationContext context, int weight, int quality, LootItemCondition[] conditions, LootItemFunction[] functions) {
+    protected TagPreferenceLootEntry deserialize(JsonObject json, JsonDeserializationIPayloadContext context, int weight, int quality, LootItemCondition[] conditions, LootItemFunction[] functions) {
       TConstruct.LOG.warn("Using deprecated tag preference loot entry 'tconstruct:tag_preference', use 'mantle:tag_preference' instead");
       TagKey<Item> tag = TagKey.create(Registries.ITEM, JsonHelper.getResourceLocation(json, "tag"));
       return new TagPreferenceLootEntry(tag, weight, quality, conditions, functions);

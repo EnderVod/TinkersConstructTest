@@ -45,7 +45,7 @@ public class KnightMetalBlock extends Block implements SimpleWaterloggedBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     FluidState fluid = context.getLevel().getFluidState(context.getClickedPos());
     return this.defaultBlockState().setValue(WATERLOGGED, fluid.getType() == Fluids.WATER && fluid.getAmount() == 8);
   }

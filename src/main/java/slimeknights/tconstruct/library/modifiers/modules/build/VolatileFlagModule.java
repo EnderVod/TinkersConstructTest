@@ -38,7 +38,7 @@ public record VolatileFlagModule(ResourceLocation flag, ModifierCondition<IToolC
   }
 
   @Override
-  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     if (condition.matches(context, modifier)) {
       volatileData.putBoolean(flag, true);
     }

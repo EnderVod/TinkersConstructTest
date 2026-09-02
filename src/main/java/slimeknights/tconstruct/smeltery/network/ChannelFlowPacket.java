@@ -44,7 +44,7 @@ public class ChannelFlowPacket implements BlockEntityPacket<ChannelBlockEntity> 
   }
 
   @Override
-  public void handleBlockEntity(IPayloadContext context, ChannelBlockEntity be) {
+  public void handleBlockEntity(IPayloadIPayloadContext context, ChannelBlockEntity be) {
     be.setFlow(side, flow);
   }
 }

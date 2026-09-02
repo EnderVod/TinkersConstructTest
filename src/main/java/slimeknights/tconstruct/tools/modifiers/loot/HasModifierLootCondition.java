@@ -27,19 +27,19 @@ public class HasModifierLootCondition implements LootItemCondition {
   }
 
   @Override
-  public boolean test(LootContext context) {
+  public boolean test(LootIPayloadContext context) {
     ItemStack tool = context.getParamOrNull(LootContextParams.TOOL);
     return tool != null && tool.is(TinkerTags.Items.MODIFIABLE) && ModifierUtil.getModifierLevel(tool, modifier) > 0;
   }
 
   public static class ConditionSerializer implements Serializer<HasModifierLootCondition> {
     @Override
-    public void serialize(JsonObject json, HasModifierLootCondition condition, JsonSerializationContext context) {
+    public void serialize(JsonObject json, HasModifierLootCondition condition, JsonSerializationIPayloadContext context) {
       json.addProperty("modifier", condition.modifier.toString());
     }
 
     @Override
-    public HasModifierLootCondition deserialize(JsonObject json, JsonDeserializationContext context) {
+    public HasModifierLootCondition deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
       return new HasModifierLootCondition(new ModifierId(JsonHelper.getResourceLocation(json, "modifier")));
     }
   }

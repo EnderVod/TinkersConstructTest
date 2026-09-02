@@ -48,7 +48,7 @@ public record FreezingAttackModule(LevelingValue time) implements ModifierModule
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     freeze(modifier, context.getTarget());
   }
 

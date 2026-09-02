@@ -182,7 +182,7 @@ public class ModifierClientEvents {
     if (event.getEntity() != Minecraft.getInstance().player) {
       return;
     }
-    EquipmentChangeContext context = event.getContext();
+    EquipmentChangeIPayloadContext context = event.getContext();
     if (Config.CLIENT.renderShieldSlotItem.get()) {
       if (context.getChangedSlot() == EquipmentSlot.LEGS) {
         IToolStackView tool = context.getToolInSlot(EquipmentSlot.LEGS);

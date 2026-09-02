@@ -51,7 +51,7 @@ public interface LootingModule extends ModifierModule, LevelingIntModule, Condit
   IJsonPredicate<DamageSource> damageSource();
 
   /** Checks if the conditions match the given context */
-  default boolean matchesConditions(IToolStackView tool, ModifierEntry modifier, LootingContext context) {
+  default boolean matchesConditions(IToolStackView tool, ModifierEntry modifier, LootingIPayloadContext context) {
     return condition().matches(tool, modifier) && holder().matches(context.getHolder()) && TinkerPredicate.matches(target(), context.getLivingTarget()) && TinkerPredicate.matches(damageSource(), context.getDamageSource());
   }
 
@@ -118,7 +118,7 @@ public interface LootingModule extends ModifierModule, LevelingIntModule, Condit
     public Weapon {}
 
     @Override
-    public int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingContext context, int looting) {
+    public int updateLooting(IToolStackView tool, ModifierEntry modifier, LootingIPayloadContext context, int looting) {
       if (matchesConditions(tool, modifier, context)) {
         looting += getLevel(modifier);
       }
@@ -146,7 +146,7 @@ public interface LootingModule extends ModifierModule, LevelingIntModule, Condit
     public Armor {}
 
     @Override
-    public int updateArmorLooting(IToolStackView tool, ModifierEntry modifier, LootingContext context, EquipmentContext equipment, EquipmentSlot slot, int looting) {
+    public int updateArmorLooting(IToolStackView tool, ModifierEntry modifier, LootingIPayloadContext context, EquipmentContext equipment, EquipmentSlot slot, int looting) {
       if (slots.contains(slot) && matchesConditions(tool, modifier, context)) {
         looting += getLevel(modifier);
       }

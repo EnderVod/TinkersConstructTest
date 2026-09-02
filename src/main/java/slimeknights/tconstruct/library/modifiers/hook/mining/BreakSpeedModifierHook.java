@@ -40,7 +40,7 @@ public interface BreakSpeedModifierHook {
    * @return new speed as modified by this hook.
    */
   @SuppressWarnings("deprecation")
-  default float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
+  default float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
     BreakSpeed event = context.event();
     event.setNewSpeed(speed);
     onBreakSpeed(tool, modifier, event, context.sideHit(), context.isEffective(), context.miningSpeedMultiplier());
@@ -58,7 +58,7 @@ public interface BreakSpeedModifierHook {
     }
 
     @Override
-    public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
+    public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
       for (BreakSpeedModifierHook module : modules) {
         speed = module.modifyBreakSpeed(tool, modifier, context, speed);
       }

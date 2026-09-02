@@ -81,7 +81,7 @@ public record ConditionalMiningSpeedModule(
   }
 
   @Override
-  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
+  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
     Player player = context.player();
     if ((!requireEffective || context.isEffective()) && condition.matches(tool, modifier) && block.matches(context.state()) && holder.matches(player)) {
       return formula.apply(tool, modifier, context, player, context.originalSpeed(), speed, context.miningSpeedMultiplier());

@@ -98,7 +98,7 @@ public class SearedLadderBlock extends OrientableSmelteryBlock {
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceContext context) {
+  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
     BlockState state = context.getLevel().getBlockState(context.getClickedPos().below());
     Direction direction = context.getHorizontalDirection().getOpposite();
     return this.defaultBlockState()
@@ -121,14 +121,14 @@ public class SearedLadderBlock extends OrientableSmelteryBlock {
   @SuppressWarnings("deprecation")
   @Override
   @Deprecated
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
     return (state.getValue(BOTTOM) ? BOUNDS_BOTTOM : BOUNDS).get(state.getValue(FACING));
   }
 
   @SuppressWarnings("deprecation")
   @Override
   @Deprecated
-  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
+  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
     return (state.getValue(BOTTOM) ? COLLISION_BOTTOM : COLLISION).get(state.getValue(FACING));
   }
 }

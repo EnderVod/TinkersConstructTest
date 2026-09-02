@@ -86,7 +86,7 @@ public class EnderportingModifier extends NoLevelsModifier implements PlantHarve
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
     if (!context.isExtraAttack()) {
       LivingEntity target = context.getLivingTarget();
       // if the entity is dead now
@@ -102,7 +102,7 @@ public class EnderportingModifier extends NoLevelsModifier implements PlantHarve
   }
 
   @Override
-  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested) {
+  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested) {
     if (harvested > 0 && context.canHarvest() && tool.hasTag(TinkerTags.Items.HARVEST)) {
       BlockPos pos = context.getPos();
       LivingEntity living = context.getLiving();
@@ -113,7 +113,7 @@ public class EnderportingModifier extends NoLevelsModifier implements PlantHarve
   }
 
   @Override
-  public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos) {
+  public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos) {
     // only teleport to the center block
     if (context.getClickedPos().equals(pos)) {
       LivingEntity living = context.getPlayer();

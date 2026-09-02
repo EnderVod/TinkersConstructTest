@@ -23,7 +23,7 @@ import slimeknights.tconstruct.smeltery.block.ChannelBlock.ChannelConnection;
 import slimeknights.tconstruct.smeltery.block.entity.ChannelBlockEntity;
 
 public class ChannelBlockEntityRenderer implements BlockEntityRenderer<ChannelBlockEntity> {
-  public ChannelBlockEntityRenderer(Context context) {}
+  public ChannelBlockEntityRenderer(IPayloadContext context) {}
 
 	@Override
 	public void render(ChannelBlockEntity te, float partialTicks, PoseStack matrices, MultiBufferSource buffer, int light, int combinedOverlayIn)  {

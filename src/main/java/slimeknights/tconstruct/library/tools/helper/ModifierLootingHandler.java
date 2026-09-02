@@ -90,7 +90,7 @@ public class ModifierLootingHandler {
       int level = event.getLootingLevel();
 
       // determine who is in charge of the looting
-      LootingContext context;
+      LootingIPayloadContext context;
       IToolStackView tool = null;
       if (direct instanceof Projectile) {
         // need to build a context from the relevant capabilities to use the modifier

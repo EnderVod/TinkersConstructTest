@@ -150,7 +150,7 @@ public class GreyToSpriteTransformer implements IRecolorSpriteTransformer {
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationContext context) {
+  public JsonObject serialize(JsonSerializationIPayloadContext context) {
     JsonObject object = new JsonObject();
     object.addProperty("type", NAME.toString());
     object.add("palette", serializePalette());
@@ -183,7 +183,7 @@ public class GreyToSpriteTransformer implements IRecolorSpriteTransformer {
     }
 
     @Override
-    public T deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+    public T deserialize(JsonElement json, Type typeOfT, JsonDeserializationIPayloadContext context) throws JsonParseException {
       JsonObject object = json.getAsJsonObject();
       GreyToSpriteTransformer.Builder paletteBuilder = GreyToSpriteTransformer.builder();
       JsonElement element = JsonHelper.getElement(object, "palette");

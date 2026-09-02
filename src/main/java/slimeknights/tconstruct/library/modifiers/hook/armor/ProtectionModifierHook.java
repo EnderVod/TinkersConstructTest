@@ -34,7 +34,7 @@ public interface ProtectionModifierHook {
    * @param modifierValue   Modifier value from previous modifiers to add
    * @return  New modifier value
    */
-  float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float modifierValue);
+  float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float modifierValue);
 
   /** Gets the maximum protection amount on the given entity */
   @SuppressWarnings("removal")
@@ -57,7 +57,7 @@ public interface ProtectionModifierHook {
   /** Merger that combines all values */
   record AllMerger(Collection<ProtectionModifierHook> modules) implements ProtectionModifierHook {
     @Override
-    public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
+    public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
       for (ProtectionModifierHook module : modules) {
         modifierValue = module.getProtectionModifier(tool, modifier, context, slotType, source, modifierValue);
       }

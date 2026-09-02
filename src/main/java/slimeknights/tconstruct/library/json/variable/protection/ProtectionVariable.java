@@ -25,14 +25,14 @@ public interface ProtectionVariable extends IHaveLoader {
    * @param slotType Slot type, will be null in tooltips
    * @return  Value of this variable
    */
-  float getValue(IToolStackView tool, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType);
+  float getValue(IToolStackView tool, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType);
 
   /** Constant value instance for this object */
   record Constant(float value) implements VariableLoaderRegistry.ConstantFloat, ProtectionVariable {
     public static final RecordLoadable<Constant> LOADER = VariableLoaderRegistry.constantLoader(Constant::new);
 
     @Override
-    public float getValue(IToolStackView tool, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
+    public float getValue(IToolStackView tool, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
       return value;
     }
 

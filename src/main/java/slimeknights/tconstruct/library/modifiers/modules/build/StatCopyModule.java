@@ -52,7 +52,7 @@ public record StatCopyModule(INumericToolStat<?> target, INumericToolStat<?> sou
   }
 
   @Override
-  public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
     if (condition.matches(context, modifier)) {
       target.add(builder, builder.getStat(source).floatValue() * percentage.compute(modifier.getEffectiveLevel()) / builder.getMultiplier(source));
     }
