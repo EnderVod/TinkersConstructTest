@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ItemLike;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import slimeknights.mantle.registration.object.IdAwareObject;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.module.ModuleHook;
@@ -34,7 +34,7 @@ public class ToolDefinition implements IdAwareObject {
   }
 
   /** Creates and registers a new tool definition */
-  public static ToolDefinition create(RegistryObject<? extends ItemLike> item) {
+  public static ToolDefinition create(DeferredHolder<ItemLike, ? extends ItemLike> item) {
     return create(item.getId());
   }
 
@@ -52,7 +52,6 @@ public class ToolDefinition implements IdAwareObject {
   public boolean hasMaterials() {
     return !data.getHook(ToolHooks.TOOL_MATERIALS).getStatTypes(this).isEmpty();
   }
-
 
   /* Loader methods */
 
