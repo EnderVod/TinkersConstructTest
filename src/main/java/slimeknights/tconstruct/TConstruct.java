@@ -121,10 +121,26 @@ public class TConstruct {
 
   /** Registers native NeoForge capabilities for Tinkers blocks, block entities, and item stacks. */
   static void registerCapabilities(final RegisterCapabilitiesEvent event) {
+    // Standalone/tiny smeltery blocks.
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.alloyer.get(), (alloyer, side) -> alloyer.getTank());
+
+    // Casting blocks expose their purpose-built casting tank directly. This replaces the old
+    // LazyOptional capability holder on both the table and basin with the native NeoForge provider model.
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingTableEntity.get(), (casting, side) -> casting.getTank());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingBasinEntity.get(), (casting, side) -> casting.getTank());
+
+    // Full Smeltery/Foundry controllers expose their melting inventory at all times, just as the
+    // original Forge implementation did. Their fluid tank is only externally valid while the
+    // multiblock is formed; returning null lets NeoForge cache the capability state correctly.
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.smeltery.get(), (controller, side) -> controller.getMeltingInventory());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.smeltery.get(),
+      (controller, side) -> controller.getStructure() == null ? null : controller.getTank());
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.foundry.get(), (controller, side) -> controller.getMeltingInventory());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.foundry.get(),
+      (controller, side) -> controller.getStructure() == null ? null : controller.getTank());
 
     // TankItem is used by tanks, lanterns, casting tanks and fluid cannons. Registering by the actual
     // item class preserves all of those existing Tinkers variants without maintaining a fragile list.
