@@ -23,14 +23,11 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler.FluidAction;
-import net.minecraftforge.items.ItemHandlerHelper;
-import net.minecraftforge.items.wrapper.SidedInvWrapper;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.items.wrapper.SidedInvWrapper;
 import slimeknights.mantle.fluid.FluidTransferHelper;
 import slimeknights.mantle.recipe.helper.RecipeHelper;
 import slimeknights.mantle.util.BlockEntityHelper;
@@ -72,7 +69,6 @@ public abstract class CastingBlockEntity extends TableBlockEntity implements Wor
   /** Special casting fluid tank */
   @Getter
   private final CastingFluidHandler tank = new CastingFluidHandler(this);
-  private final LazyOptional<CastingFluidHandler> holder = LazyOptional.of(() -> tank);
 
   /* Casting recipes */
   /** Recipe type for casting recipes, may be basin or table */
@@ -120,14 +116,6 @@ public abstract class CastingBlockEntity extends TableBlockEntity implements Wor
     this.moldingType = moldingType;
     this.castingInventory = new CastingContainerWrapper(this);
     this.moldingInventory = new MoldingContainerWrapper(itemHandler, INPUT);
-  }
-
-  @Override
-  @Nonnull
-  public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> capability, @Nullable Direction facing) {
-    if (capability == ForgeCapabilities.FLUID_HANDLER)
-      return holder.cast();
-    return super.getCapability(capability, facing);
   }
 
   /**
@@ -537,7 +525,6 @@ public abstract class CastingBlockEntity extends TableBlockEntity implements Wor
     // 0: empty
     return 0;
   }
-
 
   /* Tag */
 
