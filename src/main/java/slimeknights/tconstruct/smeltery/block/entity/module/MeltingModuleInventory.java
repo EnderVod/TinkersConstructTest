@@ -5,11 +5,11 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler.FluidAction;
-import net.minecraftforge.items.IItemHandlerModifiable;
-import net.minecraftforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import slimeknights.mantle.block.entity.MantleBlockEntity;
 import slimeknights.tconstruct.library.recipe.melting.IMeltingContainer.IOreRate;
 import slimeknights.tconstruct.library.recipe.melting.IMeltingRecipe;
@@ -159,11 +159,9 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
     if (newSize > MAX_SIZE) {
       newSize = MAX_SIZE;
     }
-    // nothing to do
     if (newSize == modules.length) {
       return;
     }
-    // if shrinking, drop extra items
     if (newSize < modules.length) {
       for (int i = newSize; i < modules.length; i++) {
         if (modules[i] != null && !modules[i].getStack().isEmpty()) {
@@ -172,7 +170,6 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
       }
     }
 
-    // resize the module array
     modules = Arrays.copyOf(modules, newSize);
     parent.setChangedFast();
   }
@@ -184,7 +181,6 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
   @Override
   public ItemStack getStackInSlot(int slot) {
     if (validSlot(slot)) {
-      // don't create the slot, just reading
       if (modules[slot] != null) {
         return modules[slot].getStack();
       }
@@ -194,14 +190,12 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
 
   @Override
   public void setStackInSlot(int slot, ItemStack stack) {
-    // actually set the stack
     if (validSlot(slot)) {
       if (stack.isEmpty()) {
         if (modules[slot] != null) {
           modules[slot].setStack(ItemStack.EMPTY);
         }
       } else {
-        // validate size
         if (stack.getCount() > 1) {
           stack.setCount(1);
         }
@@ -220,7 +214,6 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
       return stack;
     }
 
-    // if the slot is empty, we can insert. Ignores stack sizes at this time, assuming always 1
     MeltingModule module = getModule(slot);
     boolean canInsert = module.getStack().isEmpty();
     if (!simulate && canInsert) {
@@ -339,7 +332,6 @@ public class MeltingModuleInventory implements IItemHandlerModifiable {
         modules = Arrays.copyOf(modules, newSize);
       }
     }
-    // remove old data
     for (MeltingModule module : modules) {
       if (module != null) {
         module.setStack(ItemStack.EMPTY);
