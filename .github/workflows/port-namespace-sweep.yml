@@ -54,6 +54,8 @@ jobs:
               'net.minecraftforge.common.brewing.': 'net.neoforged.neoforge.common.brewing.',
               'import net.minecraftforge.common.MinecraftForge;': 'import net.neoforged.neoforge.common.NeoForge;',
               'MinecraftForge.EVENT_BUS': 'NeoForge.EVENT_BUS',
+              'import net.minecraftforge.network.NetworkEvent.Context;': 'import net.neoforged.neoforge.network.handling.IPayloadContext;',
+              'Context context': 'IPayloadContext context',
           }
 
           changed = []
