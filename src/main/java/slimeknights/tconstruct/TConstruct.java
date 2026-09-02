@@ -74,42 +74,31 @@ public class TConstruct {
     TinkerItemDisplays.init();
     MaterialRegistry.init();
 
-    // initialize modules, done this way rather than with annotations to give us control over the order
-    // base
     bus.register(new TinkerCommons());
     bus.register(new TinkerMaterials());
     bus.register(new TinkerEffects());
     bus.register(new TinkerGadgets());
     bus.register(new TinkerAttributes());
-    // world
     bus.register(new TinkerWorld());
     bus.register(new TinkerStructures());
-    // tools
     bus.register(new TinkerTables());
     bus.register(new TinkerModifiers());
     bus.register(new TinkerToolParts());
     bus.register(new TinkerTools());
-    // smeltery
     bus.register(new TinkerSmeltery());
     bus.register(new TinkerFluids());
 
-    // init deferred registers
     TinkerModule.initRegisters(bus);
     TinkerNetwork.setup();
     TinkerTags.init();
     bus.addListener(TConstruct::commonSetup);
     bus.addListener(TConstruct::registerCapabilities);
 
-    // init client logic without the removed Forge DistExecutor helper
     if (FMLEnvironment.dist == Dist.CLIENT) {
       TinkerClient.onConstruct();
     }
-
-    // Optional integrations and datagen are intentionally re-enabled later in the port once their
-    // NeoForge 1.21 APIs are migrated. Their source trees are temporarily excluded by build.gradle.
   }
 
-  /** Gets the mod event bus for classes that still register themselves statically. */
   public static IEventBus getModBus() {
     return modBus;
   }
@@ -121,7 +110,6 @@ public class TConstruct {
 
   /** Registers native NeoForge capabilities for Tinkers blocks, block entities, and item stacks. */
   static void registerCapabilities(final RegisterCapabilitiesEvent event) {
-    // Standalone/tiny smeltery blocks.
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
@@ -129,15 +117,11 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.heater.get(), (heater, side) -> heater.getItemHandler());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.fluidCannon.get(), (cannon, side) -> cannon.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.fluidCannon.get(), (cannon, side) -> cannon.getItemHandler());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingTank.get(), (castingTank, side) -> castingTank.getTank());
 
-    // Casting blocks expose their purpose-built casting tank directly. This replaces the old
-    // LazyOptional capability holder on both the table and basin with the native NeoForge provider model.
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingTableEntity.get(), (casting, side) -> casting.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingBasinEntity.get(), (casting, side) -> casting.getTank());
 
-    // Full Smeltery/Foundry controllers expose their melting inventory at all times, just as the
-    // original Forge implementation did. Their fluid tank is only externally valid while the
-    // multiblock is formed; returning null lets NeoForge cache the capability state correctly.
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.smeltery.get(), (controller, side) -> controller.getMeltingInventory());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.smeltery.get(),
       (controller, side) -> controller.getStructure() == null ? null : controller.getTank());
@@ -145,8 +129,6 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.foundry.get(),
       (controller, side) -> controller.getStructure() == null ? null : controller.getTank());
 
-    // TankItem is used by tanks, lanterns, casting tanks and fluid cannons. Registering by the actual
-    // item class preserves all of those existing Tinkers variants without maintaining a fragile list.
     for (Item item : BuiltInRegistries.ITEM) {
       if (item instanceof TankItem tankItem) {
         event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);
@@ -154,61 +136,42 @@ public class TConstruct {
     }
   }
 
-  /* Utils */
-
-  /**
-   * Gets a resource location for Tinkers.
-   * @param name resource path
-   * @return location for Tinkers
-   */
   public static ResourceLocation getResource(String name) {
     return ResourceLocation.fromNamespaceAndPath(MOD_ID, name);
   }
 
-  /** Gets a data key for the capability, mainly used for modifier markers. */
   public static <T> TinkerDataKey<T> createKey(String name) {
     return TinkerDataKey.of(getResource(name));
   }
 
-  /** Gets a computable data key for the capability. */
   public static <T> ComputableDataKey<T> createKey(String name, Supplier<T> constructor) {
     return ComputableDataKey.of(getResource(name), constructor);
   }
 
-  /** Returns the given resource prefixed with the Tinkers resource location. */
   public static String resourceString(String res) {
     return String.format("%s:%s", MOD_ID, res);
   }
 
-  /** Prefixes the given unlocalized name with the Tinkers prefix. */
   public static String prefix(String name) {
     return MOD_ID + "." + name.toLowerCase(Locale.US);
   }
 
-  /** Makes a Tinker's description ID. */
   public static String makeDescriptionId(String type, String name) {
     return type + "." + MOD_ID + "." + name;
   }
 
-  /** Makes a translation key for the given name. */
   public static String makeTranslationKey(String base, String name) {
     return Util.makeTranslationKey(base, getResource(name));
   }
 
-  /** Makes a translation text component for the given name. */
   public static MutableComponent makeTranslation(String base, String name) {
     return Component.translatable(makeTranslationKey(base, name));
   }
 
-  /** Makes a translation text component for the given name and arguments. */
   public static MutableComponent makeTranslation(String base, String name, Object... arguments) {
     return Component.translatable(makeTranslationKey(base, name), arguments);
   }
 
-  /**
-   * Prevents internal implementation classes from being extended from arbitrary packages.
-   * Anything outside the library package remains internal Tinkers implementation detail.
-   */
   public static void sealTinkersClass(Object self, String base, String solution) {
     String name = self.getClass().getName();
     if (!name.startsWith("slimeknights.tconstruct.")) {
