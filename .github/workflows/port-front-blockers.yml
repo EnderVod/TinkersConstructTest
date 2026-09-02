@@ -30,45 +30,86 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Apply explosion subscriber and spawn migrations
+      - name: Migrate RegistryObject declarations to DeferredHolder
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           root = Path('src/main/java')
+
+          def replace_registry_types(text: str) -> str:
+              token = 'RegistryObject<'
+              pos = 0
+              output = []
+              while True:
+                  idx = text.find(token, pos)
+                  if idx < 0:
+                      output.append(text[pos:])
+                      break
+                  output.append(text[pos:idx])
+                  lt = idx + len('RegistryObject')
+                  depth = 0
+                  end = lt
+                  while end < len(text):
+                      char = text[end]
+                      if char == '<':
+                          depth += 1
+                      elif char == '>':
+                          depth -= 1
+                          if depth == 0:
+                              break
+                      end += 1
+                  if end >= len(text):
+                      raise SystemExit('Unmatched RegistryObject generic in source')
+                  inner = text[lt + 1:end].strip()
+                  if inner.startswith('? extends '):
+                      base = inner[len('? extends '):].strip()
+                      replacement = f'DeferredHolder<{base}, ? extends {base}>'
+                  else:
+                      replacement = f'DeferredHolder<? super {inner}, {inner}>'
+                  output.append(replacement)
+                  pos = end + 1
+              return ''.join(output)
+
           changed = []
           for path in root.rglob('*.java'):
               original = path.read_text(encoding='utf-8')
-              text = original
+              if 'import net.neoforged.neoforge.registries.RegistryObject;' not in original:
+                  continue
 
-              # ForgeEventFactory explosion hooks moved to NeoForge EventHooks with the same call shape.
-              text = text.replace('import net.neoforged.neoforge.event.ForgeEventFactory;',
-                                  'import net.neoforged.neoforge.event.EventHooks;')
-              text = text.replace('ForgeEventFactory.onExplosionStart(', 'EventHooks.onExplosionStart(')
-              text = text.replace('ForgeEventFactory.onExplosionDetonate(', 'EventHooks.onExplosionDetonate(')
+              text = replace_registry_types(original)
+              text = text.replace(
+                  'import net.neoforged.neoforge.registries.RegistryObject;',
+                  'import net.neoforged.neoforge.registries.DeferredHolder;')
 
-              # NeoForge 1.21 uses a standalone EventBusSubscriber annotation.
-              if '@Mod.EventBusSubscriber' in text:
-                  text = text.replace('Mod.EventBusSubscriber.Bus.FORGE', 'EventBusSubscriber.Bus.GAME')
-                  text = text.replace('Mod.EventBusSubscriber.Bus.MOD', 'EventBusSubscriber.Bus.MOD')
-                  text = text.replace('@Mod.EventBusSubscriber', '@EventBusSubscriber')
-                  if 'import net.neoforged.fml.common.EventBusSubscriber;' not in text:
-                      marker = 'import net.neoforged.fml.common.Mod;\n'
-                      if marker in text:
-                          text = text.replace(marker, 'import net.neoforged.fml.common.EventBusSubscriber;\n' + marker)
-                      else:
-                          insert = text.find('\n\n', text.find('package '))
-                          text = text[:insert+2] + 'import net.neoforged.fml.common.EventBusSubscriber;\n' + text[insert+2:]
+              # Two old aliases were manually created from existing registry IDs.
+              if path.name == 'TinkerTools.java':
+                  text = text.replace(
+                      'RegistryObject.create(getResource("minotaur_axe"), ForgeRegistries.ITEMS)',
+                      'DeferredHolder.create(Registries.ITEM, getResource("minotaur_axe"))')
+                  if 'import net.minecraft.core.registries.Registries;' not in text:
+                      marker = 'package slimeknights.tconstruct.tools;\n\n'
+                      text = text.replace(marker, marker + 'import net.minecraft.core.registries.Registries;\n')
 
-              # 1.21 moved dispenser BlockSource and renamed the spawn placement registration event.
-              text = text.replace('import net.minecraft.core.BlockSource;',
-                                  'import net.minecraft.core.dispenser.BlockSource;')
-              text = text.replace('SpawnPlacementRegisterEvent', 'RegisterSpawnPlacementsEvent')
-              if 'SpawnPlacements.Type.ON_GROUND' in text:
-                  text = text.replace('SpawnPlacements.Type.ON_GROUND', 'SpawnPlacementTypes.ON_GROUND')
-                  if 'import net.minecraft.world.entity.SpawnPlacementTypes;' not in text:
-                      marker = 'import net.minecraft.world.entity.SpawnPlacements;\n'
-                      text = text.replace(marker, marker + 'import net.minecraft.world.entity.SpawnPlacementTypes;\n')
+              if path.name == 'TinkerCommons.java':
+                  text = text.replace(
+                      'RegistryObject.create(glowBlock.getId(), ForgeRegistries.BLOCKS)',
+                      'DeferredHolder.create(Registries.BLOCK, glowBlock.getId())')
+
+              # Registry keys that have direct 1.21 equivalents.
+              if path.name == 'TinkerStructures.java':
+                  text = text.replace('ForgeRegistries.FEATURES', 'Registries.FEATURE')
+
+              if path.name == 'TinkerWorld.java':
+                  text = text.replace('ForgeRegistries.Keys.BIOME_MODIFIERS', 'NeoForgeRegistries.Keys.BIOME_MODIFIERS')
+                  if 'import net.neoforged.neoforge.registries.NeoForgeRegistries;' not in text:
+                      marker = 'import net.neoforged.neoforge.registries.DeferredHolder;\n'
+                      text = text.replace(marker, marker + 'import net.neoforged.neoforge.registries.NeoForgeRegistries;\n')
+
+              # Remove ForgeRegistries imports only when no true ForgeRegistries reference remains.
+              remaining = text.replace('NeoForgeRegistries.', '')
+              if 'ForgeRegistries.' not in remaining:
+                  text = text.replace('import net.neoforged.neoforge.registries.ForgeRegistries;\n', '')
 
               if text != original:
                   path.write_text(text, encoding='utf-8')
@@ -79,23 +120,29 @@ jobs:
               print(path)
           PY
 
-      - name: Verify migration targets
+      - name: Verify registry migration
         run: |
-          if grep -R "ForgeEventFactory.onExplosion\|@Mod.EventBusSubscriber\|SpawnPlacementRegisterEvent\|SpawnPlacements.Type.ON_GROUND\|import net.minecraft.core.BlockSource;" -n src/main/java; then
-            echo 'Found stale explosion/subscriber/spawn references.'
+          if grep -R "net.neoforged.neoforge.registries.RegistryObject\|RegistryObject.create" -n src/main/java; then
+            echo 'Found stale RegistryObject references.'
+            exit 1
+          fi
+          if grep -n "ForgeRegistries.FEATURES\|ForgeRegistries.Keys.BIOME_MODIFIERS" \
+            src/main/java/slimeknights/tconstruct/world/TinkerStructures.java \
+            src/main/java/slimeknights/tconstruct/world/TinkerWorld.java; then
+            echo 'Found stale world registry keys.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No changes needed.'
+            echo 'No registry changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate explosion events and subscriber spawn APIs'
+          git commit -m 'Migrate RegistryObject declarations to DeferredHolder'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
