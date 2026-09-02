@@ -3,7 +3,6 @@ package slimeknights.tconstruct.smeltery.block.entity.controller;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.MutableComponent;
@@ -14,12 +13,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.client.model.data.ModelData;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.items.IItemHandler;
+import net.neoforged.neoforge.client.model.data.ModelData;
 import org.jetbrains.annotations.NotNull;
 import slimeknights.mantle.block.entity.NameableBlockEntity;
 import slimeknights.tconstruct.TConstruct;
@@ -37,7 +31,6 @@ import slimeknights.tconstruct.smeltery.block.entity.module.MeltingModuleInvento
 import slimeknights.tconstruct.smeltery.block.entity.module.SolidFuelModule;
 import slimeknights.tconstruct.smeltery.menu.MelterContainerMenu;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public class MelterBlockEntity extends NameableBlockEntity implements ITankInventoryBlockEntity {
@@ -52,11 +45,9 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
   public static final BlockEntityTicker<MelterBlockEntity> SERVER_TICKER = (level, pos, state, self) -> self.tick(level, pos, state);
 
   /* Tank */
-  /** Internal fluid tank output */
+  /** Internal fluid tank output. Exposed through NeoForge's registered block capability provider. */
   @Getter
   protected final FluidTankAnimated tank = new FluidTankAnimated(TANK_CAPACITY, this);
-  /** Capability holder for the tank */
-  private final LazyOptional<IFluidHandler> tankHolder = LazyOptional.of(() -> tank);
   /** Last comparator strength to reduce block updates */
   @Getter @Setter
   private int lastStrength = -1;
@@ -65,10 +56,8 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
   private int tick;
 
   /* Heating */
-  /** Handles all the melting needs */
+  /** Handles all the melting needs. Also exposed directly as the block item-handler capability. */
   private final MeltingModuleInventory meltingInventory = new MeltingModuleInventory(this, tank, Config.COMMON.melterOreRate, 3);
-  /** Capability holder for the tank */
-  private final LazyOptional<IItemHandler> inventoryHolder = LazyOptional.of(() -> meltingInventory);
 
   /** Fuel handling logic */
   @Getter
@@ -106,25 +95,6 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
     return ModelData.builder()
                     .with(ModelProperties.FLUID_STACK, tank.getFluid())
                     .with(ModelProperties.TANK_CAPACITY, tank.getCapacity()).build();
-  }
-
-  @Nonnull
-  @Override
-  public <T> LazyOptional<T> getCapability(Capability<T> capability, @Nullable Direction facing) {
-    if (capability == ForgeCapabilities.FLUID_HANDLER) {
-      return tankHolder.cast();
-    }
-    if (capability == ForgeCapabilities.ITEM_HANDLER) {
-      return inventoryHolder.cast();
-    }
-    return super.getCapability(capability, facing);
-  }
-
-  @Override
-  public void invalidateCaps() {
-    super.invalidateCaps();
-    this.tankHolder.invalidate();
-    this.inventoryHolder.invalidate();
   }
 
   /*
