@@ -6,33 +6,28 @@ import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.RailBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.Hopper;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.items.IItemHandler;
-import net.minecraftforge.items.ItemHandlerHelper;
-import slimeknights.mantle.inventory.EmptyItemHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 
 public class DropperRailBlock extends RailBlock {
-
   public DropperRailBlock(Properties properties) {
     super(properties);
   }
 
   @Override
   public void onMinecartPass(BlockState state, Level world, BlockPos pos, AbstractMinecart cart) {
-    if (!cart.getCapability(ForgeCapabilities.ITEM_HANDLER, Direction.DOWN).isPresent() || !(cart instanceof Hopper)) {
-      return;
-    }
-    BlockEntity tileEntity = world.getBlockEntity(pos.below());
-    if (tileEntity == null || !tileEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, Direction.DOWN).isPresent()) {
+    if (!(cart instanceof Hopper)) {
       return;
     }
 
-    // todo: fix this optional usage
-    IItemHandler itemHandlerCart = cart.getCapability(ForgeCapabilities.ITEM_HANDLER, Direction.UP).orElse(EmptyItemHandler.INSTANCE);
-    IItemHandler itemHandlerTE = tileEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, Direction.UP).orElse(EmptyItemHandler.INSTANCE);
+    IItemHandler itemHandlerCart = cart.getCapability(Capabilities.ItemHandler.ENTITY);
+    IItemHandler itemHandlerTE = world.getCapability(Capabilities.ItemHandler.BLOCK, pos.below(), Direction.UP);
+    if (itemHandlerCart == null || itemHandlerTE == null) {
+      return;
+    }
 
     for (int i = 0; i < itemHandlerCart.getSlots(); i++) {
       ItemStack itemStack = itemHandlerCart.extractItem(i, 1, true);
@@ -46,5 +41,4 @@ public class DropperRailBlock extends RailBlock {
       }
     }
   }
-
 }
