@@ -1,0 +1,79 @@
+name: Tinkers Front Blocker Migration
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-front-blockers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Apply targeted condition and FML migrations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('src/main/java')
+          replacements = {
+              'import net.minecraftforge.common.crafting.conditions.ICondition;': 'import net.neoforged.neoforge.common.conditions.ICondition;',
+              'import net.minecraftforge.common.crafting.conditions.ICondition.IContext;': 'import net.neoforged.neoforge.common.conditions.ICondition.IContext;',
+              'import net.minecraftforge.fml.ModLoader;': 'import net.neoforged.fml.ModLoader;',
+              'import net.minecraftforge.fml.event.IModBusEvent;': 'import net.neoforged.fml.event.IModBusEvent;',
+              'import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;': 'import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;',
+          }
+
+          changed = []
+          for path in root.rglob('*.java'):
+              original = path.read_text(encoding='utf-8')
+              text = original
+              for old, new in replacements.items():
+                  text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
+
+          modifier = root / 'slimeknights/tconstruct/library/modifiers/ModifierManager.java'
+          text = modifier.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.crafting.CraftingHelper;\n', '')
+          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;' not in text:
+              text = text.replace('import slimeknights.mantle.data.loadable.field.ContextKey;\n', 'import slimeknights.mantle.data.loadable.field.ContextKey;\nimport slimeknights.mantle.recipe.condition.ConditionHelper;\n')
+          text = text.replace('ModLoader.get().runEventGenerator(ModifierRegistrationEvent::new);', 'ModLoader.runEventGenerator(ModifierRegistrationEvent::new);')
+          text = text.replace('CraftingHelper.getCondition(GsonHelper.getAsJsonObject(json, "condition"))', 'ConditionHelper.deserialize(GsonHelper.getAsJsonObject(json, "condition"))')
+          modifier.write_text(text, encoding='utf-8')
+          if str(modifier) not in changed:
+              changed.append(str(modifier))
+
+          print(f'Updated {len(changed)} Java files')
+          for path in changed:
+              print(path)
+          PY
+
+      - name: Commit targeted migration
+        run: |
+          if git diff --quiet; then
+            echo 'No changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java
+          git commit -m 'Migrate front condition and FML blockers'
+          git push origin HEAD:1.21.1-neoforge
+
+      - name: Trigger fresh compile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
