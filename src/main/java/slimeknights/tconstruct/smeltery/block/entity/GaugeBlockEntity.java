@@ -6,15 +6,13 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.templates.EmptyFluidHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.capability.templates.EmptyFluidHandler;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 
-/** This class exists simply to allow us to have a block entity renderer for obsidian gauges. Though it is useful as a cache for the capability to render. */
+/** This class exists simply to allow us to have a block entity renderer for obsidian gauges. */
 public class GaugeBlockEntity extends BlockEntity {
-  private LazyOptional<IFluidHandler> neighbor;
   public GaugeBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
     super(type, pos, state);
   }
@@ -23,22 +21,18 @@ public class GaugeBlockEntity extends BlockEntity {
     this(TinkerSmeltery.gauge.get(), pos, state);
   }
 
-  /** Gets the neighbor fluid handler. Used mainly for rendering client side */
+  /** Gets the neighbor fluid handler. Used mainly for rendering client side. */
   public IFluidHandler getTank() {
     if (level == null) {
       return EmptyFluidHandler.INSTANCE;
     }
-    // if we have not fetched the neighbor, fetch it
-    if (neighbor == null) {
-      Direction side = getBlockState().getValue(BlockStateProperties.FACING);
-      BlockEntity te = level.getBlockEntity(getBlockPos().relative(side.getOpposite()));
-      if (te != null) {
-        neighbor = te.getCapability(ForgeCapabilities.FLUID_HANDLER, side);
-      } else {
-        neighbor = LazyOptional.empty();
-      }
+    Direction side = getBlockState().getValue(BlockStateProperties.FACING);
+    BlockPos pos = getBlockPos().relative(side.getOpposite());
+    BlockEntity blockEntity = level.getBlockEntity(pos);
+    if (blockEntity == null) {
+      return EmptyFluidHandler.INSTANCE;
     }
-    // return tank or empty tank
-    return neighbor.orElse(EmptyFluidHandler.INSTANCE);
+    IFluidHandler handler = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, level.getBlockState(pos), blockEntity, side);
+    return handler == null ? EmptyFluidHandler.INSTANCE : handler;
   }
 }
