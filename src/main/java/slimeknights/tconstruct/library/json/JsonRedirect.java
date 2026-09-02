@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import lombok.Data;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.crafting.CraftingHelper;
-import net.minecraftforge.common.crafting.conditions.ICondition;
+import net.neoforged.neoforge.common.conditions.ICondition;
 import slimeknights.mantle.util.JsonHelper;
 
 import javax.annotation.Nullable;
