@@ -23,6 +23,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           replacements = {
               'net.minecraftforge.api.distmarker.': 'net.neoforged.api.distmarker.',
@@ -55,16 +56,29 @@ jobs:
               'import net.minecraftforge.common.MinecraftForge;': 'import net.neoforged.neoforge.common.NeoForge;',
               'MinecraftForge.EVENT_BUS': 'NeoForge.EVENT_BUS',
               'import net.minecraftforge.network.NetworkEvent.Context;': 'import net.neoforged.neoforge.network.handling.IPayloadContext;',
-              'Context context': 'IPayloadContext context',
           }
 
+          payload_import = 'import net.neoforged.neoforge.network.handling.IPayloadContext;'
           changed = []
           root = Path('src/main/java')
           for path in root.rglob('*.java'):
               original = path.read_text(encoding='utf-8')
               text = original
+
+              # Repair the previous overbroad replacement. It accidentally changed types such as
+              # UseOnContext context -> UseOnIPayloadContext context across unrelated code.
+              text = re.sub(r'([A-Za-z0-9_$.]+)IPayloadContext context', r'\1Context context', text)
+              if payload_import not in text:
+                  text = text.replace('IPayloadContext context', 'Context context')
+
               for old, new in replacements.items():
                   text = text.replace(old, new)
+
+              # Only packet files that actually import IPayloadContext should use it as the simple
+              # handler parameter type. This avoids another global Context substitution.
+              if payload_import in text:
+                  text = re.sub(r'(?<![A-Za-z0-9_$.])Context context', 'IPayloadContext context', text)
+
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
@@ -83,5 +97,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate verified Forge namespaces to NeoForge'
+          git commit -m 'Repair packet context migration'
           git push origin HEAD:1.21.1-neoforge
