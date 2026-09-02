@@ -124,6 +124,7 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.alloyer.get(), (alloyer, side) -> alloyer.getTank());
 
     // TankItem is used by tanks, lanterns, casting tanks and fluid cannons. Registering by the actual
     // item class preserves all of those existing Tinkers variants without maintaining a fragile list.
