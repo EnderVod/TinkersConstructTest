@@ -2,7 +2,6 @@ package slimeknights.tconstruct.smeltery.block.entity.controller;
 
 import lombok.Getter;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
@@ -22,14 +21,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.client.model.data.ModelData;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.items.IItemHandler;
-import net.minecraftforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import slimeknights.mantle.block.entity.IRetexturedBlockEntity;
 import slimeknights.mantle.block.entity.NameableBlockEntity;
 import slimeknights.mantle.util.BlockEntityHelper;
@@ -84,7 +78,7 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
   private BlockPos errorPos;
   /** Number of ticks the error will remain visible for */
   private int errorVisibleFor = 0;
-  /** Temporary hack until forge fixes {@link #onLoad()}, do a first tick listener here as drains don't tick */
+  /** Temporary first-tick listener setup for client-side drain rendering. */
   private boolean addedFluidListeners = false;
 
   /* Saved data, written to Tag */
@@ -94,15 +88,10 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
   /** Tank instance for this smeltery */
   @Getter
   protected final SmelteryTank<HeatingStructureBlockEntity> tank = new SmelteryTank<>(this);
-  /** Capability to pass to drains for fluid handling */
-  @Getter
-  private LazyOptional<IFluidHandler> fluidCapability = LazyOptional.empty();
 
   /** Inventory handling melting items */
   @Getter
   protected final MeltingModuleInventory meltingInventory = createMeltingInventory();
-
-  private final LazyOptional<IItemHandler> itemCapability = LazyOptional.of(() -> meltingInventory);
 
   /** Fuel module */
   @Getter
@@ -216,8 +205,7 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
     if (errorVisibleFor > 0) {
       errorVisibleFor--;
     }
-    // forge's onLoad method is called before reading from NBT client side
-    // so a first tick handler is our only choice for reading this
+    // onLoad runs before reading the client NBT, so a first tick handler initializes these listeners
     if (!addedFluidListeners) {
       addedFluidListeners = true;
       if (structure != null) {
@@ -329,26 +317,6 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
     }
   }
 
-  /* Capability */
-
-  @Override
-  public void invalidateCaps() {
-    super.invalidateCaps();
-    this.itemCapability.invalidate();
-    // fluidCapability is only used by drains, but still need to invalidate it so drains stop talking to an invalid smeltery
-    // on the chance we have no fluid capability (invalid structure), this will simply no-op internally
-    this.fluidCapability.invalidate();
-  }
-
-  @Nonnull
-  @Override
-  public <T> LazyOptional<T> getCapability(Capability<T> capability, @Nullable Direction facing) {
-    if (capability == ForgeCapabilities.ITEM_HANDLER) {
-      return itemCapability.cast();
-    }
-    return super.getCapability(capability, facing);
-  }
-
 
   /* Structure */
 
@@ -364,8 +332,14 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
    * @param structure  New structure
    */
   protected void setStructure(@Nullable StructureData structure) {
+    boolean capabilityAvailabilityChanged = (this.structure == null) != (structure == null);
     this.structure = structure;
     fuelModule.clearFluidListeners();
+    if (capabilityAvailabilityChanged && level != null) {
+      // The fluid provider only exists while the multiblock is formed. Tell NeoForge to refresh
+      // cached queries whenever that availability changes.
+      level.invalidateCapabilities(worldPosition);
+    }
   }
 
   /**
@@ -396,21 +370,10 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
       TinkerNetwork.getInstance().sendToClientsAround(
         new StructureUpdatePacket(worldPosition, newStructure.getMinPos(), newStructure.getMaxPos(), newStructure.getTanks()), level, worldPosition);
 
-      // update tank capability, do first for update listeners on the drain blocks
-      if (!fluidCapability.isPresent()) {
-        fluidCapability = LazyOptional.of(() -> tank);
-      }
-
       // set master positions
       newStructure.assignMaster(this, oldStructure);
       setStructure(newStructure);
     } else {
-      // remove tank capability
-      if (fluidCapability.isPresent()) {
-        fluidCapability.invalidate();
-        fluidCapability = LazyOptional.empty();
-      }
-
       // clear positions
       if (oldStructure != null) {
         oldStructure.clearMaster(this);
@@ -431,7 +394,7 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
   public void invalidateStructure() {
     if (structure != null) {
       structure.clearMaster(this);
-      structure = null;
+      setStructure(null);
       errorPos = null;
     }
   }
@@ -627,9 +590,6 @@ public abstract class HeatingStructureBlockEntity extends NameableBlockEntity im
     }
     if (nbt.contains(TAG_STRUCTURE, Tag.TAG_COMPOUND)) {
       setStructure(multiblock.readFromTag(nbt.getCompound(TAG_STRUCTURE), this.worldPosition));
-      if (structure != null) {
-        fluidCapability = LazyOptional.of(() -> tank);
-      }
     }
     // only exists to be sent server to client in update packets
     if (nbt.contains(TAG_ERROR_POS, Tag.TAG_COMPOUND)) {
