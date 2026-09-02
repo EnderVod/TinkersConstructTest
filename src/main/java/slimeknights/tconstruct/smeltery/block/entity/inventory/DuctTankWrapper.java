@@ -2,12 +2,13 @@ package slimeknights.tconstruct.smeltery.block.entity.inventory;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import slimeknights.tconstruct.library.fluid.IMultitankListChange;
 
 import java.util.function.Consumer;
 
+/** Fluid filter wrapper used by smeltery ducts. */
 public class DuctTankWrapper implements IFluidHandler {
   private final IFluidHandler parent;
   private final DuctItemHandler itemHandler;
@@ -16,7 +17,6 @@ public class DuctTankWrapper implements IFluidHandler {
   public DuctTankWrapper(IFluidHandler parent, DuctItemHandler itemHandler) {
     this.parent = parent;
     this.itemHandler = itemHandler;
-    // clear cache when the fluid changes or the smeltery list changes
     Consumer<DuctTankWrapper> consumer = self -> self.tankMapping = null;
     itemHandler.addListener(this, consumer);
     if (parent instanceof IMultitankListChange notifier) {
@@ -24,7 +24,6 @@ public class DuctTankWrapper implements IFluidHandler {
     }
   }
 
-  /** Gets the mapping from index to matching tank */
   private int[] getTankMapping() {
     if (tankMapping == null) {
       FluidStack filter = itemHandler.getFluid();
@@ -49,9 +48,6 @@ public class DuctTankWrapper implements IFluidHandler {
     }
     return tankMapping;
   }
-
-
-  /* Properties */
 
   @Override
   public int getTanks() {
@@ -87,9 +83,6 @@ public class DuctTankWrapper implements IFluidHandler {
     return itemHandler.getFluid().isFluidEqual(stack);
   }
 
-
-  /* Interactions */
-
   @Override
   public int fill(FluidStack resource, FluidAction action) {
     if (resource.isEmpty() || !itemHandler.getFluid().isFluidEqual(resource)) {
@@ -104,7 +97,7 @@ public class DuctTankWrapper implements IFluidHandler {
     if (fluid.isEmpty()) {
       return FluidStack.EMPTY;
     }
-    return parent.drain(new FluidStack(fluid, maxDrain), action);
+    return parent.drain(fluid.copyWithAmount(maxDrain), action);
   }
 
   @Override
