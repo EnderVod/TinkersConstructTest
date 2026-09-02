@@ -1,0 +1,32 @@
+name: Tinkers Remaining Forge Import Scan
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-import-scan.yml
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Summarize remaining Forge imports
+        run: |
+          echo '=== Remaining files with net.minecraftforge imports ==='
+          grep -RIl '^import net\.minecraftforge' src/main/java | wc -l || true
+          echo '=== Unique remaining Forge imports ==='
+          grep -Rh '^import net\.minecraftforge' src/main/java \
+            | sed 's/^import //; s/;//' \
+            | sort \
+            | uniq -c \
+            | sort -nr \
+            | head -250 || true
