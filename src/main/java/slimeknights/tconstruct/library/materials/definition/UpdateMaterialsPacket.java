@@ -6,7 +6,7 @@ import lombok.Getter;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Rarity;
-import net.minecraftforge.network.NetworkEvent.Context;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import slimeknights.mantle.network.packet.IThreadsafePacket;
 import slimeknights.tconstruct.library.materials.MaterialRegistry;
 import slimeknights.tconstruct.library.utils.GenericTagUtil;
@@ -38,7 +38,6 @@ public class UpdateMaterialsPacket implements IThreadsafePacket {
       materials.put(id, new Material(id, tier, sortOrder, rarity, craftable, hidden));
     }
     this.materials = materials.build();
-    // process redirects
     int redirectCount = buffer.readVarInt();
     if (redirectCount == 0) {
       this.redirects = Collections.emptyMap();
@@ -71,7 +70,7 @@ public class UpdateMaterialsPacket implements IThreadsafePacket {
   }
 
   @Override
-  public void handleThreadsafe(Context context) {
+  public void handleThreadsafe(IPayloadContext context) {
     MaterialRegistry.updateMaterialsFromServer(this);
   }
 }
