@@ -13,10 +13,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fluids.capability.IFluidHandler;
 import slimeknights.mantle.block.entity.NameableBlockEntity;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags;
@@ -32,41 +28,27 @@ import slimeknights.tconstruct.smeltery.block.entity.module.alloying.MixerAlloyT
 import slimeknights.tconstruct.smeltery.block.entity.module.alloying.SingleAlloyingModule;
 import slimeknights.tconstruct.smeltery.menu.AlloyerContainerMenu;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-/**
- * Dedicated alloying block
- */
+/** Dedicated alloying block. */
 public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBlockEntity {
-  /** Max capacity for the tank */
   private static final int TANK_CAPACITY = TankType.INGOT_TANK.getCapacity();
-  /** Name of the container */
   private static final Component NAME = TConstruct.makeTranslation("gui", "alloyer");
 
   public static final BlockEntityTicker<AlloyerBlockEntity> SERVER_TICKER = (level, pos, state, self) -> self.tick(level, pos, state);
 
-  /** Tank for this mixer */
+  /** Tank for this mixer. Exposed through NeoForge RegisterCapabilitiesEvent in TConstruct. */
   @Getter
   protected final FluidTankAnimated tank = new FluidTankAnimated(TANK_CAPACITY, this);
-  /* Capability for return */
-  private final LazyOptional<IFluidHandler> tankHolder = LazyOptional.of(() -> tank);
 
-  // modules
-  /** Logic for a mixer alloying */
   @Getter
   private final MixerAlloyTank alloyTank = new MixerAlloyTank(this, tank);
-  /** Base alloy logic */
   private final SingleAlloyingModule alloyingModule = new SingleAlloyingModule(this, alloyTank);
-  /** Fuel handling logic */
   @Getter
   private final SolidFuelModule fuelModule;
 
-  /** Last comparator strength to reduce block updates */
   @Getter @Setter
   private int lastStrength = -1;
-
-  /** Internal tick counter */
   private int tick;
 
   public AlloyerBlockEntity(BlockPos pos, BlockState state) {
@@ -78,55 +60,25 @@ public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBloc
     this.fuelModule = new SolidFuelModule(this, pos.below());
   }
 
-  /*
-   * Capability
-   */
-
-  @Nonnull
-  @Override
-  public <T> LazyOptional<T> getCapability(Capability<T> capability, @Nullable Direction facing) {
-    if (capability == ForgeCapabilities.FLUID_HANDLER) {
-      return tankHolder.cast();
-    }
-    return super.getCapability(capability, facing);
-  }
-
-  @Override
-  public void invalidateCaps() {
-    super.invalidateCaps();
-    this.tankHolder.invalidate();
-  }
-
-
-  /*
-   * Alloying
-   */
-
-  /** Checks if the tile entity is active */
   private boolean isFormed() {
     BlockState state = this.getBlockState();
     return state.hasProperty(MelterBlock.IN_STRUCTURE) && state.getValue(MelterBlock.IN_STRUCTURE);
   }
 
-  /** Handles server tick */
   private void tick(Level level, BlockPos pos, BlockState state) {
     if (isFormed()) {
       switch (tick) {
-        // tick 0: find fuel
         case 0 -> {
           alloyTank.setTemperature(fuelModule.findFuel(false));
           if (!fuelModule.hasFuel() && alloyingModule.canAlloy()) {
             fuelModule.findFuel(true);
           }
         }
-        // tick 2: alloy alloys and consume fuel
         case 2 -> {
           boolean hasFuel = fuelModule.hasFuel();
 
-          // update state for new fuel state
           if (state.getValue(ControllerBlock.ACTIVE) != hasFuel) {
             level.setBlockAndUpdate(pos, state.setValue(ControllerBlock.ACTIVE, hasFuel));
-            // update the heater below
             BlockPos down = pos.below();
             BlockState downState = level.getBlockState(down);
             if (downState.is(TinkerTags.Blocks.FUEL_TANKS) && downState.hasProperty(ControllerBlock.ACTIVE) && downState.getValue(ControllerBlock.ACTIVE) != hasFuel) {
@@ -134,7 +86,6 @@ public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBloc
             }
           }
 
-          // actual alloying
           if (hasFuel) {
             alloyTank.setTemperature(fuelModule.getTemperature());
             alloyingModule.doAlloy();
@@ -142,35 +93,22 @@ public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBloc
           }
         }
       }
-    // if no tank, drain the excess leftover fuel from the last operation
     } else if (tick == 2 && fuelModule.hasFuel()) {
       fuelModule.decreaseFuel(1);
     }
     tick = (tick + 1) % 4;
   }
 
-  /**
-   * Called when a neighbor of this block is changed to update the tank cache
-   * @param side  Side changed
-   */
+  /** Called when a neighbor of this block is changed to update the tank cache. */
   public void neighborChanged(Direction side) {
     alloyTank.refresh(side, true);
   }
-
-  /*
-   * Display
-   */
 
   @Nullable
   @Override
   public AbstractContainerMenu createMenu(int id, Inventory inv, Player playerEntity) {
     return new AlloyerContainerMenu(id, inv, this);
   }
-
-
-  /*
-   * NBT
-   */
 
   @Override
   protected boolean shouldSyncOnUpdate() {
