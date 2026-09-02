@@ -5,8 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import slimeknights.mantle.network.packet.IThreadsafePacket;
@@ -46,15 +45,11 @@ public class InventorySlotSyncPacket implements IThreadsafePacket {
     private static void handle(InventorySlotSyncPacket packet) {
       Level world = Minecraft.getInstance().level;
       if (world != null) {
-        BlockEntity te = world.getBlockEntity(packet.pos);
-        if (te != null) {
-          te.getCapability(ForgeCapabilities.ITEM_HANDLER)
-            .filter(cap -> cap instanceof IItemHandlerModifiable)
-            .ifPresent(cap -> {
-              ((IItemHandlerModifiable)cap).setStackInSlot(packet.slot, packet.itemStack);
-              //noinspection ConstantConditions
-              Minecraft.getInstance().levelRenderer.blockChanged(null, packet.pos, null, null, 0);
-            });
+        var capability = world.getCapability(Capabilities.ItemHandler.BLOCK, packet.pos, null);
+        if (capability instanceof IItemHandlerModifiable itemHandler) {
+          itemHandler.setStackInSlot(packet.slot, packet.itemStack);
+          //noinspection ConstantConditions
+          Minecraft.getInstance().levelRenderer.blockChanged(null, packet.pos, null, null, 0);
         }
       }
     }
