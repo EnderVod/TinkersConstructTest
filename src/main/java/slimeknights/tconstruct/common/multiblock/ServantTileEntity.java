@@ -2,6 +2,8 @@ package slimeknights.tconstruct.common.multiblock;
 
 import lombok.Getter;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
@@ -9,9 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.registries.ForgeRegistries;
 import slimeknights.mantle.block.entity.MantleBlockEntity;
-import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.tconstruct.library.utils.TagUtil;
 
 import javax.annotation.Nullable;
@@ -55,23 +55,19 @@ public class ServantTileEntity extends MantleBlockEntity implements IServantLogi
       return false;
     }
 
-    // ensure the master block is correct
     assert level != null;
     if (level.getBlockState(masterPos).getBlock() == masterBlock) {
       return true;
     }
-    // master invalid, so clear
     setMaster(null, null);
     return false;
   }
 
   @Override
   public boolean isValidMaster(IMasterLogic master) {
-    // if we have a valid master, the passed master is only valid if its our current master
     if (validateMaster()) {
       return master.getMasterPos().equals(this.masterPos);
     }
-    // otherwise, we are happy with any master
     return true;
   }
 
@@ -85,11 +81,9 @@ public class ServantTileEntity extends MantleBlockEntity implements IServantLogi
   @Override
   public void setPotentialMaster(IMasterLogic master) {
     BlockPos newMaster = master.getMasterPos();
-    // if this is our current master, simply update the master block
     if (newMaster.equals(this.masterPos)) {
       masterBlock = master.getMasterBlock().getBlock();
       this.setChangedFast();
-    // otherwise, only set if we don't have a master
     } else if (!validateMaster()) {
       setMaster(newMaster, master.getMasterBlock().getBlock());
     }
@@ -102,24 +96,18 @@ public class ServantTileEntity extends MantleBlockEntity implements IServantLogi
     }
   }
 
-
   /* NBT */
 
-  /**
-   * Reads the master from NBT
-   * @param tags  NBT to read
-   */
+  /** Reads the master from NBT. */
   protected void readMaster(CompoundTag tags) {
     BlockPos masterPos = TagUtil.readOptionalPos(tags, TAG_MASTER_POS, this.worldPosition);
     Block masterBlock = null;
-    // if the master position is valid, get the master block
     if (masterPos != null && tags.contains(TAG_MASTER_BLOCK, Tag.TAG_STRING)) {
       ResourceLocation masterBlockName = ResourceLocation.tryParse(tags.getString(TAG_MASTER_BLOCK));
-      if (masterBlockName != null && ForgeRegistries.BLOCKS.containsKey(masterBlockName)) {
-        masterBlock = ForgeRegistries.BLOCKS.getValue(masterBlockName);
+      if (masterBlockName != null) {
+        masterBlock = BuiltInRegistries.BLOCK.getOptional(masterBlockName).orElse(null);
       }
     }
-    // if both valid, set
     if (masterBlock != null) {
       this.masterPos = masterPos;
       this.masterBlock = masterBlock;
@@ -127,27 +115,23 @@ public class ServantTileEntity extends MantleBlockEntity implements IServantLogi
   }
 
   @Override
-  public void load(CompoundTag tags) {
-    super.load(tags);
+  protected void loadAdditional(CompoundTag tags, HolderLookup.Provider registries) {
+    super.loadAdditional(tags, registries);
     readMaster(tags);
   }
 
-  /**
-   * Writes the master position and master block to the given compound
-   * @param tags  Tags
-   */
-  @SuppressWarnings({"UnusedReturnValue"})
+  /** Writes the master position and master block to the given compound. */
   protected CompoundTag writeMaster(CompoundTag tags) {
     if (masterPos != null && masterBlock != null) {
       tags.put(TAG_MASTER_POS, NbtUtils.writeBlockPos(masterPos.subtract(this.worldPosition)));
-      tags.putString(TAG_MASTER_BLOCK, Loadables.BLOCK.getKey(masterBlock).toString());
+      tags.putString(TAG_MASTER_BLOCK, BuiltInRegistries.BLOCK.getKey(masterBlock).toString());
     }
     return tags;
   }
 
   @Override
-  public void saveAdditional(CompoundTag tags) {
-    super.saveAdditional(tags);
+  protected void saveAdditional(CompoundTag tags, HolderLookup.Provider registries) {
+    super.saveAdditional(tags, registries);
     writeMaster(tags);
   }
 }
