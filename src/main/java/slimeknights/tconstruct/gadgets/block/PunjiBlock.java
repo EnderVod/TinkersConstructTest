@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.world.level.pathfinder.BlockPathTypes;
+import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -31,7 +31,6 @@ import java.util.EnumMap;
 import java.util.Map;
 
 public class PunjiBlock extends Block {
-
   public static final DirectionProperty FACING = BlockStateProperties.FACING;
 
   private static final BooleanProperty NORTH = BlockStateProperties.NORTH;
@@ -53,8 +52,8 @@ public class PunjiBlock extends Block {
 
   @Nullable
   @Override
-  public BlockPathTypes getBlockPathType(BlockState state, BlockGetter level, BlockPos pos, @Nullable Mob mob) {
-    return BlockPathTypes.DAMAGE_OTHER;
+  public PathType getBlockPathType(BlockState state, BlockGetter level, BlockPos pos, @Nullable Mob mob) {
+    return PathType.DAMAGE_OTHER;
   }
 
   @SuppressWarnings("deprecation")
@@ -65,13 +64,11 @@ public class PunjiBlock extends Block {
       world.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(world));
     }
 
-    // break if now invalid
     Direction direction = state.getValue(FACING);
     if (facing == direction && !state.canSurvive(world, pos)) {
       return Blocks.AIR.defaultBlockState();
     }
 
-    // apply north and east if relevant
     Direction north = getLocalNorth(direction);
     Direction east = getLocalEast(direction);
     if (facing == north) {
@@ -80,7 +77,6 @@ public class PunjiBlock extends Block {
       state = state.setValue(EAST, isConnected(world, direction, facingPos));
     }
 
-    // always update northeast and northwest, never gets direct updates
     BlockPos northPos = pos.relative(north);
     return state.setValue(NORTHEAST, isConnected(world, direction, northPos.relative(east)))
                 .setValue(NORTHWEST, isConnected(world, direction, northPos.relative(east.getOpposite())));
@@ -98,7 +94,6 @@ public class PunjiBlock extends Block {
     BlockPos pos = context.getClickedPos();
 
     BlockState state = this.defaultBlockState().setValue(FACING, direction);
-    // if the space is invalid, try again on other sides
     if (!state.canSurvive(world, pos)) {
       boolean isValid = false;
       for (Direction side : Direction.values()) {
@@ -116,7 +111,6 @@ public class PunjiBlock extends Block {
       }
     }
 
-    // apply connections
     Direction north = getLocalNorth(direction);
     Direction east = getLocalEast(direction);
     BlockPos northPos = pos.relative(north);
@@ -127,23 +121,11 @@ public class PunjiBlock extends Block {
                 .setValue(WATERLOGGED, context.getLevel().getFluidState(context.getClickedPos()).getType() == Fluids.WATER);
   }
 
-  /**
-   * Checks if this should connect to the block at the position
-   * @param world   World instance
-   * @param facing  Punji stick facing
-   * @param target  Position to check
-   * @return  True if connected
-   */
   private boolean isConnected(LevelReader world, Direction facing, BlockPos target) {
     BlockState state = world.getBlockState(target);
     return state.getBlock() == this && state.getValue(FACING) == facing;
   }
 
-  /**
-   * Gets the facing relative north
-   * @param facing  Punji stick facing
-   * @return  North for the given facing
-   */
   private static Direction getLocalNorth(Direction facing) {
     return switch (facing) {
       case DOWN -> Direction.NORTH;
@@ -152,11 +134,6 @@ public class PunjiBlock extends Block {
     };
   }
 
-  /**
-   * Gets the facing relative east
-   * @param facing  Punji stick facing
-   * @return  East for the given facing
-   */
   private static Direction getLocalEast(Direction facing) {
     if (facing.getAxis() == Axis.Y) {
       return Direction.EAST;
@@ -180,7 +157,6 @@ public class PunjiBlock extends Block {
     if (entityIn instanceof LivingEntity) {
       Direction side = state.getValue(FACING);
       Axis axis = side.getAxis();
-      // only take damage if in the same half as the punji sticks
       if (side.getAxisDirection() == AxisDirection.POSITIVE) {
         if (entityIn.getBoundingBox().max(axis) <= pos.get(axis) + 0.5f) {
           return;
@@ -199,7 +175,6 @@ public class PunjiBlock extends Block {
     }
   }
 
-  /* Bounds */
   private static final Map<Direction, VoxelShape> BOUNDS;
   static {
     BOUNDS = new EnumMap<>(Direction.class);
