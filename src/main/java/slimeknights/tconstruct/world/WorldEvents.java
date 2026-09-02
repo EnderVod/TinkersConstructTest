@@ -15,6 +15,7 @@ import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingVisibilityEv
 import net.neoforged.neoforge.event.village.WandererTradesEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.common.EventBusSubscriber.Bus;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.config.Config;
 import slimeknights.tconstruct.world.logic.AncientToolItemListing;
@@ -22,7 +23,7 @@ import slimeknights.tconstruct.world.logic.AncientToolItemListing;
 import java.util.Collections;
 
 @SuppressWarnings("unused")
-@EventBusSubscriber(modid = TConstruct.MOD_ID)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.GAME)
 public class WorldEvents {
   /* Heads */
 
