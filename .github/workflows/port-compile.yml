@@ -19,6 +19,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: tinkers-1.21.1-port-compile-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile:
     runs-on: ubuntu-latest
