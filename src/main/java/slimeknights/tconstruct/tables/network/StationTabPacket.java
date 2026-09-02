@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
-import net.minecraftforge.network.NetworkHooks;
 import slimeknights.mantle.network.packet.IThreadsafePacket;
 import slimeknights.tconstruct.common.network.TinkerNetwork;
 import slimeknights.tconstruct.tables.block.ITabbedBlock;
@@ -30,32 +29,33 @@ public class StationTabPacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    ServerPlayer sender = context.getSender();
-    if (sender != null) {
-      ItemStack heldStack = sender.containerMenu.getCarried();
-      if (!heldStack.isEmpty()) {
-        // set it to empty, so it's doesn't get dropped
-        sender.containerMenu.setCarried(ItemStack.EMPTY);
-      }
+    if (!(context.player() instanceof ServerPlayer sender)) {
+      return;
+    }
 
-      Level world = sender.getCommandSenderWorld();
-      if (!world.hasChunkAt(pos)) {
-        return;
-      }
-      BlockState state = world.getBlockState(pos);
-      if (state.getBlock() instanceof ITabbedBlock) {
-        ((ITabbedBlock) state.getBlock()).openGui(sender, sender.getCommandSenderWorld(), pos);
-      } else {
-        MenuProvider provider = state.getMenuProvider(sender.getCommandSenderWorld(), pos);
-        if (provider != null) {
-          NetworkHooks.openScreen(sender, provider, pos);
-        }
-      }
+    ItemStack heldStack = sender.containerMenu.getCarried();
+    if (!heldStack.isEmpty()) {
+      // set it to empty, so it's doesn't get dropped
+      sender.containerMenu.setCarried(ItemStack.EMPTY);
+    }
 
-      if (!heldStack.isEmpty()) {
-        sender.containerMenu.setCarried(heldStack);
-        TinkerNetwork.getInstance().sendVanillaPacket(sender, new ClientboundContainerSetSlotPacket(-1, -1, -1, heldStack));
+    Level world = sender.getCommandSenderWorld();
+    if (!world.hasChunkAt(pos)) {
+      return;
+    }
+    BlockState state = world.getBlockState(pos);
+    if (state.getBlock() instanceof ITabbedBlock) {
+      ((ITabbedBlock) state.getBlock()).openGui(sender, sender.getCommandSenderWorld(), pos);
+    } else {
+      MenuProvider provider = state.getMenuProvider(sender.getCommandSenderWorld(), pos);
+      if (provider != null) {
+        sender.openMenu(provider, buffer -> buffer.writeBlockPos(pos));
       }
+    }
+
+    if (!heldStack.isEmpty()) {
+      sender.containerMenu.setCarried(heldStack);
+      TinkerNetwork.getInstance().sendVanillaPacket(sender, new ClientboundContainerSetSlotPacket(-1, -1, -1, heldStack));
     }
   }
 }
