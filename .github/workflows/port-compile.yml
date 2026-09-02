@@ -58,4 +58,14 @@ jobs:
           echo "Using Mantle dependency: $(basename "$mantle_jar")"
 
       - name: Compile Tinkers core
-        run: ./gradlew compileJava --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew compileJava --no-daemon --stacktrace 2>&1 | tee compile.log
+
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinkers-compile-log
+          path: compile.log
+          if-no-files-found: warn
