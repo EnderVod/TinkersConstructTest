@@ -119,8 +119,8 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.fluidCannon.get(), (cannon, side) -> cannon.getItemHandler());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingTank.get(), (castingTank, side) -> castingTank.getTank());
 
-    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingTableEntity.get(), (casting, side) -> casting.getTank());
-    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.castingBasinEntity.get(), (casting, side) -> casting.getTank());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.table.get(), (casting, side) -> casting.getTank());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.basin.get(), (casting, side) -> casting.getTank());
 
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.smeltery.get(), (controller, side) -> controller.getMeltingInventory());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.smeltery.get(),
