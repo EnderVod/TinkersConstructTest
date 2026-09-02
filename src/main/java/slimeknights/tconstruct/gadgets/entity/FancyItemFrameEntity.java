@@ -3,13 +3,12 @@ package slimeknights.tconstruct.gadgets.entity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.EntityType;
@@ -17,19 +16,20 @@ import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.HitResult;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
+import net.neoforged.neoforge.entity.IEntityWithComplexSpawn;
 import slimeknights.tconstruct.common.Sounds;
 import slimeknights.tconstruct.gadgets.TinkerGadgets;
 import slimeknights.tconstruct.library.utils.Util;
 
-public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditionalSpawnData {
+public class FancyItemFrameEntity extends ItemFrame implements IEntityWithComplexSpawn {
   private static final int DIAMOND_TIMER = 300;
   private static final EntityDataAccessor<Integer> VARIANT = SynchedEntityData.defineId(FancyItemFrameEntity.class, EntityDataSerializers.INT);
+  /** Vanilla's rotation accessor is no longer exposed in 1.21, so fancy frames synchronize their own rotation. */
+  private static final EntityDataAccessor<Integer> ROTATION = SynchedEntityData.defineId(FancyItemFrameEntity.class, EntityDataSerializers.INT);
   private static final String TAG_VARIANT = "Variant";
   private static final String TAG_ROTATION_TIMER = "RotationTimer";
 
@@ -62,7 +62,12 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
       Level level = level();
       BlockState state = level.getBlockState(behind);
       if (!state.isAir()) {
-        InteractionResult result = state.use(level, player, hand, Util.createTraceResult(behind, direction, false));
+        var hit = Util.createTraceResult(behind, direction, false);
+        ItemInteractionResult itemResult = state.useItemOn(player.getItemInHand(hand), level, player, hand, hit);
+        if (itemResult.consumesAction()) {
+          return itemResult.result();
+        }
+        InteractionResult result = state.useWithoutItem(level, player, hit);
         if (result.consumesAction()) {
           return result;
         }
@@ -122,16 +127,26 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
     }
   }
 
+  @Override
+  public int getRotation() {
+    return this.getEntityData().get(ROTATION);
+  }
+
   /** Internal logic to set the rotation */
   private void setRotationRaw(int rotationIn, boolean updateComparator) {
-    this.getEntityData().set(DATA_ROTATION, rotationIn);
+    this.getEntityData().set(ROTATION, rotationIn);
     if (updateComparator) {
       this.level().updateNeighbourForOutputSignal(this.pos, Blocks.AIR);
     }
   }
 
   @Override
-  protected void setRotation(int rotationIn, boolean updateComparator) {
+  public void setRotation(int rotationIn) {
+    setRotation(rotationIn, true);
+  }
+
+  /** Internal setter retaining Tinkers' comparator/sound behavior. */
+  private void setRotation(int rotationIn, boolean updateComparator) {
     this.rotationTimer = 0;
     // diamond, manyullyn, and netherite goes 0-8 rotation
     int id = getFrameId();
@@ -155,9 +170,10 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
   }
 
   @Override
-  protected void defineSynchedData() {
-    super.defineSynchedData();
-    this.entityData.define(VARIANT, 0);
+  protected void defineSynchedData(SynchedEntityData.Builder builder) {
+    super.defineSynchedData(builder);
+    builder.define(VARIANT, 0);
+    builder.define(ROTATION, 0);
   }
 
   /** Gets the frame type */
@@ -181,7 +197,7 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
   }
 
   @Override
-  public ItemStack getPickedResult(HitResult target) {
+  public ItemStack getPickResult() {
     ItemStack held = this.getItem();
     if (held.isEmpty()) {
       return new ItemStack(getFrameItem());
@@ -196,8 +212,8 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
   }
 
   @Override
-  public boolean ignoreExplosion() {
-    return super.ignoreExplosion() || getFrameId() == FrameType.NETHERITE.getId();
+  public boolean ignoreExplosion(Explosion explosion) {
+    return super.ignoreExplosion(explosion) || getFrameId() == FrameType.NETHERITE.getId();
   }
 
   @Override
@@ -212,7 +228,6 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
     }
     return rotation % 8 + 1;
   }
-
 
   @Override
   public void addAdditionalSaveData(CompoundTag compound) {
@@ -235,24 +250,18 @@ public class FancyItemFrameEntity extends ItemFrame implements IEntityAdditional
   }
 
   @Override
-  public Packet<ClientGamePacketListener> getAddEntityPacket() {
-    return NetworkHooks.getEntitySpawningPacket(this);
-  }
-
-  @Override
-  public void writeSpawnData(FriendlyByteBuf buffer) {
+  public void writeSpawnData(RegistryFriendlyByteBuf buffer) {
     buffer.writeVarInt(this.getFrameId());
     buffer.writeBlockPos(this.pos);
     buffer.writeVarInt(this.direction.get3DDataValue());
   }
 
   @Override
-  public void readSpawnData(FriendlyByteBuf buffer) {
+  public void readSpawnData(RegistryFriendlyByteBuf buffer) {
     this.entityData.set(VARIANT, buffer.readVarInt());
     this.pos = buffer.readBlockPos();
     this.setDirection(Direction.from3DDataValue(buffer.readVarInt()));
   }
-
 
   @Override
   protected Component getTypeName() {
