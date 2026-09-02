@@ -14,7 +14,7 @@ public enum ToolPartSubtypeInterpreter implements IIngredientSubtypeInterpreter<
   INSTANCE;
 
   @Override
-  public String apply(ItemStack stack, UidIPayloadContext context) {
+  public String apply(ItemStack stack, UidContext context) {
     MaterialVariantId materialId = IMaterialItem.getMaterialFromStack(stack);
     if (materialId.equals(MaterialId.UNKNOWN)) {
       return IIngredientSubtypeInterpreter.NONE;

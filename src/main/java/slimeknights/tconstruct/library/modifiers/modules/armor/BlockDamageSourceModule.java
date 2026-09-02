@@ -50,7 +50,7 @@ public record BlockDamageSourceModule(IJsonPredicate<DamageSource> source, Modif
   }
 
   @Override
-  public boolean isDamageBlocked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount) {
+  public boolean isDamageBlocked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount) {
     return condition.matches(tool, modifier) && this.source.matches(source);
   }
 

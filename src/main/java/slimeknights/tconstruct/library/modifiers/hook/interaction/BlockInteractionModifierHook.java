@@ -20,7 +20,7 @@ public interface BlockInteractionModifierHook {
    * @param source     Source of the interaction
    * @return  Return PASS or FAIL to allow vanilla handling, any other to stop vanilla and later modifiers from running.
    */
-  default InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+  default InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
     return InteractionResult.PASS;
   }
 
@@ -32,14 +32,14 @@ public interface BlockInteractionModifierHook {
    * @param source     Source of the interaction
    * @return  Return PASS or FAIL to allow vanilla handling, any other to stop vanilla and later modifiers from running.
    */
-  default InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+  default InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
     return InteractionResult.PASS;
   }
 
   /** Logic to merge multiple interaction hooks into one */
   record FirstMerger(Collection<BlockInteractionModifierHook> modules) implements BlockInteractionModifierHook {
     @Override
-    public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+    public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
       InteractionResult result = InteractionResult.PASS;
       for (BlockInteractionModifierHook module : modules) {
         result = module.beforeBlockUse(tool, modifier, context, source);
@@ -51,7 +51,7 @@ public interface BlockInteractionModifierHook {
     }
 
     @Override
-    public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+    public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
       InteractionResult result = InteractionResult.PASS;
       for (BlockInteractionModifierHook module : modules) {
         result = module.afterBlockUse(tool, modifier, context, source);

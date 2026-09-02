@@ -27,7 +27,7 @@ public class EnderdodgingModifier extends NoLevelsModifier implements OnAttacked
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // teleport randomly from other damage
     LivingEntity self = context.getEntity();
     if (!self.hasEffect(TinkerEffects.enderference.get()) && source.getEntity() instanceof LivingEntity && RANDOM.nextInt(10) == 0) {

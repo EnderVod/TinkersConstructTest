@@ -36,7 +36,7 @@ public record VolatileIntModule(ResourceLocation flag, int value) implements Too
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ToolDataNBT volatileData) {
     volatileData.putInt(flag, volatileData.getInt(flag) + value);
   }
 }

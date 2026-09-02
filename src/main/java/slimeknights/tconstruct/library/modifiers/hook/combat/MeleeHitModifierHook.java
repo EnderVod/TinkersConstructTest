@@ -28,7 +28,7 @@ public interface MeleeHitModifierHook {
    * @param knockback      Computed knockback from all prior modifiers
    * @return  New knockback to apply. 0.5 is equivelent to 1 level of the vanilla enchant
    */
-  default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+  default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
     return knockback;
   }
 
@@ -47,7 +47,7 @@ public interface MeleeHitModifierHook {
    * @param context       Attack context
    * @param damageDealt   Amount of damage successfully dealt
    */
-  default void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {}
+  default void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {}
 
   /**
    * Called after attacking an entity when no damage was dealt
@@ -56,12 +56,12 @@ public interface MeleeHitModifierHook {
    * @param context          Attack context
    * @param damageAttempted  Amount of damage that was attempted to be dealt
    */
-  default void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageAttempted) {}
+  default void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageAttempted) {}
 
   /** Merger that runs all nested hooks */
   record AllMerger(Collection<MeleeHitModifierHook> modules) implements MeleeHitModifierHook {
     @Override
-    public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+    public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
       for (MeleeHitModifierHook module : modules) {
         knockback = module.beforeMeleeHit(tool, modifier, context, damage, baseKnockback, knockback);
       }
@@ -69,14 +69,14 @@ public interface MeleeHitModifierHook {
     }
 
     @Override
-    public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+    public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
       for (MeleeHitModifierHook module : modules) {
         module.afterMeleeHit(tool, modifier, context, damageDealt);
       }
     }
 
     @Override
-    public void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageAttempted) {
+    public void failedMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageAttempted) {
       for (MeleeHitModifierHook module : modules) {
         module.failedMeleeHit(tool, modifier, context, damageAttempted);
       }

@@ -55,12 +55,12 @@ public record ToolActionTransformModule(ToolAction action, SoundEvent sound, boo
   }
 
   @Override
-  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
+  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
     return condition.matches(tool, modifier) && state.getToolModifiedState(Util.offset(context, offset), action, true) != null;
   }
 
   @Override
-  public boolean transform(IToolStackView tool, UseOnIPayloadContext context, BlockState original, boolean playSound) {
+  public boolean transform(IToolStackView tool, UseOnContext context, BlockState original, boolean playSound) {
     Level level = context.getLevel();
     BlockPos pos = context.getClickedPos();
     BlockPos above = pos.above();

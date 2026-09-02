@@ -55,7 +55,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
   }
 
   @Override
-  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
+  public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
     return state.is(TinkerTags.Blocks.HARVESTABLE);
   }
 
@@ -68,7 +68,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
    * @param player   Player instance
    * @return  True if harvested
    */
-  private static boolean harvestInteract(UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos, Player player) {
+  private static boolean harvestInteract(UseOnContext context, ServerLevel world, BlockState state, BlockPos pos, Player player) {
     BlockHitResult trace = new BlockHitResult(context.getClickLocation(), context.getClickedFace(), pos, false);
     InteractionResult result = state.use(world, player, context.getHand(), trace);
     return result.consumesAction();
@@ -178,7 +178,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
    * @return  True if harvested
    */
   @SuppressWarnings("deprecation")
-  private static boolean harvest(UseOnIPayloadContext context, IToolStackView tool, ServerLevel world, BlockState state, BlockPos pos, InteractionSource source) {
+  private static boolean harvest(UseOnContext context, IToolStackView tool, ServerLevel world, BlockState state, BlockPos pos, InteractionSource source) {
     Player player = context.getPlayer();
     // first, check main harvestable tag
     Holder<Block> holder = state.getBlock().builtInRegistryHolder();
@@ -215,7 +215,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
   }
 
   @Override
-  public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+  public InteractionResult beforeBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
     if (tool.isBroken() || !tool.getHook(ToolHooks.INTERACTION).canInteract(tool, modifier.getId(), source)) {
       return InteractionResult.PASS;
     }

@@ -19,12 +19,12 @@ public interface AreaOfEffectHighlightModifierHook {
    * @param state     State at position
    * @return  True if the block should highlight
    */
-  boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state);
+  boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state);
 
   /** Merger returning true if any nested hook returns true */
   record AnyMerger(Collection<AreaOfEffectHighlightModifierHook> modules) implements AreaOfEffectHighlightModifierHook {
     @Override
-    public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockPos offset, BlockState state) {
+    public boolean shouldHighlight(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockPos offset, BlockState state) {
       for (AreaOfEffectHighlightModifierHook module : modules) {
         if (module.shouldHighlight(tool, modifier, context, offset, state)) {
           return true;

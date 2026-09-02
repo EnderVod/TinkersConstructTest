@@ -32,7 +32,7 @@ import slimeknights.tconstruct.smeltery.block.entity.multiblock.HeatingStructure
 public class HeatingStructureBlockEntityRenderer implements BlockEntityRenderer<HeatingStructureBlockEntity> {
   private static final float ITEM_SCALE = 15f/16f;
 
-  public HeatingStructureBlockEntityRenderer(IPayloadContext context) {}
+  public HeatingStructureBlockEntityRenderer(Context context) {}
 
   @Override
   public void render(HeatingStructureBlockEntity smeltery, float partialTicks, PoseStack matrices, MultiBufferSource buffer, int combinedLight, int combinedOverlay) {

@@ -46,7 +46,7 @@ public class SelfDestructiveModifier extends SingleLevelModifier implements Keyb
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     context.getEntity().removeEffect(TinkerEffects.selfDestructing.get());
   }
 

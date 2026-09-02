@@ -88,7 +88,7 @@ public class PunjiBlock extends Block {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     Direction direction = context.getClickedFace().getOpposite();
     LevelReader world = context.getLevel();
     BlockPos pos = context.getClickedPos();
@@ -189,7 +189,7 @@ public class PunjiBlock extends Block {
   @SuppressWarnings("deprecation")
   @Deprecated
   @Override
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return BOUNDS.get(state.getValue(FACING));
   }
 

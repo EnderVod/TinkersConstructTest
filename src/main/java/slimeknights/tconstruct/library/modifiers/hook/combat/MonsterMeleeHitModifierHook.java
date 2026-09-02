@@ -27,12 +27,12 @@ public interface MonsterMeleeHitModifierHook {
    * @param context    Attack context
    * @param damage     Amount of damage to deal. Should match exactly to the damage that will be taken, but has not been dealt yet.
    */
-  void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage);
+  void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage);
 
   /** Merger that runs all nested hooks */
   record AllMerger(Collection<MonsterMeleeHitModifierHook> modules) implements MonsterMeleeHitModifierHook {
     @Override
-    public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+    public void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
       for (MonsterMeleeHitModifierHook module : modules) {
         module.onMonsterMeleeHit(tool, modifier, context, damageDealt);
       }
@@ -42,7 +42,7 @@ public interface MonsterMeleeHitModifierHook {
   /** Helper that just redirects the monster method to the melee hit hook. Should only be used when certain the after hook can run before the damage is dealt */
   interface RedirectAfter extends MonsterMeleeHitModifierHook, MeleeHitModifierHook {
     @Override
-    default void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage) {
+    default void onMonsterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage) {
       afterMeleeHit(tool, modifier, context, damage);
     }
   }
@@ -50,7 +50,7 @@ public interface MonsterMeleeHitModifierHook {
   /** Helper that just redirects the before hit method to the monster melee hit */
   interface RedirectBefore extends MonsterMeleeHitModifierHook, MeleeHitModifierHook {
     @Override
-    default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+    default float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
       onMonsterMeleeHit(tool, modifier, context, damage);
       return knockback;
     }

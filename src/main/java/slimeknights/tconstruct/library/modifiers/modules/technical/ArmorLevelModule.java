@@ -49,12 +49,12 @@ public record ArmorLevelModule(TinkerDataKey<Integer> key, boolean allowBroken, 
   }
 
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     addLevelsIfArmor(tool, context, key, modifier.intEffectiveLevel(), allowBroken, heldTag);
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     addLevelsIfArmor(tool, context, key, -modifier.intEffectiveLevel(), allowBroken, heldTag);
   }
 
@@ -67,7 +67,7 @@ public record ArmorLevelModule(TinkerDataKey<Integer> key, boolean allowBroken, 
    * @param key      Key to modify
    * @param amount   Amount to add
    */
-  public static void addLevels(EquipmentChangeIPayloadContext context, TinkerDataKey<Integer> key, int amount) {
+  public static void addLevels(EquipmentChangeContext context, TinkerDataKey<Integer> key, int amount) {
     TinkerDataCapability.Holder data = LogicHelper.orElseNull(context.getTinkerData());
     if (data != null) {
       int totalLevels = data.get(key, 0) + amount;
@@ -92,7 +92,7 @@ public record ArmorLevelModule(TinkerDataKey<Integer> key, boolean allowBroken, 
    * @param amount   Amount to add
    * @param heldTag  Tag to check to validate held items, if null held items are considered to never be valid
    */
-  public static void addLevelsIfArmor(IToolStackView tool, EquipmentChangeIPayloadContext context, TinkerDataKey<Integer> key, int amount, boolean allowBroken, @Nullable TagKey<Item> heldTag) {
+  public static void addLevelsIfArmor(IToolStackView tool, EquipmentChangeContext context, TinkerDataKey<Integer> key, int amount, boolean allowBroken, @Nullable TagKey<Item> heldTag) {
     if (validSlot(tool, context.getChangedSlot(), heldTag) && (allowBroken || !tool.isBroken())) {
       addLevels(context, key, amount);
     }

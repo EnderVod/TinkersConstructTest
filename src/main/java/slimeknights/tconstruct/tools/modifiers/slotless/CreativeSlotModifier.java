@@ -39,7 +39,7 @@ public class CreativeSlotModifier extends NoLevelsModifier implements VolatileDa
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     IModDataView persistentData = context.getPersistentData();
     if (persistentData.contains(KEY_SLOTS, Tag.TAG_COMPOUND)) {
       CompoundTag slots = persistentData.getCompound(KEY_SLOTS);

@@ -24,12 +24,12 @@ public interface DamageDealtModifierHook {
    * @param amount           Amount of damage caused
    * @param isDirectDamage   If true, this attack is direct damage from an entity
    */
-  void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage);
+  void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage);
 
   /** Merger that runs all nested modules */
   record AllMerger(Collection<DamageDealtModifierHook> modules) implements DamageDealtModifierHook {
     @Override
-    public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
+    public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
       for (DamageDealtModifierHook module : modules) {
         module.onDamageDealt(tool, modifier, context, slotType, target, source, amount, isDirectDamage);
       }

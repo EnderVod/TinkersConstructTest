@@ -44,7 +44,7 @@ public interface AreaOfEffectIterator {
     }
 
     @Override
-    public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
+    public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
       return List.of();
     }
   });
@@ -66,7 +66,7 @@ public interface AreaOfEffectIterator {
    * @param matchType   Type of match
    * @return A list of BlockPos's that the AOE tool can affect. Note these positions will likely be mutable
    */
-  Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType);
+  Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType);
 
   /** Checks if the tool is effective on the given block */
   private static boolean isEffective(IToolStackView tool, Level world, BlockPos pos, float refHardness) {
@@ -87,7 +87,7 @@ public interface AreaOfEffectIterator {
   }
 
   /** Gets the predicate for whether a given position can be broken in AOE */
-  static Predicate<BlockPos> defaultBlockPredicate(IToolStackView tool, UseOnIPayloadContext context, AOEMatchType matchType) {
+  static Predicate<BlockPos> defaultBlockPredicate(IToolStackView tool, UseOnContext context, AOEMatchType matchType) {
     // requires effectiveness
     Level world = context.getLevel();
     if (matchType == AOEMatchType.TRANSFORM) {

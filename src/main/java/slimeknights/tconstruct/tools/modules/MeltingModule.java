@@ -133,7 +133,7 @@ public record MeltingModule(LevelingInt temperature, LevelingInt nuggetsPerMetal
   }
 
   @Override
-  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootIPayloadContext context) {
+  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootContext context) {
     if (!condition.matches(tool, modifier)) {
       return;
     }
@@ -238,7 +238,7 @@ public record MeltingModule(LevelingInt temperature, LevelingInt nuggetsPerMetal
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
     if (context.isFullyCharged()) {
       meltTarget(tool, modifier, context.getLivingTarget(), damageDealt);
     }

@@ -30,12 +30,12 @@ public interface OnAttackedModifierHook {
    * @param amount           Amount of damage caused
    * @param isDirectDamage   If true, this attack is direct damage from an entity
    */
-  void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage);
+  void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage);
 
   /** Merger that runs all submodules */
   record AllMerger(Collection<OnAttackedModifierHook> modules) implements OnAttackedModifierHook {
     @Override
-    public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+    public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
       for (OnAttackedModifierHook module : modules) {
         module.onAttacked(tool, modifier, context, slotType, source, amount, isDirectDamage);
       }
@@ -55,7 +55,7 @@ public interface OnAttackedModifierHook {
    * @param amount          Damage amount
    * @param isDirectDamage  If true, the damage source is applying directly
    */
-  static void handleAttack(ModuleHook<OnAttackedModifierHook> hook, EquipmentIPayloadContext context, DamageSource source, float amount, boolean isDirectDamage) {
+  static void handleAttack(ModuleHook<OnAttackedModifierHook> hook, EquipmentContext context, DamageSource source, float amount, boolean isDirectDamage) {
     for (EquipmentEntry entry : context.iterateTools()) {
       ModifierEntry modifier = entry.modifier();
       modifier.getHook(hook).onAttacked(entry.tool(), modifier, context, entry.slot(), source, amount, isDirectDamage);

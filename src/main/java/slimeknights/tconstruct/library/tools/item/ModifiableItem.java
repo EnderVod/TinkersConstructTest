@@ -349,7 +349,7 @@ public class ModifiableItem extends TieredItem implements IModifiableDisplay {
   }
   
   @Override
-  public InteractionResult onItemUseFirst(ItemStack stack, UseOnIPayloadContext context) {
+  public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) {
     if (stack.getCount() == 1) {
       ToolStack tool = ToolStack.from(stack);
       InteractionHand hand = context.getHand();
@@ -366,7 +366,7 @@ public class ModifiableItem extends TieredItem implements IModifiableDisplay {
   }
 
   @Override
-  public InteractionResult useOn(UseOnIPayloadContext context) {
+  public InteractionResult useOn(UseOnContext context) {
     ItemStack stack = context.getItemInHand();
     if (stack.getCount() == 1) {
       ToolStack tool = ToolStack.from(stack);

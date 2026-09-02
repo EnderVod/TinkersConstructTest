@@ -20,12 +20,12 @@ public interface BlockBreakModifierHook {
    * @param modifier  Modifier level
    * @param context   Harvest context
    */
-  void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context);
+  void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context);
 
   /** Merger that runs all nested hooks */
   record AllMerger(Collection<BlockBreakModifierHook> modules) implements BlockBreakModifierHook {
     @Override
-    public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
+    public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
       for (BlockBreakModifierHook module : modules) {
         module.afterBlockBreak(tool, modifier, context);
       }

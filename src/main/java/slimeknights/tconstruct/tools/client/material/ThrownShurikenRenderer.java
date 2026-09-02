@@ -17,7 +17,7 @@ import slimeknights.tconstruct.tools.entity.ToolProjectile;
 /** Renderer for {@link ThrownShuriken} */
 public class ThrownShurikenRenderer<T extends Projectile & ToolProjectile> extends EntityRenderer<T> {
   private final ItemRenderer itemRenderer;
-  public ThrownShurikenRenderer(EntityRendererProvider.IPayloadContext context) {
+  public ThrownShurikenRenderer(EntityRendererProvider.Context context) {
     super(context);
     this.itemRenderer = context.getItemRenderer();
   }

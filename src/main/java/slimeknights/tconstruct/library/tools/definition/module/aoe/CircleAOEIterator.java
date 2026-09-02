@@ -32,7 +32,7 @@ public record CircleAOEIterator(int diameter, boolean is3D) implements AreaOfEff
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
     // expanded gives an extra width every odd level, and an extra height every even level
     return calculate(tool, context, diameter + tool.getVolatileData().getInt(IModifiable.EXPANDED), is3D, matchType);
   }
@@ -45,7 +45,7 @@ public record CircleAOEIterator(int diameter, boolean is3D) implements AreaOfEff
    * @param matchType  Type of harvest being performed
    * @return  List of block positions
    */
-  public static Iterable<BlockPos> calculate(IToolStackView tool, UseOnIPayloadContext context, int diameter, boolean is3D, AOEMatchType matchType) {
+  public static Iterable<BlockPos> calculate(IToolStackView tool, UseOnContext context, int diameter, boolean is3D, AOEMatchType matchType) {
     // skip if no work
     if (diameter == 1) {
       return Collections.emptyList();

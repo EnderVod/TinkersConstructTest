@@ -48,7 +48,7 @@ public class TagIntersectionPresentCondition<T> implements ICondition {
   }
 
   @Override
-  public boolean test(IIPayloadContext context) {
+  public boolean test(IContext context) {
     // if there is just one tag, just needs to be filled
     List<Collection<Holder<T>>> tags = names.stream().map(context::getTag).toList();
     if (tags.size() == 1) {

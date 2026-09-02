@@ -21,7 +21,7 @@ public interface BlockTransformModifierHook {
    * @param pos      Position of block that was transformed, may be different from the context
    * @param action   Action that was performed
    */
-  void afterTransformBlock(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockState state, BlockPos pos, ToolAction action);
+  void afterTransformBlock(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockState state, BlockPos pos, ToolAction action);
 
   /**
    * Runs the hook after transforming a block
@@ -31,7 +31,7 @@ public interface BlockTransformModifierHook {
    * @param pos     Position of block that was transformed, may be different from the context
    * @param action  Action that was performed
    */
-  static void afterTransformBlock(IToolStackView tool, UseOnIPayloadContext context, BlockState state, BlockPos pos, ToolAction action) {
+  static void afterTransformBlock(IToolStackView tool, UseOnContext context, BlockState state, BlockPos pos, ToolAction action) {
     for (ModifierEntry entry : tool.getModifierList()) {
       entry.getHook(ModifierHooks.BLOCK_TRANSFORM).afterTransformBlock(tool, entry, context, state, pos, action);
     }
@@ -40,7 +40,7 @@ public interface BlockTransformModifierHook {
   /** Merger that runs all hooks */
   record AllMerger(Collection<BlockTransformModifierHook> modules) implements BlockTransformModifierHook {
     @Override
-    public void afterTransformBlock(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, BlockState state, BlockPos pos, ToolAction action) {
+    public void afterTransformBlock(IToolStackView tool, ModifierEntry modifier, UseOnContext context, BlockState state, BlockPos pos, ToolAction action) {
       for (BlockTransformModifierHook module : modules) {
         module.afterTransformBlock(tool, modifier, context, state, pos, action);
       }

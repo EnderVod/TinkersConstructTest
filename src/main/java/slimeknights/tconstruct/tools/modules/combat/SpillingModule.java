@@ -65,7 +65,7 @@ public record SpillingModule(LevelingValue level, ModifierCondition<IToolStackVi
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
     if (damageDealt > 0 && context.isFullyCharged()) {
       applyEffect(tool, modifier, context.getAttacker(), context.getPlayerAttacker(), context.getTarget(), context.getLivingTarget(), context.getProjectile());
     }

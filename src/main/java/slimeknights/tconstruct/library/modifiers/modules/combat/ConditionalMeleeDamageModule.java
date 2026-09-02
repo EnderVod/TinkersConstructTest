@@ -62,7 +62,7 @@ public record ConditionalMeleeDamageModule(IJsonPredicate<LivingEntity> target, 
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
     if (condition.matches(tool, modifier) && attacker.matches(context.getAttacker())) {
       LivingEntity target = context.getLivingTarget();
       if (target != null && this.target.matches(target)) {

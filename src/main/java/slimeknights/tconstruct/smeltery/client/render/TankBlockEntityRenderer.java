@@ -14,7 +14,7 @@ import slimeknights.tconstruct.smeltery.block.entity.ITankBlockEntity;
 import java.util.List;
 
 public class TankBlockEntityRenderer<T extends BlockEntity & ITankBlockEntity> implements BlockEntityRenderer<T> {
-  public TankBlockEntityRenderer(IPayloadContext context) {}
+  public TankBlockEntityRenderer(Context context) {}
 
   @Override
   public void render(T tile, float partialTicks, PoseStack matrixStack, MultiBufferSource buffer, int combinedLightIn, int combinedOverlayIn) {

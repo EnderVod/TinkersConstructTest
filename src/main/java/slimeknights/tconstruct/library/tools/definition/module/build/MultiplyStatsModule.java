@@ -33,7 +33,7 @@ public record MultiplyStatsModule(MultiplierNBT multipliers) implements ToolStat
   }
 
   @Override
-  public void addToolStats(IToolIPayloadContext context, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolContext context, ModifierStatsBuilder builder) {
     for (INumericToolStat<?> stat : multipliers.getContainedStats()) {
       stat.multiplyAll(builder, multipliers.get(stat));
     }

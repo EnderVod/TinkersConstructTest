@@ -33,7 +33,7 @@ public record RarityModule(Rarity rarity) implements VolatileDataModifierHook, M
   public static final RecordLoadable<RarityModule> LOADER = RecordLoadable.create(new EnumLoadable<>(Rarity.class).requiredField("rarity", RarityModule::rarity), RarityModule::new);
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     setRarity(volatileData, rarity);
   }
 

@@ -27,7 +27,7 @@ public class CongealedSlimeBlock extends Block {
 
   @Deprecated
   @Override
-  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return SHAPE;
   }
 

@@ -41,7 +41,7 @@ public interface BlockTransformModule extends ModifierModule, BlockInteractionMo
   }
 
   @Override
-  default InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+  default InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
     // tool must not be broken
     if (tool.isBroken() || !tool.getHook(ToolHooks.INTERACTION).canInteract(tool, modifier.getId(), source)) {
       return InteractionResult.PASS;
@@ -129,5 +129,5 @@ public interface BlockTransformModule extends ModifierModule, BlockInteractionMo
   }
 
   /** Applies this transformation */
-  boolean transform(IToolStackView tool, UseOnIPayloadContext context, BlockState original, boolean playSound);
+  boolean transform(IToolStackView tool, UseOnContext context, BlockState original, boolean playSound);
 }

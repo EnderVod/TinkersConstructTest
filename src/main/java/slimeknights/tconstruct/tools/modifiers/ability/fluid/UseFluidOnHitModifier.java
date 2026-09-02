@@ -48,7 +48,7 @@ public abstract class UseFluidOnHitModifier extends Modifier {
   public abstract FluidEffectContext.Entity createContext(LivingEntity self, @Nullable Player player, @Nullable Entity attacker);
 
   /** Logic for using the fluid */
-  protected void useFluid(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source) {
+  protected void useFluid(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source) {
     LivingEntity self = context.getEntity();
     float level = CounterModule.getLevel(tool, modifier, slotType, self);
     // 25% chance per level, though a blocking shield doubles it

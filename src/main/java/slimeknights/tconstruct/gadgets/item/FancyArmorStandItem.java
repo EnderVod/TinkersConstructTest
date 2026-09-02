@@ -46,7 +46,7 @@ public class FancyArmorStandItem extends Item {
 
   /** Based on {@link net.minecraft.world.item.ArmorStandItem#useOn(UseOnContext)} */
   @Override
-  public InteractionResult useOn(UseOnIPayloadContext context) {
+  public InteractionResult useOn(UseOnContext context) {
     Direction direction = context.getClickedFace();
     if (direction == Direction.DOWN) {
       return InteractionResult.FAIL;

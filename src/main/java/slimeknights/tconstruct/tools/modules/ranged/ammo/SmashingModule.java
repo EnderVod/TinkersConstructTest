@@ -266,7 +266,7 @@ public enum SmashingModule implements ModifierModule, FluidModifierHook, Project
   /* Tool data */
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     ToolFluidCapability.addTanks(modifier, volatileData, this);
   }
 

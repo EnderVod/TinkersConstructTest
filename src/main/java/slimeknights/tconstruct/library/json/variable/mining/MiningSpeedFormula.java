@@ -46,7 +46,7 @@ public record MiningSpeedFormula(ModifierFormula formula, List<MiningSpeedVariab
 
 
   /** Builds the arguments from the context */
-  private float[] getArguments(IToolStackView tool, ModifierEntry modifier, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player, float baseSpeed, float newSpeed, float multiplier) {
+  private float[] getArguments(IToolStackView tool, ModifierEntry modifier, @Nullable BreakSpeedContext context, @Nullable Player player, float baseSpeed, float newSpeed, float multiplier) {
     int size = variables.size();
     float[] arguments = VariableFormula.statModuleArguments(size, formula.processLevel(modifier), baseSpeed, newSpeed, multiplier * tool.getMultiplier(ToolStats.MINING_SPEED));
     for (int i = 0; i < size; i++) {
@@ -56,7 +56,7 @@ public record MiningSpeedFormula(ModifierFormula formula, List<MiningSpeedVariab
   }
 
   /** Runs this formula */
-  public float apply(IToolStackView tool, ModifierEntry modifier, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player, float baseSpeed, float newSpeed, float multiplier) {
+  public float apply(IToolStackView tool, ModifierEntry modifier, @Nullable BreakSpeedContext context, @Nullable Player player, float baseSpeed, float newSpeed, float multiplier) {
     return formula.apply(getArguments(tool, modifier, context, player, baseSpeed, newSpeed, multiplier));
   }
 }

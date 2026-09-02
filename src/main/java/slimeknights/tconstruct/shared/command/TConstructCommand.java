@@ -65,7 +65,7 @@ public class TConstructCommand {
   /** Event listener to register the Mantle command */
   private static void registerCommand(RegisterCommandsEvent event) {
     LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(TConstruct.MOD_ID);
-    CommandBuildIPayloadContext context = event.getBuildContext();
+    CommandBuildContext context = event.getBuildContext();
 
     register(builder, "modifiers", ModifiersCommand::register);
     register(builder, "materials", MaterialsCommand::register);

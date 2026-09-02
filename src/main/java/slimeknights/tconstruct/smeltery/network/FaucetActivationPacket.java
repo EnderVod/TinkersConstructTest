@@ -44,7 +44,7 @@ public class FaucetActivationPacket implements BlockEntityPacket<FaucetBlockEnti
   }
 
   @Override
-  public void handleBlockEntity(IPayloadIPayloadContext context, FaucetBlockEntity be) {
+  public void handleBlockEntity(IPayloadContext context, FaucetBlockEntity be) {
     be.onActivationPacket(fluid, isPouring);
   }
 }

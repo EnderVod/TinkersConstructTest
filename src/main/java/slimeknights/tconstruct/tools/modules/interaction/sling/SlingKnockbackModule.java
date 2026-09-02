@@ -78,7 +78,7 @@ public record SlingKnockbackModule(LevelingValue forceMultiplier, float drawtime
   }
 
   @Override
-  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
     if (tool.getPersistentData().getBoolean(IS_BONKING)) {
       return 0;
     }
@@ -86,7 +86,7 @@ public record SlingKnockbackModule(LevelingValue forceMultiplier, float drawtime
   }
 
   @Override
-  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float baseDamage, float damage) {
+  public float getMeleeDamage(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float baseDamage, float damage) {
     if (damageMultiplier != 1 && tool.getPersistentData().getBoolean(IS_BONKING)) {
       damage *= damageMultiplier;
     }

@@ -54,14 +54,14 @@ public record MiningCapacityModule(LevelingInt grant, boolean before, @Nullable 
   }
 
   @Override
-  public void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
+  public void startHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
     if (before) {
       apply(tool, modifier, 1);
     }
   }
 
   @Override
-  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context, int harvested) {
+  public void finishHarvest(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context, int harvested) {
     if (!before) {
       apply(tool, modifier, harvested);
     }

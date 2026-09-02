@@ -39,7 +39,7 @@ public record SweepingEdgeModule(LevelingValue value) implements ModifierModule,
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     volatileData.putFloat(SweepWeaponAttack.SWEEP_PERCENT, volatileData.getFloat(SweepWeaponAttack.SWEEP_PERCENT) + value.compute(modifier.getEffectiveLevel()));
   }
 

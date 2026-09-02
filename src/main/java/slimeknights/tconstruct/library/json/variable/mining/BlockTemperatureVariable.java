@@ -36,7 +36,7 @@ public record BlockTemperatureVariable(float fallback) implements MiningSpeedVar
   }
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
+  public float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
     if (player != null) {
       // use block position if possible player position otherwise
       BlockPos pos = player.blockPosition();

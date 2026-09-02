@@ -24,7 +24,7 @@ public class PatternIngredientHelper implements IIngredientHelper<Pattern> {
   }
 
   @Override
-  public String getUniqueId(Pattern pattern, UidIPayloadContext context) {
+  public String getUniqueId(Pattern pattern, UidContext context) {
     return pattern.toString();
   }
 

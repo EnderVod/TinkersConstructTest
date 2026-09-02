@@ -79,7 +79,7 @@ public record BucketModule(IJsonPredicate<Fluid> fluids) implements ModifierModu
   }
 
   @Override
-  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, InteractionSource source) {
+  public InteractionResult afterBlockUse(IToolStackView tool, ModifierEntry modifier, UseOnContext context, InteractionSource source) {
     if (!tool.getHook(ToolHooks.INTERACTION).canInteract(tool, modifier.getId(), source)) {
       return InteractionResult.PASS;
     }

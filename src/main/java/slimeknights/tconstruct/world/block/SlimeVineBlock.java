@@ -129,7 +129,7 @@ public class SlimeVineBlock extends VineBlock {
 
   @Override
   @Nullable
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     Level world = context.getLevel();
     BlockPos pos = context.getClickedPos();
     BlockState currState = world.getBlockState(pos);

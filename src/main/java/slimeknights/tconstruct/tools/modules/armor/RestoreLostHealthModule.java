@@ -76,7 +76,7 @@ public record RestoreLostHealthModule(LevelingValue percent, LevelingInt effectL
   }
 
   @Override
-  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // works like vanilla, if multiple pieces have it we get the highest effect
     LivingEntity defender = context.getEntity();
     if (condition.matches(tool, modifier) && this.defender.matches(defender) && TinkerPredicate.matches(this.attacker, source.getEntity())) {

@@ -26,7 +26,7 @@ public class SmelteryFluidClickedPacket implements IThreadsafePacket {
   }
 
   @Override
-  public void handleThreadsafe(IPayloadIPayloadContext context) {
+  public void handleThreadsafe(IPayloadContext context) {
     ServerPlayer sender = context.player() instanceof ServerPlayer serverPlayer ? serverPlayer : null;
     if (sender != null && !sender.isSpectator()) {
       AbstractContainerMenu container = sender.containerMenu;

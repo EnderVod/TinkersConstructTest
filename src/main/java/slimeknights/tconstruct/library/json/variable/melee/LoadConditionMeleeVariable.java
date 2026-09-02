@@ -19,7 +19,7 @@ import javax.annotation.Nullable;
 @SuppressWarnings("unused") // API
 public record LoadConditionMeleeVariable(MeleeVariable ifTrue, MeleeVariable ifFalse, ICondition... conditions) implements MeleeVariable, ConditionalObject<MeleeVariable> {
   @Override
-  public float getValue(IToolStackView tool, @Nullable ToolAttackIPayloadContext context, @Nullable LivingEntity attacker) {
+  public float getValue(IToolStackView tool, @Nullable ToolAttackContext context, @Nullable LivingEntity attacker) {
     return (Util.testConditions(conditions) ? ifTrue : ifFalse).getValue(tool, context, attacker);
   }
 

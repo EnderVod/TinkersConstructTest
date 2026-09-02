@@ -197,7 +197,7 @@ public class MaterialModel implements IUnbakedGeometry<MaterialModel> {
   /* Helpers */
 
   /** Loads a material model from JSON */
-  public static MaterialModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+  public static MaterialModel deserialize(JsonObject json, JsonDeserializationContext context) {
     // need tint index for tool models, doubles as part index
     int index = GsonHelper.getAsInt(json, "index", 0);
 

@@ -116,7 +116,7 @@ public record ShearsModule(float flatBonus, float perLevelBonus, float expandedB
 
     // use looting instead of fortune, as that is our hook with entity access
     // modifier can always use tags or the nullable parameter to distinguish if needed
-    LootingIPayloadContext context = new LootingContext(player, target, null, Util.getSlotType(hand));
+    LootingContext context = new LootingContext(player, target, null, Util.getSlotType(hand));
     int looting = LootingModifierHook.getLooting(tool, context, player.getItemInHand(hand).getEnchantmentLevel(Enchantments.MOB_LOOTING));
     looting = ArmorLootingModifierHook.getLooting(tool, context, looting);
     Level world = player.getCommandSenderWorld();

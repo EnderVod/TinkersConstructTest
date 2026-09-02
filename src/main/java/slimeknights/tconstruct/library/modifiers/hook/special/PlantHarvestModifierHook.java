@@ -20,12 +20,12 @@ public interface PlantHarvestModifierHook {
    * @param state   State before it was harvested
    * @param pos     Position that was harvested, may be different from the context
    */
-  void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos);
+  void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos);
 
   /** Merger that runs all hooks */
   record AllMerger(Collection<PlantHarvestModifierHook> modules) implements PlantHarvestModifierHook {
     @Override
-    public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos) {
+    public void afterHarvest(IToolStackView tool, ModifierEntry modifier, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos) {
       for (PlantHarvestModifierHook module : modules) {
         module.afterHarvest(tool, modifier, context, world, state, pos);
       }

@@ -143,7 +143,7 @@ public class AutosmeltModule implements ModifierModule, ProcessLootModifierHook 
   }
 
   @Override
-  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootIPayloadContext context) {
+  public void processLoot(IToolStackView tool, ModifierEntry modifier, List<ItemStack> generatedLoot, LootContext context) {
     Level world = context.getLevel();
     if (!generatedLoot.isEmpty()) {
       ListIterator<ItemStack> iterator = generatedLoot.listIterator();

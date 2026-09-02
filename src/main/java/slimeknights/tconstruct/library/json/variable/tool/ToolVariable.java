@@ -42,12 +42,12 @@ public interface ToolVariable extends IHaveLoader, MeleeVariable, ConditionalSta
   }
 
   @Override
-  default float getValue(IToolStackView tool, @Nullable ToolAttackIPayloadContext context, @Nullable LivingEntity attacker) {
+  default float getValue(IToolStackView tool, @Nullable ToolAttackContext context, @Nullable LivingEntity attacker) {
     return getValue(tool);
   }
 
   @Override
-  default float getValue(IToolStackView tool, @Nullable EquipmentIPayloadContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
+  default float getValue(IToolStackView tool, @Nullable EquipmentContext context, @Nullable LivingEntity target, @Nullable DamageSource source, @Nullable EquipmentSlot slotType) {
     return getValue(tool);
   }
 

@@ -16,12 +16,12 @@ public interface ToolStatsHook {
    * @param context   Context about the tool beilt. Partial view of {@link IToolStackView} as the tool is not fully built. Note this hook runs after volatile data builds
    * @param builder   Tool stat builder
    */
-  void addToolStats(IToolIPayloadContext context, ModifierStatsBuilder builder);
+  void addToolStats(IToolContext context, ModifierStatsBuilder builder);
 
   /** Merger that runs all hooks */
   record AllMerger(Collection<ToolStatsHook> modules) implements ToolStatsHook {
     @Override
-    public void addToolStats(IToolIPayloadContext context, ModifierStatsBuilder builder) {
+    public void addToolStats(IToolContext context, ModifierStatsBuilder builder) {
       for (ToolStatsHook module : modules) {
         module.addToolStats(context, builder);
       }

@@ -21,7 +21,7 @@ public class BreathtakingModifier extends NoLevelsModifier implements DamageDeal
   }
 
   @Override
-  public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onDamageDealt(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, LivingEntity target, DamageSource source, float amount, boolean isDirectDamage) {
     if (isDirectDamage && !source.is(DamageTypeTags.IS_PROJECTILE)) {
       LivingEntity attacker = context.getEntity();
       int attackerAir = attacker.getAirSupply();

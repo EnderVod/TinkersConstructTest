@@ -42,7 +42,7 @@ public class FluidUpdatePacket implements BlockEntityPacket<IFluidPacketReceiver
   }
 
   @Override
-  public void handleBlockEntity(IPayloadIPayloadContext context, IFluidPacketReceiver be) {
+  public void handleBlockEntity(IPayloadContext context, IFluidPacketReceiver be) {
     be.updateFluidTo(fluid);
   }
 

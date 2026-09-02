@@ -128,7 +128,7 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
 
   /* Equipment change approach, for when you wish to not show the attribute in the tooltip */
   @Override
-  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     if (condition.matches(tool, modifier)) {
       AttributeInstance instance = context.getEntity().getAttribute(attribute);
       if (instance != null) {
@@ -143,7 +143,7 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     if (condition.matches(tool, modifier)) {
       UUID uuid = getUUID(context.getChangedSlot());
       if (uuid != null) {

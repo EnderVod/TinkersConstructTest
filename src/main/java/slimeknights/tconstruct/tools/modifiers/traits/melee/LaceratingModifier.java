@@ -41,7 +41,7 @@ public class LaceratingModifier extends Modifier implements ProjectileHitModifie
     int looting = 0;
     DamageSource source = CombatHelper.damageSource(TinkerDamageTypes.BLEEDING, target);
     if (holder != null) {
-      LootingIPayloadContext context = new LootingContext(holder, target, source, slot);
+      LootingContext context = new LootingContext(holder, target, source, slot);
       // fetch slot looting for the melee hook
       looting = LootingModifierHook.getLooting(tool, context, looting);
       // fetch armor looting
@@ -73,7 +73,7 @@ public class LaceratingModifier extends Modifier implements ProjectileHitModifie
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
     // 50% chance of applying
     LivingEntity target = context.getLivingTarget();
     if (target != null && context.isFullyCharged() && target.isAlive()) {
@@ -101,7 +101,7 @@ public class LaceratingModifier extends Modifier implements ProjectileHitModifie
   }
 
   @Override
-  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // this works like vanilla, damage is capped due to the hurt immunity mechanics, so if multiple pieces apply thorns between us and vanilla, damage is capped at 4
     if (isDirectDamage && tool.hasTag(TinkerTags.Items.ARMOR) && source.getEntity() instanceof LivingEntity attacker) {
       // 25% chance of working, doubled chance on shields

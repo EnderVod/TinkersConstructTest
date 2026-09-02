@@ -84,7 +84,7 @@ public record ToolActionWalkerTransformModule(ToolAction action, SoundEvent soun
   }
 
   @Override
-  public boolean walkOn(IToolStackView tool, ModifierEntry entry, LivingEntity living, Level world, BlockPos target, MutableBlockPos mutable, MutableUseOnIPayloadContext context) {
+  public boolean walkOn(IToolStackView tool, ModifierEntry entry, LivingEntity living, Level world, BlockPos target, MutableBlockPos mutable, MutableUseOnContext context) {
     BlockState state = world.getBlockState(target);
     if (state.canBeReplaced()) {
       mutable.set(target.getX(), target.getY() - 1, target.getZ());

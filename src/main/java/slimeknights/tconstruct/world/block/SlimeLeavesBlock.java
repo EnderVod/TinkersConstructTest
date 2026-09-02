@@ -58,7 +58,7 @@ public class SlimeLeavesBlock extends LeavesBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     return updateDistance(this.defaultBlockState().setValue(PERSISTENT, Boolean.TRUE), context.getLevel(), context.getClickedPos());
   }
 

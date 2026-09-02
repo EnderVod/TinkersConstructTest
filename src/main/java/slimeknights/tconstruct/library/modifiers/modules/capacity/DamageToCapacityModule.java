@@ -52,7 +52,7 @@ public record DamageToCapacityModule(IJsonPredicate<DamageSource> source, Leveli
   }
 
   @Override
-  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     //  if it matches, absorb it
     if (condition.matches(tool, modifier) && this.source.matches(source)) {
       ModifierEntry barModifier = barModifier(tool, modifier);

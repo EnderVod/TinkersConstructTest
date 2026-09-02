@@ -62,7 +62,7 @@ public class ChrysophiliteBonusFunction extends LootItemConditionalFunction {
   }
 
   @Override
-  protected ItemStack run(ItemStack stack, LootIPayloadContext context) {
+  protected ItemStack run(ItemStack stack, LootContext context) {
     if (context.getParamOrNull(LootContextParams.THIS_ENTITY) instanceof LivingEntity entity) {
       int level = (int) entity.getAttributeValue(TinkerAttributes.CHRYSOPHILITE.get());
       if (!includeBase) {
@@ -88,7 +88,7 @@ public class ChrysophiliteBonusFunction extends LootItemConditionalFunction {
   /** Serializer class */
   private static class Serializer extends LootItemConditionalFunction.Serializer<ChrysophiliteBonusFunction> {
     @Override
-    public void serialize(JsonObject json, ChrysophiliteBonusFunction loot, JsonSerializationIPayloadContext context) {
+    public void serialize(JsonObject json, ChrysophiliteBonusFunction loot, JsonSerializationContext context) {
       super.serialize(json, loot, context);
       json.addProperty("formula", loot.formula.getType().toString());
       JsonObject parameters = new JsonObject();
@@ -100,7 +100,7 @@ public class ChrysophiliteBonusFunction extends LootItemConditionalFunction {
     }
 
     @Override
-    public ChrysophiliteBonusFunction deserialize(JsonObject json, JsonDeserializationIPayloadContext context, LootItemCondition[] conditions) {
+    public ChrysophiliteBonusFunction deserialize(JsonObject json, JsonDeserializationContext context, LootItemCondition[] conditions) {
       ResourceLocation id = JsonHelper.getResourceLocation(json, "formula");
       FormulaDeserializer deserializer = ApplyBonusCount.FORMULAS.get(id);
       if (deserializer == null) {

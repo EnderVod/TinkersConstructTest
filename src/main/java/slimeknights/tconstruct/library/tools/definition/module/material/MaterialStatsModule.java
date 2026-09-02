@@ -80,7 +80,7 @@ public class MaterialStatsModule implements ToolStatsHook, ToolTraitHook, ToolMa
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ToolDataNBT volatileData) {
     Rarity max = null;
     MaterialNBT materials = context.getMaterials();
     boolean shiny = false;
@@ -165,7 +165,7 @@ public class MaterialStatsModule implements ToolStatsHook, ToolTraitHook, ToolMa
   }
 
   @Override
-  public void addToolStats(IToolIPayloadContext context, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolContext context, ModifierStatsBuilder builder) {
     MaterialNBT materials = context.getMaterials();
     if (!materials.isEmpty()) {
       IMaterialRegistry registry = MaterialRegistry.getInstance();

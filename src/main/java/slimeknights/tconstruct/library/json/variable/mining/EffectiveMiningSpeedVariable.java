@@ -43,7 +43,7 @@ public record EffectiveMiningSpeedVariable(MiningSpeedVariable ifTrue, MiningSpe
   }
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
+  public float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
     return (context != null && context.isEffective() ? ifTrue : ifFalse).getValue(tool, context, player);
   }
 }

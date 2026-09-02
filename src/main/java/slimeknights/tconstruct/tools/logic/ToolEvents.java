@@ -108,7 +108,7 @@ public class ToolEvents {
         List<ModifierEntry> modifiers = tool.getModifierList();
         if (!modifiers.isEmpty()) {
           // build context
-          BreakSpeedIPayloadContext context = new BreakSpeedContext.Event(
+          BreakSpeedContext context = new BreakSpeedContext.Event(
             event,
             BlockSideHitListener.getSideHit(event.getEntity()),
             IsEffectiveToolHook.isEffective(tool, event.getState()),
@@ -213,7 +213,7 @@ public class ToolEvents {
     boolean isDirectDamage = OnAttackedModifierHook.isDirectDamage(source);
 
     // determine if there is any modifiable armor, handles the target wearing modifiable armor
-    EquipmentIPayloadContext context = new EquipmentContext(entity);
+    EquipmentContext context = new EquipmentContext(entity);
     float amount = event.getAmount();
     if (context.hasModifiableArmor()) {
       // first we need to determine if any of the four slots want to cancel the event
@@ -274,7 +274,7 @@ public class ToolEvents {
 
     // determine if there is any modifiable armor, if not nothing to do
     DamageSource source = event.getSource();
-    EquipmentIPayloadContext context = new EquipmentContext(entity);
+    EquipmentContext context = new EquipmentContext(entity);
     int vanillaModifier = 0;
     float modifierValue = 0;
     float originalDamage = event.getAmount();
@@ -423,7 +423,7 @@ public class ToolEvents {
 
     // give modifiers a chance to respond to damage happening
     float amount = event.getAmount();
-    EquipmentIPayloadContext context = new EquipmentContext(entity);
+    EquipmentContext context = new EquipmentContext(entity);
     if (context.hasModifiableArmor()) {
       amount = ModifyDamageModifierHook.modifyDamageTaken(ModifierHooks.MODIFY_DAMAGE, context, source, amount, OnAttackedModifierHook.isDirectDamage(source));
       event.setAmount(amount);

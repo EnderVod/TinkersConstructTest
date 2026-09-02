@@ -53,7 +53,7 @@ public record ExplosionFluidEffect(LevelingValue radius, LevelingValue damage, L
   }
 
   @Override
-  public float apply(FluidStack fluid, EffectLevel level, FluidEffectIPayloadContext context, FluidAction action) {
+  public float apply(FluidStack fluid, EffectLevel level, FluidEffectContext context, FluidAction action) {
     // if nothing scales, charge 1 level. If anything scales, scale it
     boolean isFlat = radius.isFlat() && damage.isFlat() && knockback.isFlat();
     if (isFlat && !level.isFull()) {

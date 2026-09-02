@@ -57,7 +57,7 @@ public record SweepWeaponAttack(LevelingValue range) implements MeleeHitToolHook
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ToolAttackIPayloadContext context, float damage) {
+  public void afterMeleeHit(IToolStackView tool, ToolAttackContext context, float damage) {
     // sweep code from Player#attack(Entity)
     // basically: no crit, no sprinting and has to stand on the ground for sweep. Also has to move regularly slowly
     LivingEntity attacker = context.getAttacker();

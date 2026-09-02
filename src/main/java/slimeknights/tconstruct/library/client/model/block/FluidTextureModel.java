@@ -68,7 +68,7 @@ public class FluidTextureModel implements IUnbakedGeometry<FluidTextureModel> {
   private final Set<String> retextured;
 
   @Override
-  public void resolveParents(Function<ResourceLocation, UnbakedModel> modelGetter, IGeometryBakingIPayloadContext context) {
+  public void resolveParents(Function<ResourceLocation, UnbakedModel> modelGetter, IGeometryBakingContext context) {
     model.resolveParents(modelGetter, context);
   }
 
@@ -229,7 +229,7 @@ public class FluidTextureModel implements IUnbakedGeometry<FluidTextureModel> {
   }
 
   /** Deserializes this model from JSON */
-  public static FluidTextureModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+  public static FluidTextureModel deserialize(JsonObject json, JsonDeserializationContext context) {
     ColoredBlockModel model = ColoredBlockModel.deserialize(json, context);
     Set<String> fluids = Collections.emptySet();
     if (json.has("fluids")) {

@@ -36,7 +36,7 @@ public record SetBlockFluidEffect(BlockState block) implements FluidEffect<Fluid
   }
 
   @Override
-  public float apply(FluidStack fluid, EffectLevel level, FluidEffectIPayloadContext context, FluidAction action) {
+  public float apply(FluidStack fluid, EffectLevel level, FluidEffectContext context, FluidAction action) {
     if (!level.isFull()) {
       return 0;
     }

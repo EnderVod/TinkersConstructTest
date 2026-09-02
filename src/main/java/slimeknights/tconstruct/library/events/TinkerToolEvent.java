@@ -36,13 +36,13 @@ public abstract class TinkerToolEvent extends Event {
   @Getter
   public static class ToolHarvestEvent extends TinkerToolEvent {
     /** Item context, note this is the original context, so some information (such as position) may not be accurate */
-    private final UseOnIPayloadContext context;
+    private final UseOnContext context;
     private final ServerLevel world;
     private final BlockState state;
     private final BlockPos pos;
     private final InteractionSource source;
 
-    public ToolHarvestEvent(IToolStackView tool, UseOnIPayloadContext context, ServerLevel world, BlockState state, BlockPos pos, InteractionSource source) {
+    public ToolHarvestEvent(IToolStackView tool, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos, InteractionSource source) {
       super(getItem(context, source), tool);
       this.context = context;
       this.world = world;
@@ -52,7 +52,7 @@ public abstract class TinkerToolEvent extends Event {
     }
 
     /** Gets the item for the event */
-    private static ItemStack getItem(UseOnIPayloadContext context, InteractionSource source) {
+    private static ItemStack getItem(UseOnContext context, InteractionSource source) {
       Player player = context.getPlayer();
       if (player != null) {
         return player.getItemBySlot(source.getSlot(context.getHand()));
@@ -61,7 +61,7 @@ public abstract class TinkerToolEvent extends Event {
     }
 
     /** Gets the item for the event */
-    private static ItemStack getItem(UseOnIPayloadContext context, EquipmentSlot slotType) {
+    private static ItemStack getItem(UseOnContext context, EquipmentSlot slotType) {
       Player player = context.getPlayer();
       if (player != null) {
         return player.getItemBySlot(slotType);

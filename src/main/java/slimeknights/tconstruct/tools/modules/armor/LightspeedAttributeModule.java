@@ -104,7 +104,7 @@ public record LightspeedAttributeModule(String unique, UUID uuid, Attribute attr
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     // remove boost when boots are removed
     LivingEntity livingEntity = context.getEntity();
     if (context.getChangedSlot() == EquipmentSlot.FEET) {

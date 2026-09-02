@@ -98,7 +98,7 @@ public class FramesSpriteTransformer implements IRecolorSpriteTransformer {
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationIPayloadContext context) {
+  public JsonObject serialize(JsonSerializationContext context) {
     JsonObject json = JsonUtils.withType(NAME);
     JsonArray frames = new JsonArray();
     for (IRecolorSpriteTransformer transformer : this.frames) {

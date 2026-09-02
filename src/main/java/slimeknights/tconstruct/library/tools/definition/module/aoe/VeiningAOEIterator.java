@@ -30,7 +30,7 @@ public record VeiningAOEIterator(int maxDistance) implements AreaOfEffectIterato
   }
 
   @Override
-  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnIPayloadContext context, BlockState state, AOEMatchType matchType) {
+  public Iterable<BlockPos> getBlocks(IToolStackView tool, UseOnContext context, BlockState state, AOEMatchType matchType) {
     int expanded = tool.getVolatileData().getInt(IModifiable.EXPANDED);
     return calculate(state, context.getLevel(), context.getClickedPos(), maxDistance + expanded);
   }

@@ -44,7 +44,7 @@ public class CastingTankBlock extends InventoryBlock implements ITankBlock, Enti
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     return SearedTankBlock.setLightLevel(defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()), context);
   }
 

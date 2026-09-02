@@ -53,14 +53,14 @@ public record MeleeCapacityModule(IJsonPredicate<LivingEntity> target, IJsonPred
   }
 
   /** Applies the capacity boost to the modifier. */
-  private void apply(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context) {
+  private void apply(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context) {
     if (condition.matches(tool, modifier) && this.attacker.matches(context.getAttacker()) && TinkerPredicate.matches(this.target, context.getLivingTarget())) {
       CapacitySourceModule.apply(tool, barModifier(tool, modifier), 1, grant.compute(modifier.getEffectiveLevel()));
     }
   }
 
   @Override
-  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
     if (before) {
       apply(tool, modifier, context);
     }
@@ -68,7 +68,7 @@ public record MeleeCapacityModule(IJsonPredicate<LivingEntity> target, IJsonPred
   }
 
   @Override
-  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damageDealt) {
+  public void afterMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damageDealt) {
     if (!before) {
       apply(tool, modifier, context);
     };

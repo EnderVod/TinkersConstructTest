@@ -50,7 +50,7 @@ public class SearedLanternBlock extends LanternBlock implements ITankBlock, Enti
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     BlockState state = super.getStateForPlacement(context);
     if (state != null) {
       return SearedTankBlock.setLightLevel(state, context);

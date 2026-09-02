@@ -36,7 +36,7 @@ public interface MiningSpeedVariable extends IHaveLoader {
    * @return  Value of this variable, using a fallback if appropiate
    */
   @SuppressWarnings("deprecation")
-  default float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
+  default float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
     if (context != null) {
       return getValue(tool, context.event(), player, context.sideHit());
     }
@@ -53,7 +53,7 @@ public interface MiningSpeedVariable extends IHaveLoader {
     }
 
     @Override
-    public float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
+    public float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
       return value;
     }
 

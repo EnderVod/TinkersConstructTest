@@ -38,12 +38,12 @@ public class TagNotEmptyCondition<T> implements LootItemCondition, ICondition {
   }
 
   @Override
-  public boolean test(IIPayloadContext context) {
+  public boolean test(IContext context) {
     return !context.getTag(tag).isEmpty();
   }
 
   @Override
-  public boolean test(LootIPayloadContext context) {
+  public boolean test(LootContext context) {
     Registry<T> registry = RegistryHelper.getRegistry(tag.registry());
     return registry != null && registry.getTagOrEmpty(tag).iterator().hasNext();
   }
@@ -62,7 +62,7 @@ public class TagNotEmptyCondition<T> implements LootItemCondition, ICondition {
     }
 
     @Override
-    public void serialize(JsonObject json, TagNotEmptyCondition<?> value, JsonSerializationIPayloadContext context) {
+    public void serialize(JsonObject json, TagNotEmptyCondition<?> value, JsonSerializationContext context) {
       write(json, value);
     }
 
@@ -72,7 +72,7 @@ public class TagNotEmptyCondition<T> implements LootItemCondition, ICondition {
     }
 
     @Override
-    public TagNotEmptyCondition<?> deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+    public TagNotEmptyCondition<?> deserialize(JsonObject json, JsonDeserializationContext context) {
       return read(json);
     }
 

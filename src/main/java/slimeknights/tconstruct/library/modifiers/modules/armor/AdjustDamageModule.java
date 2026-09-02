@@ -68,7 +68,7 @@ public record AdjustDamageModule(ProtectionFormula formula, IJsonPredicate<Livin
   }
 
   @Override
-  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
+  public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     if (condition.matches(tool, modifier) && this.holder.matches(context.getEntity()) && this.damageSource.matches(source)) {
       amount = formula.apply(tool, modifier, context, context.getEntity(), slotType, source, amount);
     }

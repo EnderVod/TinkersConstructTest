@@ -47,12 +47,12 @@ public abstract class TableBlock extends InventoryBlock implements SimpleWaterlo
 
   @Override
   @Deprecated
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return TABLE_SHAPE;
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     boolean flag = context.getLevel().getFluidState(context.getClickedPos()).getType() == Fluids.WATER;
     return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()).setValue(WATERLOGGED, flag);
   }

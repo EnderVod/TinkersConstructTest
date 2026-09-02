@@ -38,7 +38,7 @@ public abstract class TinyMultiblockControllerBlock extends ControllerBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     return super.getStateForPlacement(context)
       .setValue(IN_STRUCTURE, isValidFuelSource(context.getLevel().getBlockState(context.getClickedPos().below())));
   }

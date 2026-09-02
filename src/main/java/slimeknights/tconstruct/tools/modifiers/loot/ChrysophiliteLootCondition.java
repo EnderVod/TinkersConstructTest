@@ -24,7 +24,7 @@ public class ChrysophiliteLootCondition implements LootItemCondition {
   private ChrysophiliteLootCondition() {}
 
   @Override
-  public boolean test(LootIPayloadContext context) {
+  public boolean test(LootContext context) {
     return context.getParamOrNull(LootContextParams.THIS_ENTITY) instanceof LivingEntity living && living.getAttributeValue(TinkerAttributes.CHRYSOPHILITE.get()) >= 1;
   }
 
@@ -41,10 +41,10 @@ public class ChrysophiliteLootCondition implements LootItemCondition {
   /** Loot serializer instance */
   private static class ChrysophiliteSerializer implements Serializer<ChrysophiliteLootCondition> {
     @Override
-    public void serialize(JsonObject json, ChrysophiliteLootCondition loot, JsonSerializationIPayloadContext context) {}
+    public void serialize(JsonObject json, ChrysophiliteLootCondition loot, JsonSerializationContext context) {}
 
     @Override
-    public ChrysophiliteLootCondition deserialize(JsonObject jsonObject, JsonDeserializationIPayloadContext context) {
+    public ChrysophiliteLootCondition deserialize(JsonObject jsonObject, JsonDeserializationContext context) {
       return INSTANCE;
     }
   }

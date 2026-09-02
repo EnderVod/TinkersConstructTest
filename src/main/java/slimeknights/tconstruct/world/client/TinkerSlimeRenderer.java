@@ -15,7 +15,7 @@ public class TinkerSlimeRenderer extends SlimeRenderer {
   public static final Factory ENDER_SLIME_FACTORY = new Factory(TConstruct.getResource("textures/entity/ender_slime.png"), TConstruct.getResource("textures/entity/knightmetal_slime.png"));
 
   private final ResourceLocation slime, metal;
-  public TinkerSlimeRenderer(EntityRendererProvider.IPayloadContext context, ResourceLocation slime, ResourceLocation metal) {
+  public TinkerSlimeRenderer(EntityRendererProvider.Context context, ResourceLocation slime, ResourceLocation metal) {
     super(context);
     this.slime = slime;
     this.metal = metal;
@@ -36,7 +36,7 @@ public class TinkerSlimeRenderer extends SlimeRenderer {
     }
 
     @Override
-    public EntityRenderer<Slime> create(IPayloadContext context) {
+    public EntityRenderer<Slime> create(Context context) {
       return new TinkerSlimeRenderer(context, slime, metal);
     }
   }

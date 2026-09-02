@@ -76,7 +76,7 @@ public record DepthProtectionModule(IJsonPredicate<DamageSource> source, IJsonPr
   }
 
   @Override
-  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentIPayloadContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
+  public float getProtectionModifier(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float modifierValue) {
     LivingEntity target = context.getEntity();
     if (this.condition.matches(tool, modifier) && this.source.matches(source) && this.entity.matches(target)) {
       modifierValue += getBonusMultiplier(context.getEntity(), baselineHeight, neutralRange) * amount.compute(modifier.getEffectiveLevel());

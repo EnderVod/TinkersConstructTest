@@ -69,7 +69,7 @@ public record SwappableSlotModule(@Nullable ResourceLocation key, int slotCount,
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     if (condition.matches(context, modifier)) {
       String slotName = context.getPersistentData().getString(getKey(modifier.getModifier()));
       if (!slotName.isEmpty()) {
@@ -118,7 +118,7 @@ public record SwappableSlotModule(@Nullable ResourceLocation key, int slotCount,
     }
 
     @Override
-    public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+    public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
       if (condition.matches(context, modifier)) {
         String slotName = context.getPersistentData().getString(getKey(modifier.getModifier()));
         if (!slotName.isEmpty() && match.getName().equals(slotName)) {

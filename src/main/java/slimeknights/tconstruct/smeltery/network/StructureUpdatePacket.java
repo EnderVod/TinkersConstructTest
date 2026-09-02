@@ -53,7 +53,7 @@ public class StructureUpdatePacket implements BlockEntityPacket<HeatingStructure
   }
 
   @Override
-  public void handleBlockEntity(IPayloadIPayloadContext context, HeatingStructureBlockEntity be) {
+  public void handleBlockEntity(IPayloadContext context, HeatingStructureBlockEntity be) {
     be.setStructureSize(minPos, maxPos, tanks);
   }
 }

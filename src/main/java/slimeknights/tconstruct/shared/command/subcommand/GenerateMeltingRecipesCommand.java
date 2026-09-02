@@ -86,7 +86,7 @@ public class GenerateMeltingRecipesCommand {
    * @param subCommand Command builder
    * @param context    Context to fetch the recipe type argument
    */
-  public static void register(LiteralArgumentBuilder<CommandSourceStack> subCommand, CommandBuildIPayloadContext context) {
+  public static void register(LiteralArgumentBuilder<CommandSourceStack> subCommand, CommandBuildContext context) {
     subCommand.requires(sender -> sender.hasPermission(MantleCommand.PERMISSION_GAME_COMMANDS))
       .then(Commands.argument("recipe_type", ResourceArgument.resource(context, Registries.RECIPE_TYPE))
         .executes(GenerateMeltingRecipesCommand::run));

@@ -54,7 +54,7 @@ public class AddToolDataFunction extends LootItemConditionalFunction {
   }
 
   @Override
-  protected ItemStack run(ItemStack stack, LootIPayloadContext context) {
+  protected ItemStack run(ItemStack stack, LootContext context) {
     if (stack.is(TinkerTags.Items.MODIFIABLE)) {
       ToolStack tool = ToolStack.from(stack);
       ToolDefinition definition = tool.getDefinition();
@@ -77,7 +77,7 @@ public class AddToolDataFunction extends LootItemConditionalFunction {
     private static final LoadableField<List<RandomMaterial>,AddToolDataFunction> MATERIAL_LIST = RandomMaterial.LOADER.list(0).defaultField("materials", List.of(), d -> d.materials);
 
     @Override
-    public void serialize(JsonObject json, AddToolDataFunction loot, JsonSerializationIPayloadContext context) {
+    public void serialize(JsonObject json, AddToolDataFunction loot, JsonSerializationContext context) {
       super.serialize(json, loot, context);
       // initial damage
       if (loot.damage > 0) {
@@ -87,7 +87,7 @@ public class AddToolDataFunction extends LootItemConditionalFunction {
     }
 
     @Override
-    public AddToolDataFunction deserialize(JsonObject object, JsonDeserializationIPayloadContext context, LootItemCondition[] conditions) {
+    public AddToolDataFunction deserialize(JsonObject object, JsonDeserializationContext context, LootItemCondition[] conditions) {
       float damage = GsonHelper.getAsFloat(object, "damage_percent", 0f);
       if (damage < 0 || damage > 1) {
         throw new JsonSyntaxException("damage_percent must be between 0 and 1, given " + damage);

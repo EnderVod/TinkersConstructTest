@@ -70,7 +70,7 @@ public class TankModel implements IUnbakedGeometry<TankModel> {
   protected final boolean forceModelFluid;
 
   @Override
-  public void resolveParents(Function<ResourceLocation,UnbakedModel> modelGetter, IGeometryBakingIPayloadContext context) {
+  public void resolveParents(Function<ResourceLocation,UnbakedModel> modelGetter, IGeometryBakingContext context) {
     model.resolveParents(modelGetter, context);
     if (gui != null) {
       gui.resolveParents(modelGetter, context);
@@ -234,7 +234,7 @@ public class TankModel implements IUnbakedGeometry<TankModel> {
 
 
   /** Loader for this model */
-  public static TankModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+  public static TankModel deserialize(JsonObject json, JsonDeserializationContext context) {
     SimpleBlockModel model = SimpleBlockModel.deserialize(json, context);
     SimpleBlockModel gui = null;
     if (json.has("gui")) {

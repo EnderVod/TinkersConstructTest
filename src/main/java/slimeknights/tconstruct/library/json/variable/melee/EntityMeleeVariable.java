@@ -24,7 +24,7 @@ public record EntityMeleeVariable(EntityVariable entity, WhichEntity which, floa
     EntityMeleeVariable::new);
 
   @Override
-  public float getValue(IToolStackView tool, @Nullable ToolAttackIPayloadContext context, @Nullable LivingEntity attacker) {
+  public float getValue(IToolStackView tool, @Nullable ToolAttackContext context, @Nullable LivingEntity attacker) {
     LivingEntity entity = null;
     if (which == WhichEntity.ATTACKER) {
       entity = attacker;

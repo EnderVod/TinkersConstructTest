@@ -45,7 +45,7 @@ public class MobEquipmentManager extends SimpleJsonResourceReloadListener {
 
   /** Map of active replacements */
   private Map<EntityType<?>,List<MobEquipment>> replacements = Map.of();
-  private IIPayloadContext context = IContext.EMPTY;
+  private IContext context = IContext.EMPTY;
 
   private MobEquipmentManager() {
     super(JsonHelper.DEFAULT_GSON, FOLDER);

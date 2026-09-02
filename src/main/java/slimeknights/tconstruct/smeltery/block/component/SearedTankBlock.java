@@ -86,7 +86,7 @@ public class SearedTankBlock extends SearedBlock implements ITankBlock, EntityBl
   }
 
   /** Helper for setting the light level on placement */
-  public static BlockState setLightLevel(BlockState state, BlockPlaceIPayloadContext context) {
+  public static BlockState setLightLevel(BlockState state, BlockPlaceContext context) {
     ItemStack stack = context.getItemInHand();
     FluidStack fluid = TankItem.getTank(stack, 1).getFluid();
     if (!fluid.isEmpty()) {
@@ -97,7 +97,7 @@ public class SearedTankBlock extends SearedBlock implements ITankBlock, EntityBl
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     return setLightLevel(this.defaultBlockState(), context);
   }
 

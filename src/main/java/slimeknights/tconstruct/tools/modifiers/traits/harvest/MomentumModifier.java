@@ -69,7 +69,7 @@ public class MomentumModifier extends Modifier implements ProjectileLaunchModifi
   }
 
   @Override
-  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedIPayloadContext context, float speed) {
+  public float modifyBreakSpeed(IToolStackView tool, ModifierEntry modifier, BreakSpeedContext context, float speed) {
     if (context.isEffective()) {
       // 25% boost per level at max
       speed *= 1 + getBonus(context.player(), ToolType.HARVEST, modifier) / 40f;
@@ -78,7 +78,7 @@ public class MomentumModifier extends Modifier implements ProjectileLaunchModifi
   }
 
   @Override
-  public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
+  public void afterBlockBreak(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
     if (context.canHarvest() && context.isEffective() && !context.isAOE() && tool.hasTag(TinkerTags.Items.HARVEST)) {
       // grant the effect for 5 seconds, though grant a longer effect if the blocks hardness is particularly high compared to our mining speed
       int duration = Math.max(5*20, (int) (2.5f * 20f * context.getState().getDestroySpeed(context.getWorld(), context.getPos()) / tool.getStats().get(ToolStats.MINING_SPEED)));

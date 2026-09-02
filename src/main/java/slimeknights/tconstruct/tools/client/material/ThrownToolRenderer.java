@@ -18,7 +18,7 @@ import slimeknights.tconstruct.tools.entity.ToolProjectile;
 /** Renderer for {@link ThrownTool} */
 public class ThrownToolRenderer<T extends AbstractArrow & ToolProjectile> extends EntityRenderer<T> {
   protected final ItemRenderer itemRenderer;
-  public ThrownToolRenderer(IPayloadContext context) {
+  public ThrownToolRenderer(Context context) {
     super(context);
     this.itemRenderer = context.getItemRenderer();
   }

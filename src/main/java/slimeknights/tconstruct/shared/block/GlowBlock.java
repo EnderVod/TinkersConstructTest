@@ -46,19 +46,19 @@ public class GlowBlock extends Block {
 
   @SuppressWarnings("deprecation")
   @Override
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return Objects.requireNonNull(BOUNDS.get(state.getValue(FACING)));
   }
 
   @SuppressWarnings("deprecation")
   @Override
-  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getCollisionShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return Shapes.empty();
   }
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     Level level = context.getLevel();
     // direction of the glow to place
     Direction direction = context.getClickedFace().getOpposite();

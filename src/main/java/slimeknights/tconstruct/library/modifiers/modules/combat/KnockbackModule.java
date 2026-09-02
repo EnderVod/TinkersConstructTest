@@ -53,7 +53,7 @@ public record KnockbackModule(IJsonPredicate<LivingEntity> entity, ModifierFormu
   }
 
   @Override
-  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackIPayloadContext context, float damage, float baseKnockback, float knockback) {
+  public float beforeMeleeHit(IToolStackView tool, ModifierEntry modifier, ToolAttackContext context, float damage, float baseKnockback, float knockback) {
     // might want to consider an entity predicate here, this special casing is a bit odd
     if (this.condition.matches(tool, modifier) && projectile.test(context.isProjectile()) && TinkerPredicate.matches(entity, context.getLivingTarget())) {
       return formula.apply(formula.processLevel(modifier), knockback);

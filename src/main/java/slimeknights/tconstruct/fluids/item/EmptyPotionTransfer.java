@@ -35,7 +35,7 @@ public class EmptyPotionTransfer extends EmptyFluidWithNBTTransfer {
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationIPayloadContext context) {
+  public JsonObject serialize(JsonSerializationContext context) {
     JsonObject json = super.serialize(context);
     json.addProperty("type", ID.toString());
     return json;

@@ -74,7 +74,7 @@ public class ModifierBonusLootFunction extends LootItemConditionalFunction {
   }
 
   @Override
-  protected ItemStack run(ItemStack stack, LootIPayloadContext context) {
+  protected ItemStack run(ItemStack stack, LootContext context) {
     int level = ModifierUtil.getModifierLevel(context.getParam(LootContextParams.TOOL), modifier);
     if (!includeBase) {
       level--;
@@ -88,7 +88,7 @@ public class ModifierBonusLootFunction extends LootItemConditionalFunction {
   /** Serializer class */
   public static class Serializer extends LootItemConditionalFunction.Serializer<ModifierBonusLootFunction> {
     @Override
-    public void serialize(JsonObject json, ModifierBonusLootFunction loot, JsonSerializationIPayloadContext context) {
+    public void serialize(JsonObject json, ModifierBonusLootFunction loot, JsonSerializationContext context) {
       super.serialize(json, loot, context);
       json.addProperty("modifier", loot.modifier.toString());
       json.addProperty("formula", loot.formula.getType().toString());
@@ -101,7 +101,7 @@ public class ModifierBonusLootFunction extends LootItemConditionalFunction {
     }
 
     @Override
-    public ModifierBonusLootFunction deserialize(JsonObject json, JsonDeserializationIPayloadContext context, LootItemCondition[] conditions) {
+    public ModifierBonusLootFunction deserialize(JsonObject json, JsonDeserializationContext context, LootItemCondition[] conditions) {
       ModifierId modifier = new ModifierId(JsonHelper.getResourceLocation(json, "modifier"));
       ResourceLocation id = JsonHelper.getResourceLocation(json, "formula");
       FormulaDeserializer deserializer = ApplyBonusCount.FORMULAS.get(id);

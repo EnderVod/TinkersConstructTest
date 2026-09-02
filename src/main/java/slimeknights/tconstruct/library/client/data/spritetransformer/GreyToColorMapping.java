@@ -102,7 +102,7 @@ public class GreyToColorMapping implements IColorMapping {
   }
 
   @Override
-  public JsonObject serialize(JsonSerializationIPayloadContext context) {
+  public JsonObject serialize(JsonSerializationContext context) {
     JsonObject object = new JsonObject();
     object.addProperty("type", NAME.toString());
     object.add("palette", serializePalette());
@@ -131,7 +131,7 @@ public class GreyToColorMapping implements IColorMapping {
   /** Serializer for a recolor sprite transformer */
   protected static class Deserializer implements JsonDeserializer<GreyToColorMapping> {
     @Override
-    public GreyToColorMapping deserialize(JsonElement json, Type typeOfT, JsonDeserializationIPayloadContext context) throws JsonParseException {
+    public GreyToColorMapping deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
       JsonObject object = json.getAsJsonObject();
       JsonElement element = JsonHelper.getElement(object, "palette");
       // array format: [{"grey": ###, "color": "######"}]

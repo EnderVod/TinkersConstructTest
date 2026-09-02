@@ -32,7 +32,7 @@ public class UniqueGuiModel implements IUnbakedGeometry<UniqueGuiModel> {
   protected final SimpleBlockModel gui;
 
   @Override
-  public void resolveParents(Function<ResourceLocation,UnbakedModel> modelGetter, IGeometryBakingIPayloadContext context) {
+  public void resolveParents(Function<ResourceLocation,UnbakedModel> modelGetter, IGeometryBakingContext context) {
     model.resolveParents(modelGetter, context);
     gui.resolveParents(modelGetter, context);
   }
@@ -66,7 +66,7 @@ public class UniqueGuiModel implements IUnbakedGeometry<UniqueGuiModel> {
   }
 
   /** Loader for this model */
-  public static UniqueGuiModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+  public static UniqueGuiModel deserialize(JsonObject json, JsonDeserializationContext context) {
     return new UniqueGuiModel(
       SimpleBlockModel.deserialize(json, context),
       SimpleBlockModel.deserialize(GsonHelper.getAsJsonObject(json, "gui"), context)

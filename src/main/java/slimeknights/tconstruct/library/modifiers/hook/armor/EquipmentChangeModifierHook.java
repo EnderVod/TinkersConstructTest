@@ -22,7 +22,7 @@ public interface EquipmentChangeModifierHook {
    * @param modifier     Level of the modifier
    * @param context      Context about the event
    */
-  default void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {}
+  default void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {}
 
   /**
    * Called when a tinker tool is unequipped from an entity
@@ -36,7 +36,7 @@ public interface EquipmentChangeModifierHook {
    * @param modifier     Level of the modifier
    * @param context      Context about the event
    */
-  default void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {}
+  default void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {}
 
   /**
    * Called when a stack in a different slot changed. Not called on the slot that changed
@@ -51,7 +51,7 @@ public interface EquipmentChangeModifierHook {
    * @param context   Context describing the change
    * @param slotType  Slot containing this tool, did not change
    */
-  default void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {}
+  default void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, EquipmentSlot slotType) {}
 
   /** Checks if this tool changed. */
   static boolean didChange(IToolStackView tool, @Nullable IToolStackView other) {
@@ -60,33 +60,33 @@ public interface EquipmentChangeModifierHook {
   }
 
   /** Checks if this tool was equip, as {@link #onUnequip(IToolStackView, ModifierEntry, EquipmentChangeContext)} may be called on the tool itself changing NBT. */
-  static boolean didEquip(IToolStackView tool, EquipmentChangeIPayloadContext context) {
+  static boolean didEquip(IToolStackView tool, EquipmentChangeContext context) {
     return didChange(tool, context.getOriginalTool());
   }
 
   /** Checks if this tool was unequip, as {@link #onUnequip(IToolStackView, ModifierEntry, EquipmentChangeContext)} may be called on the tool itself changing NBT. */
-  static boolean didUnequip(IToolStackView tool, EquipmentChangeIPayloadContext context) {
+  static boolean didUnequip(IToolStackView tool, EquipmentChangeContext context) {
     return didChange(tool, context.getReplacementTool());
   }
 
   /** Record that runs all nested hooks */
   record AllMerger(Collection<EquipmentChangeModifierHook> modules) implements EquipmentChangeModifierHook {
     @Override
-    public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+    public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
       for (EquipmentChangeModifierHook module : modules) {
         module.onEquip(tool, modifier, context);
       }
     }
 
     @Override
-    public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+    public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
       for (EquipmentChangeModifierHook module : modules) {
         module.onUnequip(tool, modifier, context);
       }
     }
 
     @Override
-    public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {
+    public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, EquipmentSlot slotType) {
       EquipmentChangeModifierHook.super.onEquipmentChange(tool, modifier, context, slotType);
       for (EquipmentChangeModifierHook module : modules) {
         module.onEquipmentChange(tool, modifier, context, slotType);

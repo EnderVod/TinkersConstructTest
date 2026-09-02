@@ -22,7 +22,7 @@ public class PiglinHeadBlock extends SkullBlock {
   }
 
   @Override
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return PIGLIN_SHAPE;
   }
 

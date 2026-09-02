@@ -734,7 +734,7 @@ public class ToolStack implements IToolStackView {
 
     // temporary context while we add modifier traits, will recreate if we have modifiers
     // clear out volatile data, mostly affects the volatile data hook
-    ToolRebuildIPayloadContext context = new ToolRebuildContext(item, definition, materials, getUpgrades(), beforeTraits, getPersistentData());
+    ToolRebuildContext context = new ToolRebuildContext(item, definition, materials, getUpgrades(), beforeTraits, getPersistentData());
 
     // if we have modifiers, apply modifier traits, saves creating some builders if empty
     List<ModifierEntry> modifierList = Collections.emptyList();

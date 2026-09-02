@@ -37,7 +37,7 @@ public interface ConditionalStatVariable extends IHaveLoader, MiningSpeedVariabl
   }
 
   @Override
-  default float getValue(IToolStackView tool, @Nullable BreakSpeedIPayloadContext context, @Nullable Player player) {
+  default float getValue(IToolStackView tool, @Nullable BreakSpeedContext context, @Nullable Player player) {
     return getValue(tool, player);
   }
 

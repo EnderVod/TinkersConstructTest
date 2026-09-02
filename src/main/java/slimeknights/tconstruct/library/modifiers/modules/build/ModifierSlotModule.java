@@ -64,7 +64,7 @@ public record ModifierSlotModule(SlotType type, LevelingInt count, ModifierCondi
   }
 
   @Override
-  public void addVolatileData(IToolIPayloadContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
+  public void addVolatileData(IToolContext context, ModifierEntry modifier, ToolDataNBT volatileData) {
     if (condition.matches(context, modifier)) {
       volatileData.addSlots(type, count.computeForLevel(modifier.getEffectiveLevel()));
     }

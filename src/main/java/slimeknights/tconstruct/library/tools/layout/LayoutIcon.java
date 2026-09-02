@@ -153,7 +153,7 @@ public abstract class LayoutIcon {
   /** Serializer class */
   protected static class Serializer implements JsonSerializer<LayoutIcon>, JsonDeserializer<LayoutIcon> {
     @Override
-    public LayoutIcon deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationIPayloadContext context) throws JsonParseException {
+    public LayoutIcon deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
       JsonObject object = GsonHelper.convertToJsonObject(json, "button_icon");
       if (object.has("pattern")) {
         Pattern pattern = new Pattern(JsonHelper.getResourceLocation(object, "pattern"));
@@ -171,7 +171,7 @@ public abstract class LayoutIcon {
     }
 
     @Override
-    public JsonElement serialize(LayoutIcon icon, java.lang.reflect.Type typeOfSrc, JsonSerializationIPayloadContext context) {
+    public JsonElement serialize(LayoutIcon icon, java.lang.reflect.Type typeOfSrc, JsonSerializationContext context) {
       return icon.toJson();
     }
   }

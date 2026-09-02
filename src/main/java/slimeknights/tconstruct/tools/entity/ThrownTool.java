@@ -236,7 +236,7 @@ public class ThrownTool extends ThrownTrident implements ToolProjectile {
             owner.setItemInHand(InteractionHand.OFF_HAND, tridentItem);
           }
           // TODO: consider whether redundant sound is fine
-          ToolAttackIPayloadContext context = ToolAttackContext.attacker(owner).target(target).hand(InteractionHand.OFF_HAND).baseDamage(tool.getStats().get(ToolStats.ATTACK_DAMAGE) * multiplier).cooldown(charge).projectile(this).build();
+          ToolAttackContext context = ToolAttackContext.attacker(owner).target(target).hand(InteractionHand.OFF_HAND).baseDamage(tool.getStats().get(ToolStats.ATTACK_DAMAGE) * multiplier).cooldown(charge).projectile(this).build();
           if (ToolAttackUtil.performAttack(tool, context)) {
             if (target instanceof LivingEntity living) {
               this.doPostHurtEffects(living);
@@ -304,7 +304,7 @@ public class ThrownTool extends ThrownTrident implements ToolProjectile {
               ModifierNBT modifiers = tool.getModifiers();
               Direction sideHit = result.getDirection();
               if (!modifiers.isEmpty()) {
-                BreakSpeedIPayloadContext context = new BreakSpeedContext.Direct(owner, state, pos, sideHit, true, miningSpeed, multiplier);
+                BreakSpeedContext context = new BreakSpeedContext.Direct(owner, state, pos, sideHit, true, miningSpeed, multiplier);
                 for (ModifierEntry entry : tool.getModifiers()) {
                   miningSpeed = entry.getHook(ModifierHooks.BREAK_SPEED).modifyBreakSpeed(tool, entry, context, miningSpeed);
                 }

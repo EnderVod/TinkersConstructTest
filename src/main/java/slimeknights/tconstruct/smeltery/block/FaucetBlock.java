@@ -60,7 +60,7 @@ public class FaucetBlock extends Block implements EntityBlock {
 
   @Nullable
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     Direction dir = context.getClickedFace();
     if (dir == Direction.UP) {
       dir = Direction.DOWN;
@@ -71,7 +71,7 @@ public class FaucetBlock extends Block implements EntityBlock {
   @SuppressWarnings("deprecation")
   @Deprecated
   @Override
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return SHAPES.get(state.getValue(FACING));
   }
 

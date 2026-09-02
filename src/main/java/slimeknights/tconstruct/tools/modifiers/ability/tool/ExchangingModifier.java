@@ -43,7 +43,7 @@ public class ExchangingModifier extends NoLevelsModifier implements RemoveBlockM
 
   @Nullable
   @Override
-  public Boolean removeBlock(IToolStackView tool, ModifierEntry modifier, ToolHarvestIPayloadContext context) {
+  public Boolean removeBlock(IToolStackView tool, ModifierEntry modifier, ToolHarvestContext context) {
     // We check the offhand first for a block provider
     LivingEntity entity = context.getLiving();
     ItemStack item = entity.getOffhandItem();

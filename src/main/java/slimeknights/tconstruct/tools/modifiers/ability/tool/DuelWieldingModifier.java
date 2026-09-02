@@ -17,7 +17,7 @@ public class DuelWieldingModifier extends OffhandAttackModifier implements ToolS
   }
 
   @Override
-  public void addToolStats(IToolIPayloadContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
+  public void addToolStats(IToolContext context, ModifierEntry modifier, ModifierStatsBuilder builder) {
     // on two handed tools, take a larger hit to attack damage, smaller to attack speed
     if (context.hasTag(TinkerTags.Items.BROAD_TOOLS)) {
       ToolStats.ATTACK_DAMAGE.multiplyAll(builder, 0.7);

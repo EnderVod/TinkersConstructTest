@@ -21,7 +21,7 @@ public enum ToolSubtypeInterpreter implements IIngredientSubtypeInterpreter<Item
   FIRST;
 
   @Override
-  public String apply(ItemStack itemStack, UidIPayloadContext context) {
+  public String apply(ItemStack itemStack, UidContext context) {
     boolean isIngredient = context == UidContext.Ingredient;
     if (isIngredient || this != INGREDIENT) {
       List<MaterialVariantId> materialList = MaterialIdNBT.from(itemStack).getMaterials();

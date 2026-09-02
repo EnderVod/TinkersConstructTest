@@ -79,7 +79,7 @@ public record FluidContainerModel(FluidStack fluid, boolean flipGas) implements 
   public static final Transformation FLUID_TRANSFORM = new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(1, 1, 1.002f), new Quaternionf());
 
   /** Deserializes this model from JSON */
-  public static FluidContainerModel deserialize(JsonObject json, JsonDeserializationIPayloadContext context) {
+  public static FluidContainerModel deserialize(JsonObject json, JsonDeserializationContext context) {
     FluidStack fluidStack = FluidStack.EMPTY;
     // parse the fluid with an optional tag
     if (json.has("fluid")) {
@@ -103,14 +103,14 @@ public record FluidContainerModel(FluidStack fluid, boolean flipGas) implements 
 
   /** Gets the given sprite, or null if the texture is not present in the model */
   @Nullable
-  private static TextureAtlasSprite getSprite(IGeometryBakingIPayloadContext context, Function<Material,TextureAtlasSprite> spriteGetter, String key) {
+  private static TextureAtlasSprite getSprite(IGeometryBakingContext context, Function<Material,TextureAtlasSprite> spriteGetter, String key) {
     if (context.hasMaterial(key)) {
       return spriteGetter.apply(context.getMaterial(key));
     }
     return null;
   }
 
-  private static BakedModel bakeInternal(IGeometryBakingIPayloadContext context, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides, ResourceLocation modelLocation, FluidStack fluid, boolean flipGas) {
+  private static BakedModel bakeInternal(IGeometryBakingContext context, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides, ResourceLocation modelLocation, FluidStack fluid, boolean flipGas) {
     // get basic sprites
     IClientFluidTypeExtensions clientFluid = IClientFluidTypeExtensions.of(fluid.getFluid());
     TextureAtlasSprite baseSprite = getSprite(context, spriteGetter, "base");
@@ -169,7 +169,7 @@ public record FluidContainerModel(FluidStack fluid, boolean flipGas) implements 
   }
 
   @Override
-  public BakedModel bake(IGeometryBakingIPayloadContext context, ModelBaker bakery, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides, ResourceLocation modelLocation) {
+  public BakedModel bake(IGeometryBakingContext context, ModelBaker bakery, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides, ResourceLocation modelLocation) {
     // We need to disable GUI 3D and block lighting for this to render properly
     context = StandaloneGeometryBakingContext.builder(context).withGui3d(false).withUseBlockLight(false).build(modelLocation);
     // only do contained fluid if we did not set the fluid in the model properties
@@ -186,7 +186,7 @@ public record FluidContainerModel(FluidStack fluid, boolean flipGas) implements 
 
     private final Map<FluidStack,BakedModel> cache = Maps.newHashMap(); // contains all the baked models since they'll never change
 
-    private final IGeometryBakingIPayloadContext context;
+    private final IGeometryBakingContext context;
     private final ItemOverrides nested;
     private final ModelState modelState;
     private final boolean flipGas;

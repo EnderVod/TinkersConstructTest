@@ -69,7 +69,7 @@ public class IslandStructure extends Structure {
   }
 
   @Override
-  public Optional<GenerationStub> findGenerationPoint(GenerationIPayloadContext context) {
+  public Optional<GenerationStub> findGenerationPoint(GenerationContext context) {
     // get height
     // biome check
 //    BlockPos targetPos = context.chunkPos().getMiddleBlockPosition(height);
@@ -81,7 +81,7 @@ public class IslandStructure extends Structure {
     return onTopOfChunkCenter(context, Types.WORLD_SURFACE, builder -> this.generatePieces(builder, context));
   }
 
-  private void generatePieces(StructurePiecesBuilder builder, Structure.GenerationIPayloadContext context) {
+  private void generatePieces(StructurePiecesBuilder builder, Structure.GenerationContext context) {
     RandomSource random = context.random();
     Optional<ResourceLocation> template = templates.getRandomValue(random);
     if (template.isPresent()) {

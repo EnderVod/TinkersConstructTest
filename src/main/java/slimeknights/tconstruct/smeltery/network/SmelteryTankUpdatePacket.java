@@ -58,7 +58,7 @@ public class SmelteryTankUpdatePacket implements BlockEntityPacket<ISmelteryTank
   }
 
   @Override
-  public void handleBlockEntity(IPayloadIPayloadContext context, ISmelteryTankHandler be) {
+  public void handleBlockEntity(IPayloadContext context, ISmelteryTankHandler be) {
     be.updateFluidsFromPacket(fluids);
   }
 }

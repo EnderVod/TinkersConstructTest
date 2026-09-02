@@ -38,7 +38,7 @@ public class SearedPillarBlock extends SearedBlock {
   }
 
   @Override
-  public BlockState getStateForPlacement(BlockPlaceIPayloadContext context) {
+  public BlockState getStateForPlacement(BlockPlaceContext context) {
     return this.defaultBlockState().setValue(AXIS, context.getClickedFace().getAxis());
   }
 }

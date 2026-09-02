@@ -133,7 +133,7 @@ public enum FishingModule implements ModifierModule, GeneralInteractionModifierH
   }
 
   @Override
-  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context) {
+  public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     // if actively fishing, switching to a new rod means we need to retrieve to prevent a cheese
     if (context.getEntity() instanceof Player player && player.fishing != null) {
       IToolStackView replacement = context.getReplacementTool();
@@ -144,7 +144,7 @@ public enum FishingModule implements ModifierModule, GeneralInteractionModifierH
   }
 
   @Override
-  public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeIPayloadContext context, EquipmentSlot slotType) {
+  public void onEquipmentChange(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context, EquipmentSlot slotType) {
     // if the main hand changed such that it gained the ability to fish, then vanilla is going to move our fishing bobber to attach to the mainhand
     // so just retrieve it to prevent a cheese
     // there is technically an issue with us inheriting someone elses bobber, but thats just a worse version of our bobber, so not really a cheese

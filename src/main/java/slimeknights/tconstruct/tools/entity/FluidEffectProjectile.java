@@ -168,7 +168,7 @@ public class FluidEffectProjectile extends Projectile implements ProjectileWithK
   }
 
   /** Updates the stack for the fluid cannon */
-  private void updateCannonStack(FluidEffectIPayloadContext context) {
+  private void updateCannonStack(FluidEffectContext context) {
     if (cannon != null) {
       IItemHandlerModifiable handler = getCannonInventory();
       if (handler != null) {

@@ -41,7 +41,7 @@ public class SlotIngredientHelper implements IIngredientHelper<SlotCount> {
   }
 
   @Override
-  public String getUniqueId(SlotCount slots, UidIPayloadContext context) {
+  public String getUniqueId(SlotCount slots, UidContext context) {
     return getName(slots);
   }
 

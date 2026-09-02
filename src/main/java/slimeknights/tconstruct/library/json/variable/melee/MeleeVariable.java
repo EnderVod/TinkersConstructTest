@@ -25,7 +25,7 @@ public interface MeleeVariable extends IHaveLoader {
    * @param attacker Entity using the tool, may be null conditionally in tooltips
    * @return  Value of this variable
    */
-  float getValue(IToolStackView tool, @Nullable ToolAttackIPayloadContext context, @Nullable LivingEntity attacker);
+  float getValue(IToolStackView tool, @Nullable ToolAttackContext context, @Nullable LivingEntity attacker);
 
 
   /** Constant value instance for this object */
@@ -33,7 +33,7 @@ public interface MeleeVariable extends IHaveLoader {
     public static final RecordLoadable<Constant> LOADER = VariableLoaderRegistry.constantLoader(Constant::new);
 
     @Override
-    public float getValue(IToolStackView tool, @Nullable ToolAttackIPayloadContext context, @Nullable LivingEntity attacker) {
+    public float getValue(IToolStackView tool, @Nullable ToolAttackContext context, @Nullable LivingEntity attacker) {
       return value;
     }
 

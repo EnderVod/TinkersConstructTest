@@ -71,7 +71,7 @@ public class ChestBlock extends TabbedTableBlock {
   @SuppressWarnings("deprecation")
   @Override
   @Deprecated
-  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionIPayloadContext context) {
+  public VoxelShape getShape(BlockState state, BlockGetter worldIn, BlockPos pos, CollisionContext context) {
     return SHAPE;
   }
 
