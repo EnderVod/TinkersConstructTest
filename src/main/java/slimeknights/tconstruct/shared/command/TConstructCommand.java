@@ -6,9 +6,8 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import slimeknights.mantle.command.argument.TagSourceArgument;
 import slimeknights.mantle.registration.deferred.ArgumentTypeDeferredRegister;
 import slimeknights.tconstruct.TConstruct;
@@ -40,7 +39,7 @@ public class TConstructCommand {
 
   /** Registers all TConstruct command related content */
   public static void init() {
-    ARGUMENT_TYPE.register(FMLJavaModLoadingContext.get().getModEventBus());
+    ARGUMENT_TYPE.register(TConstruct.getModBus());
     ARGUMENT_TYPE.registerSingleton("slot_type", SlotTypeArgument.class, SlotTypeArgument::slotType);
     ARGUMENT_TYPE.registerSingleton("tool_stat", ToolStatArgument.class, ToolStatArgument::stat);
     ARGUMENT_TYPE.registerSingleton("modifier", ModifierArgument.class, ModifierArgument::modifier);
@@ -53,7 +52,7 @@ public class TConstructCommand {
     TagSourceArgument.registerCustom(MaterialRegistry.getTagSource());
 
     // add command listener
-    MinecraftForge.EVENT_BUS.addListener(TConstructCommand::registerCommand);
+    NeoForge.EVENT_BUS.addListener(TConstructCommand::registerCommand);
   }
 
   /** Registers a sub command for the root Mantle command */
@@ -68,7 +67,6 @@ public class TConstructCommand {
     LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(TConstruct.MOD_ID);
     CommandBuildContext context = event.getBuildContext();
 
-    // sub commands
     register(builder, "modifiers", ModifiersCommand::register);
     register(builder, "materials", MaterialsCommand::register);
     register(builder, "tool_stats", StatsCommand::register);
@@ -84,7 +82,6 @@ public class TConstructCommand {
       register(b, "hidden_fluids_tag", GenerateHiddenFluidsCommand::register);
     });
 
-    // register final command
     event.getDispatcher().register(builder);
   }
 }
