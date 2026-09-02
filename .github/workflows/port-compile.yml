@@ -57,6 +57,7 @@ jobs:
           cp "$mantle_jar" libs/
           echo "Using Mantle dependency: $(basename "$mantle_jar")"
 
+      # Keep compiler output as artifacts so each porting pass can target the exact remaining failures.
       - name: Compile Tinkers core
         run: |
           set -o pipefail
