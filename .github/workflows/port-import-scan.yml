@@ -33,11 +33,15 @@ jobs:
 
           echo '=== Old packet context files ==='
           grep -RIl 'net\.minecraftforge\.network\.NetworkEvent\.Context' src/main/java | sort || true
+          echo '=== Suspicious payload-context substitutions ==='
+          grep -RInE '[A-Za-z0-9_$.]+IPayloadContext context' src/main/java || true
           echo '=== Old capability files ==='
           grep -RIl 'net\.minecraftforge\.common\.capabilities\|ForgeCapabilities' src/main/java | sort || true
           echo '=== Old mod-bus context files ==='
           grep -RIl 'FMLJavaModLoadingContext' src/main/java | sort || true
           echo '=== Old tool action files ==='
           grep -RIl 'net\.minecraftforge\.common\.ToolAction\|net\.minecraftforge\.common\.ToolActions' src/main/java | sort || true
+          echo '=== ToolActions constants used ==='
+          grep -RhoE 'ToolActions\.[A-Z0-9_]+' src/main/java | sort -u || true
           echo '=== Old condition/crafting files ==='
           grep -RIl 'net\.minecraftforge\.common\.crafting' src/main/java | sort || true
