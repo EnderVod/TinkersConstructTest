@@ -1,8 +1,6 @@
 package slimeknights.tconstruct.smeltery;
 
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.DataGenerator;
-import net.minecraft.data.PackOutput;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ArmorItem;
@@ -28,7 +26,6 @@ import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -121,8 +118,6 @@ import slimeknights.tconstruct.smeltery.block.entity.controller.AlloyerBlockEnti
 import slimeknights.tconstruct.smeltery.block.entity.controller.FoundryBlockEntity;
 import slimeknights.tconstruct.smeltery.block.entity.controller.MelterBlockEntity;
 import slimeknights.tconstruct.smeltery.block.entity.controller.SmelteryBlockEntity;
-import slimeknights.tconstruct.smeltery.data.FluidContainerTransferProvider;
-import slimeknights.tconstruct.smeltery.data.SmelteryRecipeProvider;
 import slimeknights.tconstruct.smeltery.item.CopperCanItem;
 import slimeknights.tconstruct.smeltery.item.DummyMaterialItem;
 import slimeknights.tconstruct.smeltery.item.TankItem;
@@ -467,14 +462,6 @@ public final class TinkerSmeltery extends TinkerModule {
     }
   }
 
-  @SubscribeEvent
-  void gatherData(final GatherDataEvent event) {
-    boolean server = event.includeServer();
-    DataGenerator generator = event.getGenerator();
-    PackOutput packOutput = generator.getPackOutput();
-    generator.addProvider(server, new SmelteryRecipeProvider(packOutput));
-    generator.addProvider(server, new FluidContainerTransferProvider(packOutput));
-  }
 
   /** Adds all relevant items to the creative tab */
   private static void addTabItems(ItemDisplayParameters itemDisplayParameters, Output output) {

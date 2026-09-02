@@ -34,7 +34,6 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.event.IModBusEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.neoforged.fml.loading.FMLLoader;
 import slimeknights.mantle.data.loadable.field.ContextKey;
 import slimeknights.mantle.recipe.condition.ConditionHelper;
@@ -126,7 +125,7 @@ public class ModifierManager extends SimpleJsonResourceReloadListener {
 
   /** For internal use only */
   public void init() {
-    FMLJavaModLoadingContext.get().getModEventBus().addListener(EventPriority.NORMAL, false, FMLCommonSetupEvent.class, e -> e.enqueueWork(this::fireRegistryEvent));
+    slimeknights.tconstruct.TConstruct.getModBus().addListener(EventPriority.NORMAL, false, FMLCommonSetupEvent.class, e -> e.enqueueWork(this::fireRegistryEvent));
     NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, AddReloadListenerEvent.class, this::addDataPackListeners);
     NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, OnDatapackSyncEvent.class, e -> JsonUtils.syncPackets(e, new UpdateModifiersPacket(this.dynamicModifiers, this.tags, this.enchantmentMap, this.enchantmentTagMap)));
   }

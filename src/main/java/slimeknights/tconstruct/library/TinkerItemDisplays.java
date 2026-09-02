@@ -2,7 +2,6 @@ package slimeknights.tconstruct.library;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
-import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.neoforged.neoforge.registries.ForgeRegistries;
 import net.neoforged.neoforge.registries.IForgeRegistry;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -15,7 +14,7 @@ public class TinkerItemDisplays {
   private TinkerItemDisplays() {}
 
   public static void init() {
-    FMLJavaModLoadingContext.get().getModEventBus().addListener(TinkerItemDisplays::registerDisplay);
+    slimeknights.tconstruct.TConstruct.getModBus().addListener(TinkerItemDisplays::registerDisplay);
   }
 
   /** Used by the melter and smeltery for display of items its melting */

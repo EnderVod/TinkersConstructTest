@@ -15,7 +15,6 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.common.util.LazyOptional;
 import net.neoforged.neoforge.event.AttachCapabilitiesEvent;
 import net.neoforged.bus.api.EventPriority;
-import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.tools.nbt.ModifierNBT;
 
@@ -80,7 +79,7 @@ public class EntityModifierCapability {
 
   /** Registers this capability with relevant busses*/
   public static void register() {
-    FMLJavaModLoadingContext.get().getModEventBus().addListener(EventPriority.NORMAL, false, RegisterCapabilitiesEvent.class, event -> event.register(ModifierNBT.class));
+    slimeknights.tconstruct.TConstruct.getModBus().addListener(EventPriority.NORMAL, false, RegisterCapabilitiesEvent.class, event -> event.register(ModifierNBT.class));
     NeoForge.EVENT_BUS.addGenericListener(Entity.class, EntityModifierCapability::attachCapability);
   }
 

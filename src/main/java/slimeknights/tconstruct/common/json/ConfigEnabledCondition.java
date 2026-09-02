@@ -12,7 +12,7 @@ import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.Serializer;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 import net.minecraft.world.level.storage.loot.predicates.LootItemConditionType;
-import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
+import net.neoforged.neoforge.common.ModConfigSpec.BooleanValue;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.minecraftforge.common.crafting.conditions.IConditionSerializer;
 import slimeknights.tconstruct.TConstruct;
