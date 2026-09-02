@@ -129,6 +129,11 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.foundry.get(),
       (controller, side) -> controller.getStructure() == null ? null : controller.getTank());
 
+    // Drains, ducts, and chutes forward the capability exposed by their validated controller.
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.drain.get(), (io, side) -> io.getHandler(side));
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.duct.get(), (io, side) -> io.getHandler(side));
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.chute.get(), (io, side) -> io.getHandler(side));
+
     for (Item item : BuiltInRegistries.ITEM) {
       if (item instanceof TankItem tankItem) {
         event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);
