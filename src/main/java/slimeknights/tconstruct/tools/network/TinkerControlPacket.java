@@ -68,8 +68,7 @@ public enum TinkerControlPacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    ServerPlayer player = context.getSender();
-    if (player != null) {
+    if (context.player() instanceof ServerPlayer player) {
       switch (this) {
         case DOUBLE_JUMP -> DoubleJumpHandler.extraJump(player);
         case ANTIGRAVITY_JUMP -> TinkerEffects.antigravity.get().antigravityJump(player);

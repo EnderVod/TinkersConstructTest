@@ -24,8 +24,7 @@ public class TinkerStationRenamePacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    ServerPlayer sender = context.getSender();
-    if (sender != null && sender.containerMenu instanceof TinkerStationContainerMenu station) {
+    if (context.player() instanceof ServerPlayer sender && sender.containerMenu instanceof TinkerStationContainerMenu station) {
       TinkerStationBlockEntity tile = station.getTile();
       if (tile != null) {
         station.getTile().setItemName(name);

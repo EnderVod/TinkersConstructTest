@@ -24,8 +24,7 @@ public class TinkerStationSelectionPacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    ServerPlayer sender = context.getSender();
-    if (sender != null) {
+    if (context.player() instanceof ServerPlayer sender) {
       AbstractContainerMenu container = sender.containerMenu;
       if (container instanceof TinkerStationContainerMenu tinker) {
         tinker.setToolSelection(StationSlotLayoutLoader.getInstance().get(layoutName));

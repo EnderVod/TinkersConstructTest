@@ -41,23 +41,23 @@ public enum InteractWithAirPacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    ServerPlayer player = context.getSender();
-    if (player != null && !player.isSpectator()) {
-      if (this == LEFT_CLICK) {
-        ItemStack held = player.getItemInHand(hand);
-        if (held.is(TinkerTags.Items.INTERACTABLE_LEFT)) {
-          InteractionResult result = InteractionHandler.onLeftClickInteraction(player, held, hand);
-          if (result.shouldSwing()) {
-            player.swing(hand, true);
-          }
+    if (!(context.player() instanceof ServerPlayer player) || player.isSpectator()) {
+      return;
+    }
+    if (this == LEFT_CLICK) {
+      ItemStack held = player.getItemInHand(hand);
+      if (held.is(TinkerTags.Items.INTERACTABLE_LEFT)) {
+        InteractionResult result = InteractionHandler.onLeftClickInteraction(player, held, hand);
+        if (result.shouldSwing()) {
+          player.swing(hand, true);
         }
-      } else {
-        ItemStack chestplate = player.getItemBySlot(EquipmentSlot.CHEST);
-        if (chestplate.is(TinkerTags.Items.INTERACTABLE_ARMOR) && player.getItemInHand(hand).isEmpty()) {
-          InteractionResult result = InteractionHandler.onChestplateUse(player, chestplate, hand);
-          if (result.shouldSwing()) {
-            player.swing(hand, true);
-          }
+      }
+    } else {
+      ItemStack chestplate = player.getItemBySlot(EquipmentSlot.CHEST);
+      if (chestplate.is(TinkerTags.Items.INTERACTABLE_ARMOR) && player.getItemInHand(hand).isEmpty()) {
+        InteractionResult result = InteractionHandler.onChestplateUse(player, chestplate, hand);
+        if (result.shouldSwing()) {
+          player.swing(hand, true);
         }
       }
     }
