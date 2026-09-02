@@ -7,24 +7,17 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.client.model.data.ModelData;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.common.util.NonNullConsumer;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.templates.EmptyFluidHandler;
-import net.minecraftforge.items.IItemHandler;
+import net.neoforged.neoforge.capabilities.BlockCapability;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
 import slimeknights.mantle.block.entity.IRetexturedBlockEntity;
-import slimeknights.mantle.inventory.EmptyItemHandler;
 import slimeknights.mantle.util.RetexturedHelper;
-import slimeknights.mantle.util.WeakConsumerWrapper;
 import slimeknights.tconstruct.common.multiblock.IMasterLogic;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
-import slimeknights.tconstruct.smeltery.block.entity.tank.ISmelteryTankHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -33,107 +26,65 @@ import java.util.Objects;
 import static slimeknights.mantle.util.RetexturedHelper.TAG_TEXTURE;
 
 /**
- * Shared logic between drains and ducts
+ * Shared logic between drains, ducts, and chutes.
+ *
+ * NeoForge 1.21 exposes capabilities through registered providers instead of BlockEntity#getCapability.
+ * These IO blocks therefore resolve the current master capability directly when their own provider is queried.
  */
 public abstract class SmelteryInputOutputBlockEntity<T> extends SmelteryComponentBlockEntity implements IRetexturedBlockEntity {
-  /** Capability this TE watches */
-  private final Capability<T> capability;
-  /** Empty capability for in case the valid capability becomes invalid without invalidating */
-  protected final T emptyInstance;
-  /** Listener to attach to consumed capabilities */
-  protected final NonNullConsumer<LazyOptional<T>> listener = new WeakConsumerWrapper<>(this, (te, cap) -> te.clearHandler());
-  @Nullable
-  private LazyOptional<T> capabilityHolder = null;
+  /** Capability this block forwards from its master. */
+  private final BlockCapability<T,Direction> capability;
 
   /* Retexturing */
   @Nonnull
   @Getter
   private Block texture = Blocks.AIR;
 
-  protected SmelteryInputOutputBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, Capability<T> capability, T emptyInstance) {
+  protected SmelteryInputOutputBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, BlockCapability<T,Direction> capability) {
     super(type, pos, state);
     this.capability = capability;
-    this.emptyInstance = emptyInstance;
   }
 
-  /** Clears all cached capabilities */
-  private void clearHandler() {
-    if (capabilityHolder != null) {
-      capabilityHolder.invalidate();
-      capabilityHolder = null;
+  /**
+   * Invalidates this block's externally visible capability after its master relationship changes.
+   */
+  private void invalidateHandler() {
+    if (level != null) {
+      level.invalidateCapabilities(worldPosition);
     }
   }
 
   @Override
-  public void invalidateCaps() {
-    super.invalidateCaps();
-    clearHandler();
-  }
-
-  @Override
   public void onMasterLoad(IMasterLogic master) {
-    clearHandler();
+    invalidateHandler();
   }
 
   @Override
   protected void setMaster(@Nullable BlockPos master, @Nullable Block block) {
     assert level != null;
 
-    // if we have a new master, invalidate handlers
-    boolean masterChanged = false;
-    if (!Objects.equals(getMasterPos(), master)) {
-      clearHandler();
-      masterChanged = true;
-    }
+    boolean masterChanged = !Objects.equals(getMasterPos(), master);
     super.setMaster(master, block);
-    // notify neighbors of the change (state change skips the notify flag)
     if (masterChanged) {
+      invalidateHandler();
+      // notify neighbors of the change (state change skips the notify flag)
       level.blockUpdated(worldPosition, getBlockState().getBlock());
     }
   }
 
   /**
-   * Gets the capability to store in this IO block. Capability parent should have the proper listeners attached
-   * @param parent  Parent tile entity
-   * @return  Capability from parent, or empty if absent
+   * Resolves the currently exposed handler from the validated master.
+   * Returning null tells NeoForge that this IO block has no capability while its structure is invalid.
    */
-  protected LazyOptional<T> getCapability(BlockEntity parent) {
-    LazyOptional<T> handler = parent.getCapability(capability);
-    if (handler.isPresent()) {
-      handler.addListener(listener);
-
-      return LazyOptional.of(() -> handler.orElse(emptyInstance));
-    }
-    return LazyOptional.empty();
-  }
-
-  /**
-   * Fetches the capability handlers if missing
-   */
-  private LazyOptional<T> getCachedCapability() {
-    if (capabilityHolder == null) {
-      if (validateMaster()) {
-        BlockPos master = getMasterPos();
-        if (master != null && this.level != null) {
-          BlockEntity te = level.getBlockEntity(master);
-          if (te != null) {
-            capabilityHolder = getCapability(te);
-            return capabilityHolder;
-          }
-        }
+  @Nullable
+  public T getHandler(@Nullable Direction facing) {
+    if (validateMaster()) {
+      BlockPos master = getMasterPos();
+      if (master != null && level != null) {
+        return level.getCapability(capability, master, facing);
       }
-      capabilityHolder = LazyOptional.empty();
     }
-    return capabilityHolder;
-  }
-
-  @Nonnull
-  @Override
-  public <C> LazyOptional<C> getCapability(Capability<C> capability, @Nullable Direction facing) {
-    if (capability == this.capability) {
-      return getCachedCapability().cast();
-    }
-    return super.getCapability(capability, facing);
+    return null;
   }
 
 
@@ -186,40 +137,21 @@ public abstract class SmelteryInputOutputBlockEntity<T> extends SmelteryComponen
   }
 
 
-  /** Fluid implementation of smeltery IO */
+  /** Fluid implementation of smeltery IO. */
   public static abstract class SmelteryFluidIO extends SmelteryInputOutputBlockEntity<IFluidHandler> {
     protected SmelteryFluidIO(BlockEntityType<?> type, BlockPos pos, BlockState state) {
-      super(type, pos, state, ForgeCapabilities.FLUID_HANDLER, EmptyFluidHandler.INSTANCE);
-    }
-
-    /** Wraps the given capability */
-    protected LazyOptional<IFluidHandler> makeWrapper(LazyOptional<IFluidHandler> capability) {
-      return LazyOptional.of(() -> capability.orElse(emptyInstance));
-    }
-
-    @Override
-    protected LazyOptional<IFluidHandler> getCapability(BlockEntity parent) {
-      // fluid capability is not exposed directly in the smeltery
-      if (parent instanceof ISmelteryTankHandler tankHandler) {
-        LazyOptional<IFluidHandler> capability = tankHandler.getFluidCapability();
-        if (capability.isPresent()) {
-          capability.addListener(listener);
-          return makeWrapper(capability);
-        }
-      }
-      return LazyOptional.empty();
+      super(type, pos, state, Capabilities.FluidHandler.BLOCK);
     }
   }
 
-  /** Item implementation of smeltery IO */
+  /** Item implementation of smeltery IO. */
   public static class ChuteBlockEntity extends SmelteryInputOutputBlockEntity<IItemHandler> {
     public ChuteBlockEntity(BlockPos pos, BlockState state) {
       this(TinkerSmeltery.chute.get(), pos, state);
     }
 
     protected ChuteBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
-      super(type, pos, state, ForgeCapabilities.ITEM_HANDLER, EmptyItemHandler.INSTANCE);
+      super(type, pos, state, Capabilities.ItemHandler.BLOCK);
     }
   }
-
 }
