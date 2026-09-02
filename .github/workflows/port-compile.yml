@@ -69,3 +69,11 @@ jobs:
           name: tinkers-compile-log
           path: compile.log
           if-no-files-found: warn
+
+      - name: Upload port source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinkers-port-source
+          path: src/main/java
+          if-no-files-found: error
