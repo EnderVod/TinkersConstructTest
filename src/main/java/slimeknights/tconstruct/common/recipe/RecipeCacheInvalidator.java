@@ -5,7 +5,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraftforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import slimeknights.mantle.data.listener.IEarlySafeManagerReloadListener;
 
 import java.util.ArrayList;
@@ -38,9 +38,7 @@ public class RecipeCacheInvalidator implements IEarlySafeManagerReloadListener {
     return listener;
   }
 
-  /**
-   * Reloads all listeners, used client side
-   */
+  /** Reloads all listeners, used client side */
   public static void reload(boolean client) {
     for (BooleanConsumer runnable : listeners) {
       runnable.accept(client);
@@ -52,10 +50,7 @@ public class RecipeCacheInvalidator implements IEarlySafeManagerReloadListener {
     reload(false);
   }
 
-  /**
-   * Called when resource managers reload
-   * @param event  Reload event
-   */
+  /** Called when resource managers reload */
   public static void onReloadListenerReload(AddReloadListenerEvent event) {
     event.addListener(INSTANCE);
   }
@@ -68,9 +63,6 @@ public class RecipeCacheInvalidator implements IEarlySafeManagerReloadListener {
 
     @Override
     public void accept(boolean client) {
-      // client side event runs at the end of recipe loading
-      // server side runs at the start
-      // so queue client side to run at the beginning of the next recipe list
       if (client) {
         clearQueued = true;
       } else {
@@ -78,17 +70,11 @@ public class RecipeCacheInvalidator implements IEarlySafeManagerReloadListener {
       }
     }
 
-    /**
-     * Clears the cache based on the runnable
-     */
     public void clearCache() {
       clearQueued = false;
       clearCache.run();
     }
 
-    /**
-     * Clears the cache if a clear is queued. Intended to be called during add
-     */
     public void checkClear() {
       if (clearQueued) {
         clearCache();
