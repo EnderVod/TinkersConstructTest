@@ -1,6 +1,6 @@
 package slimeknights.tconstruct.library.recipe.melting;
 
-import net.minecraftforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import slimeknights.mantle.recipe.container.ISingleStackContainer;
 
 /** Interface for melting inventories */
@@ -21,22 +21,17 @@ public interface IMeltingContainer extends ISingleStackContainer {
       if (rate == OreRateType.DEFAULT || rate == OreRateType.NONE) {
         return forceCopy ? fluid.copy() : fluid;
       }
-      return new FluidStack(fluid, applyOreBoost(rate, fluid.getAmount()));
+      return fluid.copyWithAmount(applyOreBoost(rate, fluid.getAmount()));
     }
   }
 
   /** Ore rate options */
   enum OreRateType {
-    /** No boost */
     NONE,
-    /** Metal boost, works with divisions of 9 */
     METAL,
-    /** Gem boost, works with divisions of 4 */
     GEM,
-    /** Default value, used in place of null to indicate the value should be fetched from another source. If o default exits acts as NONE. */
     DEFAULT;
 
-    /** Returns the passed argument if this is default, else return self */
     public OreRateType orElse(OreRateType type) {
       if (this == DEFAULT) {
         return type;
