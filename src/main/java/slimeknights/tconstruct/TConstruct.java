@@ -118,6 +118,8 @@ public class TConstruct {
   /** Registers native NeoForge capabilities for Tinkers block entities. */
   static void registerCapabilities(final RegisterCapabilitiesEvent event) {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
   }
 
   /* Utils */
