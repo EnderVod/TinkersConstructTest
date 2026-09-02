@@ -2,11 +2,10 @@ package slimeknights.tconstruct.common.multiblock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.extensions.IForgeBlockEntity;
 
 import javax.annotation.Nullable;
 
-public interface IServantLogic extends IForgeBlockEntity {
+public interface IServantLogic {
   /**
    * Gets the position of the master block
    * @return  Master position, null if none is set
@@ -41,5 +40,5 @@ public interface IServantLogic extends IForgeBlockEntity {
    * Removes this master from the given servant
    * @param master  Master to remove
    */
-	void removeMaster(IMasterLogic master);
+  void removeMaster(IMasterLogic master);
 }
