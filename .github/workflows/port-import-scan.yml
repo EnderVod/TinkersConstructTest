@@ -30,3 +30,14 @@ jobs:
             | uniq -c \
             | sort -nr \
             | head -250 || true
+
+          echo '=== Old packet context files ==='
+          grep -RIl 'net\.minecraftforge\.network\.NetworkEvent\.Context' src/main/java | sort || true
+          echo '=== Old capability files ==='
+          grep -RIl 'net\.minecraftforge\.common\.capabilities\|ForgeCapabilities' src/main/java | sort || true
+          echo '=== Old mod-bus context files ==='
+          grep -RIl 'FMLJavaModLoadingContext' src/main/java | sort || true
+          echo '=== Old tool action files ==='
+          grep -RIl 'net\.minecraftforge\.common\.ToolAction\|net\.minecraftforge\.common\.ToolActions' src/main/java | sort || true
+          echo '=== Old condition/crafting files ==='
+          grep -RIl 'net\.minecraftforge\.common\.crafting' src/main/java | sort || true
