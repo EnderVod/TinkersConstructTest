@@ -126,6 +126,9 @@ public class TConstruct {
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.alloyer.get(), (alloyer, side) -> alloyer.getTank());
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.heater.get(), (heater, side) -> heater.getItemHandler());
+    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.fluidCannon.get(), (cannon, side) -> cannon.getTank());
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.fluidCannon.get(), (cannon, side) -> cannon.getItemHandler());
 
     // Casting blocks expose their purpose-built casting tank directly. This replaces the old
     // LazyOptional capability holder on both the table and basin with the native NeoForge provider model.
