@@ -1,8 +1,10 @@
 package slimeknights.tconstruct.smeltery.block.entity.tank;
 
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.templates.FluidTank;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
 import slimeknights.tconstruct.smeltery.block.entity.ChannelBlockEntity;
 
 import javax.annotation.Nonnull;
@@ -10,6 +12,7 @@ import javax.annotation.Nonnull;
 /** Tank for channel contents */
 public class ChannelTank extends FluidTank {
 	private static final String TAG_LOCKED = "locked";
+	private static final RegistryAccess BUILTIN_LOOKUP = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
 
 	/**
 	 * Amount of fluid that may not be extracted this tick
@@ -67,16 +70,14 @@ public class ChannelTank extends FluidTank {
 		return stack;
 	}
 
-	@Override
 	public FluidTank readFromNBT(CompoundTag nbt) {
 		this.locked = nbt.getInt(TAG_LOCKED);
-		super.readFromNBT(nbt);
+		super.readFromNBT(BUILTIN_LOOKUP, nbt);
 		return this;
 	}
 
-	@Override
 	public CompoundTag writeToNBT(CompoundTag nbt) {
-		nbt = super.writeToNBT(nbt);
+		nbt = super.writeToNBT(BUILTIN_LOOKUP, nbt);
 		nbt.putInt(TAG_LOCKED, locked);
 		return nbt;
 	}
