@@ -5,7 +5,7 @@ import lombok.ToString;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent.Context;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import slimeknights.mantle.network.packet.BlockEntityPacket;
 import slimeknights.tconstruct.smeltery.block.entity.ChannelBlockEntity;
 
@@ -44,7 +44,7 @@ public class ChannelFlowPacket implements BlockEntityPacket<ChannelBlockEntity> 
   }
 
   @Override
-  public void handleBlockEntity(Context context, ChannelBlockEntity be) {
+  public void handleBlockEntity(IPayloadContext context, ChannelBlockEntity be) {
     be.setFlow(side, flow);
   }
 }
