@@ -1,6 +1,6 @@
 package net.minecraftforge.common.capabilities;
 
-import net.neoforged.neoforge.common.util.LazyOptional;
+import net.minecraftforge.common.util.LazyOptional;
 
 /** Lightweight identity token replacing the removed legacy Forge Capability class. */
 public class Capability<T> {
