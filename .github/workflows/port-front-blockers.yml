@@ -42,7 +42,7 @@ jobs:
               'import net.minecraftforge.common.crafting.conditions.ICondition.IContext;': 'import net.neoforged.neoforge.common.conditions.ICondition.IContext;',
               'import net.minecraftforge.fml.ModLoader;': 'import net.neoforged.fml.ModLoader;',
               'import net.minecraftforge.fml.event.IModBusEvent;': 'import net.neoforged.fml.event.IModBusEvent;',
-              'import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;': 'import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;',
+              'import net.minecraftforge.fml.ModLoadingContext;': 'import net.neoforged.fml.ModLoadingContext;',
               'import net.neoforged.neoforge.common.util.LazyOptional;': 'import net.minecraftforge.common.util.LazyOptional;',
           }
 
@@ -55,6 +55,18 @@ jobs:
               text = original
               for old, new in replacements.items():
                   text = text.replace(old, new)
+
+              # NeoForge 1.21 injects the mod bus into TConstruct; use the bridge already added to the port.
+              if 'FMLJavaModLoadingContext.get().getModEventBus()' in text:
+                  text = text.replace('FMLJavaModLoadingContext.get().getModEventBus()', 'slimeknights.tconstruct.TConstruct.getModBus()')
+              text = text.replace('import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;\n', '')
+              text = text.replace('import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;\n', '')
+
+              # ForgeConfigSpec was renamed to ModConfigSpec in NeoForge 1.21.
+              if 'net.minecraftforge.common.ForgeConfigSpec' in text:
+                  text = text.replace('net.minecraftforge.common.ForgeConfigSpec', 'net.neoforged.neoforge.common.ModConfigSpec')
+                  text = text.replace('ForgeConfigSpec', 'ModConfigSpec')
+
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
@@ -87,31 +99,44 @@ jobs:
           isolate_datagen(
               root / 'slimeknights/tconstruct/shared/TinkerCommons.java',
               [
-                  'import net.minecraft.data.DataGenerator;\n',
-                  'import net.minecraft.data.PackOutput;\n',
-                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n',
-                  'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
-                  'import slimeknights.tconstruct.common.data.model.ModelSpriteProvider;\n',
-                  'import slimeknights.tconstruct.common.data.model.TinkerBlockStateProvider;\n',
-                  'import slimeknights.tconstruct.common.data.model.TinkerItemModelProvider;\n',
-                  'import slimeknights.tconstruct.common.data.model.TinkerSpriteSourceProvider;\n',
-                  'import slimeknights.tconstruct.common.data.render.RenderFluidProvider;\n',
-                  'import slimeknights.tconstruct.common.data.render.RenderItemProvider;\n',
+                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n',
+                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.tconstruct.common.data.model.ModelSpriteProvider;\n', 'import slimeknights.tconstruct.common.data.model.TinkerBlockStateProvider;\n',
+                  'import slimeknights.tconstruct.common.data.model.TinkerItemModelProvider;\n', 'import slimeknights.tconstruct.common.data.model.TinkerSpriteSourceProvider;\n',
+                  'import slimeknights.tconstruct.common.data.render.RenderFluidProvider;\n', 'import slimeknights.tconstruct.common.data.render.RenderItemProvider;\n',
                   'import slimeknights.tconstruct.shared.data.CommonRecipeProvider;\n',
               ]
           )
-
           isolate_datagen(
               root / 'slimeknights/tconstruct/fluids/TinkerFluids.java',
               [
-                  'import net.minecraft.data.DataGenerator;\n',
-                  'import net.minecraft.data.PackOutput;\n',
-                  'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
                   'import slimeknights.mantle.fluid.texture.FluidTextureCameraProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidBlockstateModelProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidBucketModelProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidTextureProvider;\n',
-                  'import slimeknights.tconstruct.fluids.data.FluidTooltipProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidBlockstateModelProvider;\n', 'import slimeknights.tconstruct.fluids.data.FluidBucketModelProvider;\n',
+                  'import slimeknights.tconstruct.fluids.data.FluidTextureProvider;\n', 'import slimeknights.tconstruct.fluids.data.FluidTooltipProvider;\n',
+              ]
+          )
+          isolate_datagen(
+              root / 'slimeknights/tconstruct/smeltery/TinkerSmeltery.java',
+              [
+                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.tconstruct.smeltery.data.FluidContainerTransferProvider;\n',
+                  'import slimeknights.tconstruct.smeltery.data.SmelteryRecipeProvider;\n',
+              ]
+          )
+          isolate_datagen(
+              root / 'slimeknights/tconstruct/world/TinkerWorld.java',
+              [
+                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.tconstruct.world.data.MobEquipmentProvider;\n', 'import slimeknights.tconstruct.world.data.WorldRecipeProvider;\n',
+              ]
+          )
+          isolate_datagen(
+              root / 'slimeknights/tconstruct/world/TinkerStructures.java',
+              [
+                  'import net.minecraft.data.DataGenerator;\n', 'import net.minecraft.data.PackOutput;\n',
+                  'import net.neoforged.neoforge.common.data.ExistingFileHelper;\n', 'import net.neoforged.neoforge.data.event.GatherDataEvent;\n',
+                  'import slimeknights.tconstruct.world.data.StructureRepalleter;\n',
               ]
           )
 
@@ -120,13 +145,18 @@ jobs:
               print(path)
           PY
 
-      - name: Verify isolation targets
+      - name: Verify migration targets
         run: |
-          if grep -R "net.neoforged.neoforge.common.util.LazyOptional" -n src/main/java; then
-            echo 'Found stale NeoForge LazyOptional imports.'
+          if grep -R "net.neoforged.neoforge.common.util.LazyOptional\|FMLJavaModLoadingContext.get().getModEventBus()\|net.minecraftforge.common.ForgeConfigSpec" -n src/main/java; then
+            echo 'Found stale front blocker API references.'
             exit 1
           fi
-          if grep -n "void gatherData(final GatherDataEvent" src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java; then
+          if grep -n "void gatherData(final GatherDataEvent" \
+            src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java \
+            src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java \
+            src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java \
+            src/main/java/slimeknights/tconstruct/world/TinkerWorld.java \
+            src/main/java/slimeknights/tconstruct/world/TinkerStructures.java; then
             echo 'Datagen handler isolation did not complete.'
             exit 1
           fi
@@ -140,7 +170,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Reconnect legacy capability shim and isolate datagen'
+          git commit -m 'Migrate mod bus config and remaining datagen hooks'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
