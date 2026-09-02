@@ -7,13 +7,15 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import slimeknights.mantle.block.entity.MantleBlockEntity;
 import slimeknights.tconstruct.common.network.TinkerNetwork;
 import slimeknights.tconstruct.library.fluid.IMultitankListChange;
+import slimeknights.tconstruct.library.utils.TagUtil;
 import slimeknights.tconstruct.library.utils.WeakListenerList;
 import slimeknights.tconstruct.smeltery.block.entity.tank.ISmelteryTankHandler.FluidChange;
+import slimeknights.tconstruct.smeltery.item.TankItem;
 import slimeknights.tconstruct.smeltery.network.SmelteryTankUpdatePacket;
 
 import javax.annotation.Nonnull;
@@ -34,7 +36,7 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
   /** Current amount of fluid in the tank */
   @Getter
   private int contained;
-  /** Listener for the tank list changing */ // TODO: does this replace ISmelteryTankHandler?
+  /** Listener for the tank list changing */
   private final WeakListenerList tankListChange = new WeakListenerList();
 
   public SmelteryTank(T parent) {
@@ -44,9 +46,7 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     this.parent = parent;
   }
 
-  /**
-   * Called when the fluids change to sync to client
-   */
+  /** Called when the fluids change to sync to client. */
   public void syncFluids() {
     Level world = parent.getLevel();
     if (world != null && !world.isClientSide) {
@@ -55,38 +55,23 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     }
   }
 
-
-  /* Capacity and space */
-
-  /**
-   * Updates the maximum tank capacity
-   * @param maxCapacity  New max capacity
-   */
+  /** Updates the maximum tank capacity. */
   public void setCapacity(int maxCapacity) {
     this.capacity = maxCapacity;
   }
 
-  /**
-   * Gets the maximum amount of space in the smeltery tank
-   * @return  Tank capacity
-   */
+  /** Gets the maximum amount of space in the smeltery tank. */
   public int getCapacity() {
     return capacity;
   }
 
-  /**
-   * Gets the amount of empty space in the tank
-   * @return  Remaining space in the tank
-   */
+  /** Gets the amount of empty space in the tank. */
   public int getRemainingSpace() {
     if (contained >= capacity) {
       return 0;
     }
     return capacity - contained;
   }
-
-
-  /* Fluids */
 
   @Override
   public boolean isFluidValid(int tank, FluidStack stack) {
@@ -115,19 +100,14 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     if (tank < 0) {
       return 0;
     }
-    // index of the tank size means the "empty" segment
     int remaining = capacity - contained;
     if (tank == fluids.size()) {
       return remaining;
     }
-    // any valid index, return the amount contained and the extra space
     return fluids.get(tank).getAmount() + remaining;
   }
 
-  /**
-   * Moves the fluid with the passed index to the beginning/bottom of the fluid tank stack
-   * @param index  Index to move
-   */
+  /** Moves the fluid with the passed index to the beginning/bottom of the fluid tank stack. */
   public void moveFluidToBottom(int index) {
     if (index < fluids.size()) {
       FluidStack fluid = fluids.get(index);
@@ -138,38 +118,27 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     }
   }
 
-
-  /* Filling and draining */
-
   @Override
   public int fill(FluidStack resource, FluidAction action) {
-    // if full or nothing being filled, do nothing
     if (contained >= capacity || resource.isEmpty()) {
       return 0;
     }
 
-    // determine how much we can fill
     int usable = Math.min(capacity - contained, resource.getAmount());
-    // could be negative if the smeltery size changes then you try filling it
     if (usable <= 0) {
       return 0;
     }
 
-    // done here if just simulating
     if (action.simulate()) {
       return usable;
     }
 
-    // add contained fluid amount
     contained += usable;
 
-    // check if we already have the given liquid
     for (FluidStack fluid : fluids) {
-      if (fluid.isFluidEqual(resource)) {
-        // yup. add it
+      if (FluidStack.isSameFluidSameComponents(fluid, resource)) {
         fluid.grow(usable);
         parent.notifyFluidsChanged(FluidChange.CHANGED, fluid);
-        // notify as we lost the "empty tank"
         if (contained >= capacity) {
           tankListChange.run();
         }
@@ -177,12 +146,9 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
       }
     }
 
-    // not present yet, add it
-    resource = resource.copy();
-    resource.setAmount(usable);
+    resource = resource.copyWithAmount(usable);
     fluids.add(resource);
     parent.notifyFluidsChanged(FluidChange.ADDED, resource);
-    // notify as we added a new fluid
     tankListChange.run();
     return usable;
   }
@@ -195,34 +161,25 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     }
     boolean wasFull = contained >= capacity;
 
-    // simply drain the first one
     FluidStack fluid = fluids.get(0);
     int drainable = Math.min(maxDrain, fluid.getAmount());
+    FluidStack ret = fluid.copyWithAmount(drainable);
 
-    // copy contained fluid to return for accuracy
-    FluidStack ret = fluid.copy();
-    ret.setAmount(drainable);
-
-    // remove the fluid from the tank
     if (action.execute()) {
       fluid.shrink(drainable);
       contained -= drainable;
-      // if now empty, remove from the list
       if (fluid.getAmount() <= 0) {
         fluids.remove(fluid);
         parent.notifyFluidsChanged(FluidChange.REMOVED, fluid);
         tankListChange.run();
       } else {
         parent.notifyFluidsChanged(FluidChange.CHANGED, fluid);
-
-        // need to notify if we were full but are no longer as its adds an empty tank
         if (wasFull && contained < capacity) {
           tankListChange.run();
         }
       }
     }
 
-    // return drained fluid
     return ret;
   }
 
@@ -230,31 +187,22 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
   @Override
   public FluidStack drain(FluidStack toDrain, FluidAction action) {
     boolean wasFull = contained >= capacity;
-    // search for the resource
     ListIterator<FluidStack> iter = fluids.listIterator();
     while (iter.hasNext()) {
       FluidStack fluid = iter.next();
-      if (fluid.isFluidEqual(toDrain)) {
-        // if found, determine how much we can drain
+      if (FluidStack.isSameFluidSameComponents(fluid, toDrain)) {
         int drainable = Math.min(toDrain.getAmount(), fluid.getAmount());
+        FluidStack ret = fluid.copyWithAmount(drainable);
 
-        // copy contained fluid to return for accuracy
-        FluidStack ret = fluid.copy();
-        ret.setAmount(drainable);
-
-        // update tank if executing
         if (action.execute()) {
           fluid.shrink(drainable);
           contained -= drainable;
-          // if now empty, remove from the list
           if (fluid.getAmount() <= 0) {
             iter.remove();
             parent.notifyFluidsChanged(FluidChange.REMOVED, fluid);
             tankListChange.run();
           } else {
             parent.notifyFluidsChanged(FluidChange.CHANGED, fluid);
-
-            // need to notify if we were full but are no longer as its adds an empty tank
             if (wasFull && contained < capacity) {
               tankListChange.run();
             }
@@ -265,52 +213,46 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
       }
     }
 
-    // nothing drained
     return FluidStack.EMPTY;
   }
-
-  /* Saving and loading */
 
   private static final String TAG_FLUIDS = "fluids";
   private static final String TAG_CAPACITY = "capacity";
 
-  /**
-   * Updates fluids in the tank, typically from a packet
-   * @param fluids  List of fluids
-   */
+  /** Updates fluids in the tank, typically from a packet. */
   public void setFluids(List<FluidStack> fluids) {
     FluidStack oldFirst = getFluidInTank(0);
     this.fluids.clear();
     this.fluids.addAll(fluids);
     contained = fluids.stream().mapToInt(FluidStack::getAmount).reduce(0, Integer::sum);
     FluidStack newFirst = getFluidInTank(0);
-    if (!oldFirst.isFluidEqual(newFirst)) {
+    if (!FluidStack.isSameFluidSameComponents(oldFirst, newFirst)) {
       parent.notifyFluidsChanged(FluidChange.ORDER_CHANGED, newFirst);
       tankListChange.run();
     }
   }
 
-  /** Writes the tank to NBT */
+  /** Writes the tank to NBT using Minecraft 1.21 registry-aware FluidStack serialization. */
   public CompoundTag write(CompoundTag nbt) {
     ListTag list = new ListTag();
     for (FluidStack liquid : fluids) {
-      CompoundTag fluidTag = new CompoundTag();
-      liquid.writeToNBT(fluidTag);
-      list.add(fluidTag);
+      list.add(liquid.save(TagUtil.BUILTIN_LOOKUP));
     }
     nbt.put(TAG_FLUIDS, list);
     nbt.putInt(TAG_CAPACITY, capacity);
     return nbt;
   }
 
-  /** Reads the tank from NBT */
+  /** Reads the tank from NBT, retaining compatibility with Tinkers' legacy FluidName/Amount data. */
   public void read(CompoundTag tag) {
     ListTag list = tag.getList(TAG_FLUIDS, Tag.TAG_COMPOUND);
     fluids.clear();
     contained = 0;
     for (int i = 0; i < list.size(); i++) {
       CompoundTag fluidTag = list.getCompound(i);
-      FluidStack fluid = FluidStack.loadFluidStackFromNBT(fluidTag);
+      FluidStack fluid = fluidTag.contains("FluidName", Tag.TAG_STRING)
+        ? TankItem.readFluid(fluidTag)
+        : FluidStack.parseOptional(TagUtil.BUILTIN_LOOKUP, fluidTag);
       if (!fluid.isEmpty()) {
         fluids.add(fluid);
         contained += fluid.getAmount();
@@ -318,9 +260,6 @@ public class SmelteryTank<T extends MantleBlockEntity & ISmelteryTankHandler> im
     }
     capacity = tag.getInt(TAG_CAPACITY);
   }
-
-
-  /* Listeners */
 
   @Override
   public <TE> void addTankListListener(TE parent, Consumer<TE> listener) {
