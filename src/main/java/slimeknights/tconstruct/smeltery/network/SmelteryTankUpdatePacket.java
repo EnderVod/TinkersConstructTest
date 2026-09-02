@@ -1,31 +1,39 @@
 package slimeknights.tconstruct.smeltery.network;
 
-import lombok.AllArgsConstructor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.network.NetworkEvent.Context;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import slimeknights.mantle.network.packet.BlockEntityPacket;
 import slimeknights.tconstruct.smeltery.block.entity.tank.ISmelteryTankHandler;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Packet sent whenever the contents of the smeltery tank change.
- * TODO 1.21: make record
- */
-@AllArgsConstructor
+/** Packet sent whenever the contents of the smeltery tank change. */
 public class SmelteryTankUpdatePacket implements BlockEntityPacket<ISmelteryTankHandler> {
   private final BlockPos pos;
   private final List<FluidStack> fluids;
+
+  /**
+   * Snapshots the tank contents when the packet is created so later tank mutations cannot race async encoding.
+   */
+  public SmelteryTankUpdatePacket(BlockPos pos, List<FluidStack> fluids) {
+    this.pos = pos;
+    this.fluids = fluids.stream().map(FluidStack::copy).toList();
+  }
 
   public SmelteryTankUpdatePacket(FriendlyByteBuf buffer) {
     pos = buffer.readBlockPos();
     int size = buffer.readVarInt();
     fluids = new ArrayList<>(size);
+    RegistryFriendlyByteBuf registryBuffer = (RegistryFriendlyByteBuf) buffer;
     for (int i = 0; i < size; i++) {
-      fluids.add(buffer.readFluidStack());
+      FluidStack fluid = FluidStack.OPTIONAL_STREAM_CODEC.decode(registryBuffer);
+      if (!fluid.isEmpty()) {
+        fluids.add(fluid);
+      }
     }
   }
 
@@ -33,8 +41,9 @@ public class SmelteryTankUpdatePacket implements BlockEntityPacket<ISmelteryTank
   public void encode(FriendlyByteBuf buffer) {
     buffer.writeBlockPos(pos);
     buffer.writeVarInt(fluids.size());
+    RegistryFriendlyByteBuf registryBuffer = (RegistryFriendlyByteBuf) buffer;
     for (FluidStack fluid : fluids) {
-      buffer.writeFluidStack(fluid);
+      FluidStack.OPTIONAL_STREAM_CODEC.encode(registryBuffer, fluid);
     }
   }
 
@@ -49,7 +58,7 @@ public class SmelteryTankUpdatePacket implements BlockEntityPacket<ISmelteryTank
   }
 
   @Override
-  public void handleBlockEntity(Context context, ISmelteryTankHandler be) {
+  public void handleBlockEntity(IPayloadContext context, ISmelteryTankHandler be) {
     be.updateFluidsFromPacket(fluids);
   }
 }
