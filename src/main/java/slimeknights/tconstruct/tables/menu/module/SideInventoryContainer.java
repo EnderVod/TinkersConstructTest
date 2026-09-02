@@ -5,12 +5,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.items.IItemHandler;
-import net.minecraftforge.items.wrapper.EmptyHandler;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.items.IItemHandler;
 import slimeknights.mantle.inventory.BaseContainerMenu;
+import slimeknights.mantle.inventory.EmptyItemHandler;
 import slimeknights.mantle.inventory.SmartItemHandlerSlot;
 
 import javax.annotation.Nullable;
@@ -21,7 +21,7 @@ public class SideInventoryContainer<TILE extends BlockEntity> extends BaseContai
   private final int columns;
   @Getter
   private final int slotCount;
-  protected final LazyOptional<IItemHandler> itemHandler;
+  protected final IItemHandler itemHandler;
 
   public SideInventoryContainer(MenuType<?> containerType, int windowId, Inventory inv, @Nullable TILE tile, int x, int y, int columns) {
     this(containerType, windowId, inv, tile, null, x, y, columns);
@@ -30,31 +30,33 @@ public class SideInventoryContainer<TILE extends BlockEntity> extends BaseContai
   public SideInventoryContainer(MenuType<?> containerType, int windowId, Inventory inv, @Nullable TILE tile, @Nullable Direction inventoryDirection, int x, int y, int columns) {
     super(containerType, windowId, inv, tile);
 
-    // must have a TE
-    if (tile == null) {
-      this.itemHandler = LazyOptional.of(() -> EmptyHandler.INSTANCE);
-    } else {
-      this.itemHandler = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, inventoryDirection);
+    // NeoForge 1.21 capabilities are queried from the level and returned directly rather than via LazyOptional.
+    IItemHandler handler = null;
+    if (tile != null) {
+      Level level = tile.getLevel();
+      if (level != null) {
+        handler = level.getCapability(Capabilities.ItemHandler.BLOCK, tile.getBlockPos(), tile.getBlockState(), tile, inventoryDirection);
+      }
     }
+    this.itemHandler = handler == null ? EmptyItemHandler.INSTANCE : handler;
 
     // slot properties
-    IItemHandler handler = itemHandler.orElse(EmptyHandler.INSTANCE);
-    this.slotCount = handler.getSlots();
-    this.columns = columns;
-    int rows = this.slotCount / columns;
-    if (this.slotCount % columns != 0) {
+    this.slotCount = itemHandler.getSlots();
+    this.columns = Math.max(1, columns);
+    int rows = this.slotCount / this.columns;
+    if (this.slotCount % this.columns != 0) {
       rows++;
     }
 
     // add slots
     int index = 0;
     for (int r = 0; r < rows; r++) {
-      for (int c = 0; c < columns; c++) {
+      for (int c = 0; c < this.columns; c++) {
         if (index >= this.slotCount) {
           break;
         }
 
-        this.addSlot(this.createSlot(handler, index, x + c * 18, y + r * 18));
+        this.addSlot(this.createSlot(itemHandler, index, x + c * 18, y + r * 18));
         index++;
       }
     }
