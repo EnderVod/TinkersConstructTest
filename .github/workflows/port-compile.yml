@@ -62,6 +62,16 @@ jobs:
           set -o pipefail
           ./gradlew compileJava --no-daemon --stacktrace 2>&1 | tee compile.log
 
+      - name: Build compact compiler summary
+        if: always()
+        run: |
+          if [ -f compile.log ]; then
+            grep -E '(^|: )[[:alnum:]_./-]+\.java:[0-9]+: error:|^[[:space:]]*error:|cannot find symbol|package .* does not exist' compile.log \
+              | sed -E 's#^.*?/src/main/java/#src/main/java/#' \
+              | head -400 > compile-errors.txt || true
+          fi
+          test -s compile-errors.txt || echo 'No javac error lines captured.' > compile-errors.txt
+
       - name: Upload compiler log
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,6 +79,14 @@ jobs:
           name: tinkers-compile-log
           path: compile.log
           if-no-files-found: warn
+
+      - name: Upload compiler error summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinkers-compile-errors
+          path: compile-errors.txt
+          if-no-files-found: error
 
       - name: Upload port source snapshot
         if: always()
