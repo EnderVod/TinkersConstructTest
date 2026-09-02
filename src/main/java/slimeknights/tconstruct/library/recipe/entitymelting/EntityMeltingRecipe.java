@@ -8,7 +8,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import slimeknights.mantle.data.loadable.field.ContextKey;
 import slimeknights.mantle.data.loadable.primitive.IntLoadable;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
@@ -21,9 +21,7 @@ import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 
 import java.util.Collection;
 
-/**
- * Recipe to melt an entity into a fluid
- */
+/** Recipe to melt an entity into a fluid. */
 @RequiredArgsConstructor
 public class EntityMeltingRecipe implements ICustomOutputRecipe<IEmptyContainer> {
   public static final RecordLoadable<EntityMeltingRecipe> LOADER = RecordLoadable.create(
@@ -41,33 +39,18 @@ public class EntityMeltingRecipe implements ICustomOutputRecipe<IEmptyContainer>
   @Getter
   private final int damage;
 
-  /**
-   * Checks if the recipe matches the given type
-   * @param type  Type
-   * @return  True if it matches
-   */
   public boolean matches(EntityType<?> type) {
     return ingredient.test(type);
   }
 
-  /** Gets the non-entity sensitive recipe result */
   public FluidStack getOutput() {
     return output.get();
   }
 
-  /**
-   * Gets the output for this recipe
-   * @param entity  Entity being melted
-   * @return  Fluid output
-   */
   public FluidStack getOutput(LivingEntity entity) {
     return output.copy();
   }
 
-  /**
-   * Gets a collection of inputs for filtering in JEI
-   * @return  Collection of types
-   */
   public Collection<EntityType<?>> getInputs() {
     return ingredient.getTypes();
   }
@@ -82,7 +65,7 @@ public class EntityMeltingRecipe implements ICustomOutputRecipe<IEmptyContainer>
     return TinkerRecipeTypes.ENTITY_MELTING.get();
   }
 
-  /** @deprecated use {@link #matches(EntityType)}*/
+  /** @deprecated use {@link #matches(EntityType)} */
   @Deprecated
   @Override
   public boolean matches(IEmptyContainer inv, Level worldIn) {
