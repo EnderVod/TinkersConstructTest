@@ -1,7 +1,7 @@
 package slimeknights.tconstruct.shared.block;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.BlockSource;
+import net.minecraft.core.dispenser.BlockSource;
 import net.minecraft.core.dispenser.OptionalDispenseItemBehavior;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.BlockItem;
