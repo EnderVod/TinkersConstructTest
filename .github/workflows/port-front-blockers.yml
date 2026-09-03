@@ -30,7 +30,7 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate shared runtime APIs
+      - name: Migrate flowing fluid base APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -50,44 +50,19 @@ jobs:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          # AbstractGlassBlock/GlassBlock were removed in 1.21; TransparentBlock is the vanilla glass base now.
-          edit('shared/TinkerCommons.java', [
-              ('import net.minecraft.world.level.block.GlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
-              ('ItemObject<GlassBlock> clearGlass', 'ItemObject<TransparentBlock> clearGlass'),
-              ('new GlassBlock(glassBuilder(MapColor.NONE))', 'new TransparentBlock(glassBuilder(MapColor.NONE))'),
-              ('ItemObject<GlassBlock> soulGlass', 'ItemObject<TransparentBlock> soulGlass'),
-          ])
-          edit('shared/block/SoulGlassBlock.java', [
-              ('import net.minecraft.world.level.block.GlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
-              ('extends GlassBlock', 'extends TransparentBlock'),
-          ])
-          edit('shared/block/ClearStainedGlassBlock.java', [
-              ('import net.minecraft.world.level.block.AbstractGlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
-              ('extends AbstractGlassBlock', 'extends TransparentBlock'),
-              ('public float[] getBeaconColorMultiplier(BlockState state, LevelReader world, BlockPos pos, BlockPos beaconPos) {\n    return this.glassColor.getRgb();\n  }',
-               'public Integer getBeaconColorMultiplier(BlockState state, LevelReader world, BlockPos pos, BlockPos beaconPos) {\n    return 0xFF000000 | this.glassColor.getColor();\n  }'),
-          ])
-
-          # Forge ToolAction was replaced by NeoForge ItemAbility in 1.21.
-          for rel in ['shared/block/WeatheringPlatformBlock.java', 'shared/block/WaxedPlatformBlock.java']:
-              edit(rel, [
-                  ('import net.minecraftforge.common.ToolAction;', 'import net.neoforged.neoforge.common.ItemAbility;'),
-                  ('import net.minecraftforge.common.ToolActions;', 'import net.neoforged.neoforge.common.ItemAbilities;'),
-                  ('ToolAction toolAction', 'ItemAbility toolAction'),
-                  ('ToolActions.AXE_', 'ItemAbilities.AXE_'),
-              ])
-
-          # Block pathfinding types were renamed in vanilla 1.21.
-          edit('shared/block/KnightMetalBlock.java', [
+          # Mantle 1.21 builds all standard flowing fluids on NeoForge BaseFlowingFluid.
+          edit('fluids/TinkerFluids.java', [
               ('import net.minecraft.world.level.pathfinder.BlockPathTypes;', 'import net.minecraft.world.level.pathfinder.PathType;'),
-              ('public BlockPathTypes getBlockPathType(', 'public PathType getBlockPathType('),
-              ('return BlockPathTypes.DAMAGE_OTHER;', 'return PathType.DAMAGE_OTHER;'),
+              ('import net.minecraftforge.common.ForgeMod;', 'import net.neoforged.neoforge.common.NeoForgeMod;'),
+              ('import net.minecraftforge.common.SoundActions;', 'import net.neoforged.neoforge.common.SoundActions;'),
+              ('import net.neoforged.neoforge.fluids.ForgeFlowingFluid;', 'import net.neoforged.neoforge.fluids.BaseFlowingFluid;'),
+              ('ForgeMod.enableMilkFluid();', 'NeoForgeMod.enableMilkFluid();'),
+              ('FlowingFluidObject<ForgeFlowingFluid>', 'FlowingFluidObject<BaseFlowingFluid>'),
+              ('BlockPathTypes.LAVA', 'PathType.LAVA'),
           ])
-
-          # NeoForge patches ServerPlayer.openMenu directly; NetworkHooks is gone.
-          edit('shared/CommonsEvents.java', [
-              ('import net.minecraftforge.network.NetworkHooks;\n', ''),
-              ('NetworkHooks.openScreen(serverPlayer, provider, pos);', 'serverPlayer.openMenu(provider, pos);'),
+          edit('fluids/fluids/SlimeFluid.java', [
+              ('import net.neoforged.neoforge.fluids.ForgeFlowingFluid;', 'import net.neoforged.neoforge.fluids.BaseFlowingFluid;'),
+              ('extends ForgeFlowingFluid', 'extends BaseFlowingFluid'),
           ])
 
           print(f'Updated {len(changed)} Java files')
@@ -95,24 +70,24 @@ jobs:
               print(path)
           PY
 
-      - name: Verify shared runtime migration
+      - name: Verify flowing fluid migration
         run: |
-          if grep -R "AbstractGlassBlock\|world.level.block.GlassBlock\|net.minecraftforge.common.ToolAction\|net.minecraftforge.common.ToolActions\|BlockPathTypes\|net.minecraftforge.network.NetworkHooks" -n \
-            src/main/java/slimeknights/tconstruct/shared; then
-            echo 'Found stale shared runtime API references.'
+          if grep -R "ForgeFlowingFluid\|net.minecraftforge.common.ForgeMod\|net.minecraftforge.common.SoundActions\|BlockPathTypes" -n \
+            src/main/java/slimeknights/tconstruct/fluids; then
+            echo 'Found stale flowing-fluid API references.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No shared runtime changes needed.'
+            echo 'No flowing-fluid changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate shared runtime APIs to 1.21'
+          git commit -m 'Migrate fluids to BaseFlowingFluid'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
