@@ -31,57 +31,52 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate modifiable arrows to ProjectileItem
+      - name: Migrate enchantment registry and tooltip flags
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          arrow = Path('src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java')
-          text = arrow.read_text(encoding='utf-8')
-          replacements = {
-              'package slimeknights.tconstruct.library.tools.item;\n\n': 'package slimeknights.tconstruct.library.tools.item;\n\nimport net.minecraft.core.Direction;\nimport net.minecraft.core.Position;\n',
-              'import net.minecraft.world.entity.projectile.AbstractArrow;\n': 'import net.minecraft.world.entity.projectile.AbstractArrow;\nimport net.minecraft.world.entity.projectile.Projectile;\n',
-              'import java.util.List;\n': 'import javax.annotation.Nullable;\nimport java.util.List;\n',
-              '  public AbstractArrow createArrow(Level level, ItemStack stack, LivingEntity shooter) {\n    ModifiableArrow arrow = new ModifiableArrow(level, shooter);\n    arrow.onCreate(stack, shooter);\n    return arrow;\n  }': '  public AbstractArrow createArrow(Level level, ItemStack stack, LivingEntity shooter, @Nullable ItemStack weapon) {\n    ModifiableArrow arrow = new ModifiableArrow(level, shooter);\n    arrow.onCreate(stack, shooter);\n    return arrow;\n  }\n\n  @Override\n  public Projectile asProjectile(Level level, Position position, ItemStack stack, Direction direction) {\n    ModifiableArrow arrow = new ModifiableArrow(level, position.x(), position.y(), position.z());\n    arrow.onCreate(stack, null);\n    arrow.pickup = AbstractArrow.Pickup.ALLOWED;\n    return arrow;\n  }'
-          }
-          for old, new in replacements.items():
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
               if old not in text:
-                  raise SystemExit(f'Missing expected arrow token: {old!r}')
-              text = text.replace(old, new)
-          arrow.write_text(text, encoding='utf-8')
+                  raise SystemExit(f'Missing expected token in {path}: {old!r}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
 
-          tools = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
-          text = tools.read_text(encoding='utf-8')
-          for old in [
-              'import slimeknights.tconstruct.tools.logic.ModifiableArrowDispenserBehavior;\n',
-              '      DispenserBlock.registerBehavior(TinkerTools.arrow.get(), ModifiableArrowDispenserBehavior.INSTANCE);\n'
-          ]:
-              if old not in text:
-                  raise SystemExit(f'Missing expected TinkerTools token: {old!r}')
-              text = text.replace(old, '')
-          tools.write_text(text, encoding='utf-8')
+          packet = 'src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java'
+          replace(packet,
+                  'import net.minecraft.core.registries.Registries;\n',
+                  'import net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.core.registries.Registries;\n')
+          replace(packet,
+                  'import net.neoforged.neoforge.registries.ForgeRegistries;\n',
+                  '')
+          replace(packet, 'ForgeRegistries.ENCHANTMENTS', 'BuiltInRegistries.ENCHANTMENT')
+
+          tooltip = 'src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java'
+          replace(tooltip, 'import net.minecraft.world.item.ItemStack.TooltipPart;\n', '')
+          replace(tooltip,
+                  '  /** Flags used when not holding control or shift */\n  private static final int DEFAULT_HIDE_FLAGS = TooltipPart.ENCHANTMENTS.getMask();\n  /** Flags used when holding control or shift */\n  private static final int MODIFIER_HIDE_FLAGS = TooltipPart.ENCHANTMENTS.getMask() | TooltipPart.MODIFIERS.getMask();',
+                  '  /** 1.21 removed ItemStack tooltip bitmasks. Keep the legacy hook neutral until component-based suppression is restored. */\n  private static final int DEFAULT_HIDE_FLAGS = 0;\n  private static final int MODIFIER_HIDE_FLAGS = 0;')
           PY
-          rm src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
 
       - name: Verify targeted migration
         shell: bash
         run: |
-          grep -Fq 'public Projectile asProjectile' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java
-          grep -Fq '@Nullable ItemStack weapon' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java
-          test ! -e src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
-          test -z "$(grep -F 'ModifiableArrowDispenserBehavior' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
+          grep -Fq 'BuiltInRegistries.ENCHANTMENT' src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java
+          test -z "$(grep -F 'ForgeRegistries' src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java || true)"
+          test -z "$(grep -F 'TooltipPart' src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java || true)"
+          grep -Fq 'DEFAULT_HIDE_FLAGS = 0' src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java
 
       - name: Commit grouped migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
-                     src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
-                     src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
+          git add src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java \
+                  src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate modifiable arrows to 1.21 ProjectileItem API'
+          git commit -m 'Migrate registry and tooltip APIs to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
