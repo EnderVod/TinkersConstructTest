@@ -71,7 +71,8 @@ jobs:
 
       - name: Verify custom ingredient wiring
         run: |
-          grep -q 'toolHookIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'toolHookIngredientType' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath()' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
           test -z "$(grep 'CraftingHelper.register(ToolHookIngredient' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
           grep -q 'ingredient.getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/library/recipe/material/ShapedMaterialRecipe.java
           grep -q 'getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java
