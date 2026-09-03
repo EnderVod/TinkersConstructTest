@@ -1,7 +1,6 @@
 package slimeknights.tconstruct.tools.modules;
 
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.TierSortingRegistry;
 import net.neoforged.neoforge.fluids.FluidStack;
 import slimeknights.mantle.data.loadable.primitive.BooleanLoadable;
 import slimeknights.mantle.data.loadable.primitive.IntLoadable;
@@ -18,6 +17,7 @@ import slimeknights.tconstruct.library.tools.definition.module.mining.IsEffectiv
 import slimeknights.tconstruct.library.tools.definition.module.mining.IsEffectiveToolHook;
 import slimeknights.tconstruct.library.tools.definition.module.mining.MiningTierToolHook;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
+import slimeknights.tconstruct.library.utils.HarvestTiers;
 
 import java.util.List;
 
@@ -45,20 +45,14 @@ public record MeltingFluidEffectiveModule(IJsonPredicate<BlockState> predicate, 
 
   @Override
   public boolean isToolEffective(IToolStackView tool, BlockState state) {
-    // outer predicate must match, typically this is a very inclusive predicate
     if (predicate.matches(state)) {
-      // tool must have capacity
       int capacity = ToolTankHelper.TANK_HELPER.getCapacity(tool);
       if (capacity > 0) {
-        // tool must have available space
-        // we could check that the output fits but that's a little unreliable as there may be an ore multiplier and the drop might be different than the block
         FluidStack currentFluid = ToolTankHelper.TANK_HELPER.getFluid(tool);
         if (capacity > currentFluid.getAmount()) {
-          // new fluid must match current fluid
           FluidStack meltingResult = MeltingRecipeLookup.findResult(state.getBlock(), temperature);
           return (!meltingResult.isEmpty() && (currentFluid.isEmpty() || currentFluid.isFluidEqual(meltingResult)))
-                 // tier must also match
-                 && (ignoreTier || TierSortingRegistry.isCorrectTierForDrops(MiningTierToolHook.getTier(tool), state));
+                 && (ignoreTier || HarvestTiers.isCorrectTierForDrops(MiningTierToolHook.getTier(tool), state));
         }
       }
     }
