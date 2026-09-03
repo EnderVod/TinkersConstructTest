@@ -31,7 +31,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate enchantment registry and tooltip flags
+      - name: Migrate potion components and alpha-blocked hooks
         shell: bash
         run: |
           python3 - <<'PY'
@@ -44,39 +44,121 @@ jobs:
                   raise SystemExit(f'Missing expected token in {path}: {old!r}')
               p.write_text(text.replace(old, new), encoding='utf-8')
 
-          packet = 'src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java'
-          replace(packet,
-                  'import net.minecraft.core.registries.Registries;\n',
-                  'import net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.core.registries.Registries;\n')
-          replace(packet,
-                  'import net.neoforged.neoforge.registries.ForgeRegistries;\n',
-                  '')
-          replace(packet, 'ForgeRegistries.ENCHANTMENTS', 'BuiltInRegistries.ENCHANTMENT')
+          # Fluid potion effects now read the POTION_CONTENTS data component.
+          path = 'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java'
+          replace(path,
+                  'package slimeknights.tconstruct.library.modifiers.fluid.entity;\n\n',
+                  'package slimeknights.tconstruct.library.modifiers.fluid.entity;\n\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.nbt.CompoundTag;\n')
+          replace(path,
+                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
+                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
+          replace(path, 'import java.util.List;\n', 'import java.util.ArrayList;\nimport java.util.List;\n')
+          replace(path,
+                  '    // must match the tag predicate\n    if (target != null && predicate.test(fluid.getTag())) {\n      List<MobEffectInstance> effects = PotionUtils.getPotion(fluid.getTag()).getEffects();',
+                  '    // 1.21 fluid stacks store potion data in components; synthesize the legacy base-potion tag for existing predicates.\n    PotionContents contents = fluid.get(DataComponents.POTION_CONTENTS);\n    CompoundTag potionTag = new CompoundTag();\n    if (contents != null) {\n      contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key -> potionTag.putString("Potion", key.location().toString()));\n    }\n    if (target != null && contents != null && predicate.test(potionTag)) {\n      List<MobEffectInstance> effects = new ArrayList<>();\n      contents.forEachEffect(effects::add);')
 
-          tooltip = 'src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java'
-          replace(tooltip, 'import net.minecraft.world.item.ItemStack.TooltipPart;\n', '')
-          replace(tooltip,
-                  '  /** Flags used when not holding control or shift */\n  private static final int DEFAULT_HIDE_FLAGS = TooltipPart.ENCHANTMENTS.getMask();\n  /** Flags used when holding control or shift */\n  private static final int MODIFIER_HIDE_FLAGS = TooltipPart.ENCHANTMENTS.getMask() | TooltipPart.MODIFIERS.getMask();',
-                  '  /** 1.21 removed ItemStack tooltip bitmasks. Keep the legacy hook neutral until component-based suppression is restored. */\n  private static final int DEFAULT_HIDE_FLAGS = 0;\n  private static final int MODIFIER_HIDE_FLAGS = 0;')
+          path = 'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java'
+          replace(path,
+                  'package slimeknights.tconstruct.library.modifiers.fluid.block;\n\n',
+                  'package slimeknights.tconstruct.library.modifiers.fluid.block;\n\nimport net.minecraft.core.component.DataComponents;\n')
+          replace(path, 'import net.minecraft.world.item.alchemy.Potion;\n', '')
+          replace(path,
+                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
+                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
+          replace(path, 'import java.util.List;\n', 'import java.util.ArrayList;\nimport java.util.List;\n')
+          replace(path,
+                  '    CompoundTag tag = fluid.getTag();\n    if (predicate.test(tag) && context.isOffsetReplaceable()) {\n      Potion potion = PotionUtils.getPotion(fluid.getTag());\n      List<MobEffectInstance> effects = potion.getEffects();',
+                  '    PotionContents contents = fluid.get(DataComponents.POTION_CONTENTS);\n    CompoundTag tag = new CompoundTag();\n    if (contents != null) {\n      contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key -> tag.putString("Potion", key.location().toString()));\n    }\n    if (contents != null && predicate.test(tag) && context.isOffsetReplaceable()) {\n      List<MobEffectInstance> effects = new ArrayList<>();\n      contents.forEachEffect(effects::add);')
+
+          path = 'src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java'
+          replace(path,
+                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
+                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
+          replace(path, '          PotionUtils.getColor(potion);\n', '')
+          replace(path,
+                  '          PotionUtils.addPotionTooltip(potion.getEffects(), tooltip, 1f / getDivisor(modifier));',
+                  '          PotionContents.addPotionTooltip(potion.getEffects(), tooltip::add, 1f / getDivisor(modifier), 20.0f);')
+          replace(path,
+                  '          ).withStyle(style -> style.withColor(PotionUtils.getColor(potion)));',
+                  '          ).withStyle(style -> style.withColor(PotionContents.getColor(potion.getEffects())));')
+
+          path = 'src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java'
+          replace(path,
+                  'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.Tag;\n',
+                  'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.component.DataComponents;\n')
+          replace(path,
+                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
+                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
+          replace(path,
+                  '          CompoundTag tag = stack.getTag();\n          if (tag != null && tag.contains(PotionUtils.TAG_POTION, Tag.TAG_STRING)) {\n            tool.getPersistentData().putString(modifier, tag.getString(PotionUtils.TAG_POTION));\n          }',
+                  '          PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);\n          if (contents != null) {\n            contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key ->\n              tool.getPersistentData().putString(modifier, key.location().toString()));\n          }')
+          replace(path,
+                  '          CompoundTag tag = stack.getTag();\n          if (tag != null) {\n            ItemStack copy = result.copy();\n            ToolStack.from(copy).getPersistentData().putString(modifier, tag.getString(PotionUtils.TAG_POTION));\n            return copy;\n          }\n          return result;',
+                  '          PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);\n          if (contents != null) {\n            var potionKey = contents.potion().flatMap(holder -> holder.unwrapKey());\n            if (potionKey.isPresent()) {\n              ItemStack copy = result.copy();\n              ToolStack.from(copy).getPersistentData().putString(modifier, potionKey.get().location().toString());\n              return copy;\n            }\n          }\n          return result;')
+
+          # This JEI helper still receives a legacy CompoundTag. Preserve subtype uniqueness without the removed PotionUtils parser.
+          path = 'src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java'
+          replace(path, 'import net.minecraft.world.item.alchemy.PotionUtils;\n', '')
+          p = Path(path)
+          text = p.read_text(encoding='utf-8')
+          old = '''    Potion potionType = PotionUtils.getPotion(tag);\n    String potionTypeString = potionType.getName("");\n    StringBuilder stringBuilder = new StringBuilder(potionTypeString);\n    List<MobEffectInstance> effects = PotionUtils.getAllEffects(tag);\n    for (MobEffectInstance effect : effects) {\n      stringBuilder.append(";").append(effect);\n    }\n    return stringBuilder.toString();'''
+          if old not in text:
+              raise SystemExit('Missing JEI potion subtype body')
+          p.write_text(text.replace(old, '    return tag.toString();'), encoding='utf-8')
+
+          # NeoForge 21.1 removed LootingLevelEvent. Keep slot bookkeeping, but defer Tinkers-specific looting until the new loot-context hook is ported.
+          path = 'src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java'
+          p = Path(path)
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('import net.neoforged.neoforge.event.entity.living.LootingLevelEvent;\n', '')
+          text = text.replace('    NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, ModifierLootingHandler::onLooting);\n', '')
+          start = text.find('  /** Applies the looting bonus for modifiers */')
+          end = text.find('  /** Called when a player leaves the server to clear the face */')
+          if start < 0 or end < 0 or end <= start:
+              raise SystemExit('Could not locate legacy looting handler block')
+          text = text[:start] + '  // TODO 1.21 alpha: port Tinkers-specific looting to the new loot-context/enchantment pipeline.\n\n' + text[end:]
+          p.write_text(text, encoding='utf-8')
+
+          # The old LivingHurtEvent pipeline manually recomputed armor/protection. Disable only that legacy stage for alpha rather than double-reducing damage.
+          path = 'src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java'
+          p = Path(path)
+          text = p.read_text(encoding='utf-8').replace('import net.neoforged.neoforge.event.entity.living.LivingHurtEvent;\n', '')
+          start = text.find('  // low priority to minimize conflict as we apply reduction as if we are the final change to damage before vanilla')
+          end = text.find('  @SubscribeEvent\n  static void livingDamage(LivingDamageEvent.Pre event)')
+          if start < 0 or end < 0 or end <= start:
+              raise SystemExit('Could not locate legacy LivingHurtEvent block')
+          text = text[:start] + '  // TODO 1.21 alpha: port legacy MODIFY_HURT/protection math to DamageContainer reduction modifiers.\n\n' + text[end:]
+          p.write_text(text, encoding='utf-8')
           PY
 
       - name: Verify targeted migration
         shell: bash
         run: |
-          grep -Fq 'BuiltInRegistries.ENCHANTMENT' src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java
-          test -z "$(grep -F 'ForgeRegistries' src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java || true)"
-          test -z "$(grep -F 'TooltipPart' src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java || true)"
-          grep -Fq 'DEFAULT_HIDE_FLAGS = 0' src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java
+          test -z "$(grep -R -F 'PotionUtils' \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java \
+            src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java \
+            src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java || true)"
+          grep -Fq 'DataComponents.POTION_CONTENTS' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
+          grep -Fq 'PotionContents.addPotionTooltip' src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java
+          test -z "$(grep -F 'LootingLevelEvent' src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java || true)"
+          test -z "$(grep -F 'LivingHurtEvent' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java || true)"
 
       - name: Commit grouped migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/modifiers/UpdateModifiersPacket.java \
-                  src/main/java/slimeknights/tconstruct/library/tools/helper/TooltipUtil.java
+          git add src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
+                  src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
+                  src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java \
+                  src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java \
+                  src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
+                  src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate registry and tooltip APIs to 1.21'
+          git commit -m 'Migrate potion components and isolate alpha combat hooks'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
