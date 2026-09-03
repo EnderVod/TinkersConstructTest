@@ -29,7 +29,7 @@ import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
-import net.minecraftforge.common.ToolActions;
+import net.neoforged.neoforge.common.ItemAbilities;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import slimeknights.mantle.client.TooltipKey;
@@ -183,7 +183,7 @@ public class ModifiableCrossbowItem extends ModifiableLauncherItem {
         return InteractionResultHolder.pass(bow);
       }
       // can block while filled with ammo
-      if (ModifierUtil.canPerformAction(tool, ToolActions.SHIELD_BLOCK)) {
+      if (ModifierUtil.canPerformAction(tool, ItemAbilities.SHIELD_BLOCK)) {
         player.startUsingItem(hand);
         return InteractionResultHolder.consume(bow);
       }

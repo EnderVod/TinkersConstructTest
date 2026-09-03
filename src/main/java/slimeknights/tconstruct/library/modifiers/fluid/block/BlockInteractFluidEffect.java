@@ -18,7 +18,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.common.ForgeHooks;
+import net.neoforged.neoforge.common.CommonHooks;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.bus.api.Event.Result;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -103,7 +103,7 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
       Result useItem = Result.DEFAULT;
       Result useBlock = Result.DEFAULT;
       if (player != null) {
-        PlayerInteractEvent.RightClickBlock event = ForgeHooks.onRightClickBlock(player, hand, pos, hitResult);
+        PlayerInteractEvent.RightClickBlock event = CommonHooks.onRightClickBlock(player, hand, pos, hitResult);
         if (event.isCanceled()) {
           // if successful, swing hand
           if (event.getCancellationResult().consumesAction()) {

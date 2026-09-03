@@ -30,7 +30,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraftforge.common.ForgeMod;
-import net.minecraftforge.common.ToolActions;
+import net.neoforged.neoforge.common.ItemAbilities;
 import net.minecraftforge.common.crafting.conditions.IConditionBuilder;
 import net.neoforged.neoforge.fluids.FluidType;
 import slimeknights.mantle.client.TooltipKey;
@@ -829,19 +829,19 @@ public class ModifierProvider extends AbstractModifierProvider implements ICondi
     buildModifier(ModifierIds.pathing)
       .levelDisplay(ModifierLevelDisplay.NO_LEVELS)
       .addModule(ExtinguishCampfireModule.INSTANCE)
-      .addModule(ToolActionTransformModule.builder(ToolActions.SHOVEL_FLATTEN, SoundEvents.SHOVEL_FLATTEN).requireGround().build())
-      .addModule(ToolActionWalkerTransformModule.builder(ToolActions.SHOVEL_FLATTEN, SoundEvents.SHOVEL_FLATTEN).amount(0.5f, 1))
+      .addModule(ToolActionTransformModule.builder(ItemAbilities.SHOVEL_FLATTEN, SoundEvents.SHOVEL_FLATTEN).requireGround().build())
+      .addModule(ToolActionWalkerTransformModule.builder(ItemAbilities.SHOVEL_FLATTEN, SoundEvents.SHOVEL_FLATTEN).amount(0.5f, 1))
       .addModule(ShowOffhandModule.DISALLOW_BROKEN).addModule(ShowInteractionSourceModule.INSTANCE);
     buildModifier(ModifierIds.stripping)
       .levelDisplay(ModifierLevelDisplay.NO_LEVELS)
-      .addModule(ToolActionTransformModule.builder(ToolActions.AXE_STRIP, SoundEvents.AXE_STRIP).build())
-      .addModule(ToolActionTransformModule.builder(ToolActions.AXE_SCRAPE, SoundEvents.AXE_SCRAPE).eventId(LevelEvent.PARTICLES_SCRAPE).build())
-      .addModule(ToolActionTransformModule.builder(ToolActions.AXE_WAX_OFF, SoundEvents.AXE_WAX_OFF).eventId(LevelEvent.PARTICLES_WAX_OFF).build())
+      .addModule(ToolActionTransformModule.builder(ItemAbilities.AXE_STRIP, SoundEvents.AXE_STRIP).build())
+      .addModule(ToolActionTransformModule.builder(ItemAbilities.AXE_SCRAPE, SoundEvents.AXE_SCRAPE).eventId(LevelEvent.PARTICLES_SCRAPE).build())
+      .addModule(ToolActionTransformModule.builder(ItemAbilities.AXE_WAX_OFF, SoundEvents.AXE_WAX_OFF).eventId(LevelEvent.PARTICLES_WAX_OFF).build())
       .addModule(ShowOffhandModule.DISALLOW_BROKEN).addModule(ShowInteractionSourceModule.INSTANCE);
     buildModifier(ModifierIds.tilling)
       .levelDisplay(ModifierLevelDisplay.NO_LEVELS)
-      .addModule(ToolActionTransformModule.builder(ToolActions.HOE_TILL, SoundEvents.HOE_TILL).build())
-      .addModule(ToolActionWalkerTransformModule.builder(ToolActions.HOE_TILL, SoundEvents.HOE_TILL).amount(0.5f, 1))
+      .addModule(ToolActionTransformModule.builder(ItemAbilities.HOE_TILL, SoundEvents.HOE_TILL).build())
+      .addModule(ToolActionWalkerTransformModule.builder(ItemAbilities.HOE_TILL, SoundEvents.HOE_TILL).amount(0.5f, 1))
       .addModule(ShowOffhandModule.DISALLOW_BROKEN).addModule(ShowInteractionSourceModule.INSTANCE);
     buildModifier(ModifierIds.brushing).levelDisplay(ModifierLevelDisplay.NO_LEVELS).addModule(BrushModule.INSTANCE);
     buildModifier(ModifierIds.harvest).levelDisplay(ModifierLevelDisplay.NO_LEVELS)
