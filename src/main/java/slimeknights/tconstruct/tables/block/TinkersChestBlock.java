@@ -18,7 +18,7 @@ public class TinkersChestBlock extends ChestBlock {
   }
 
   @Override
-  public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter world, BlockPos pos, Player player) {
+  public ItemStack getCloneItemStack(net.minecraft.world.level.LevelReader world, BlockPos pos, BlockState state) {
     ItemStack stack = new ItemStack(this);
     if (world.getBlockEntity(pos) instanceof TinkersChestBlockEntity te && te.hasColor()) {
       stack.set(DataComponents.DYED_COLOR, new DyedItemColor(te.getColor(), true));

@@ -94,7 +94,7 @@ public class CastingTankBlock extends InventoryBlock implements ITankBlock, Enti
 
   @Override
   public void setPlacedBy(Level worldIn, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
-    CompoundTag nbt = stack.getTag();
+    CompoundTag nbt = slimeknights.tconstruct.library.utils.TagUtil.getTag(stack);
     if (nbt != null && worldIn.getBlockEntity(pos) instanceof CastingTankBlockEntity tank) {
       tank.updateTank(nbt.getCompound(NBTTags.TANK));
     }
@@ -138,7 +138,7 @@ public class CastingTankBlock extends InventoryBlock implements ITankBlock, Enti
   }
 
   @Override
-  public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter world, BlockPos pos, Player player) {
+  public ItemStack getCloneItemStack(net.minecraft.world.level.LevelReader world, BlockPos pos, BlockState state) {
     return ITankBlockEntity.getCloneItemStack(new ItemStack(this), world, pos);
   }
 

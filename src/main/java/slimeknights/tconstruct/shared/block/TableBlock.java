@@ -90,8 +90,4 @@ public abstract class TableBlock extends InventoryBlock implements SimpleWaterlo
     return state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : super.getFluidState(state);
   }
 
-  @Override
-  public boolean isPathfindable(BlockState state, BlockGetter worldIn, BlockPos pos, PathComputationType type) {
-    return false;
-  }
 }

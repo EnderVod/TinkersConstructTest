@@ -31,10 +31,6 @@ public class CongealedSlimeBlock extends Block {
     return SHAPE;
   }
 
-  @Override
-  public boolean isPathfindable(BlockState state, BlockGetter worldIn, BlockPos pos, PathComputationType type) {
-    return false;
-  }
 
   @Nullable
   @Override

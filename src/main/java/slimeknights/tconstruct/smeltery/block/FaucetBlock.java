@@ -75,11 +75,6 @@ public class FaucetBlock extends Block implements EntityBlock {
     return SHAPES.get(state.getValue(FACING));
   }
 
-  @SuppressWarnings("deprecation")
-  @Override
-  public boolean isPathfindable(BlockState state, BlockGetter worldIn, BlockPos pos, PathComputationType type) {
-    return false;
-  }
 
 
   /* Tile entity */

@@ -151,10 +151,6 @@ public class ChannelBlock extends Block implements EntityBlock {
     DIRECTION_MAP.values().forEach(builder::add);
   }
 
-  @Override
-  public boolean isPathfindable(BlockState state, BlockGetter worldIn, BlockPos pos, PathComputationType type) {
-    return false;
-  }
 
   /* Basic block logic */
 
