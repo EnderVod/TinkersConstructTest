@@ -19,6 +19,7 @@ import slimeknights.tconstruct.common.multiblock.IMasterLogic;
 import slimeknights.tconstruct.library.client.model.ModelProperties;
 import slimeknights.tconstruct.library.fluid.FluidTankAnimated;
 import slimeknights.tconstruct.library.utils.NBTTags;
+import slimeknights.tconstruct.library.utils.TagUtil;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 import slimeknights.tconstruct.smeltery.block.component.SearedTankBlock;
 import slimeknights.tconstruct.smeltery.block.component.SearedTankBlock.TankType;
@@ -27,14 +28,8 @@ import slimeknights.tconstruct.smeltery.block.entity.ITankBlockEntity;
 import javax.annotation.Nonnull;
 
 public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITankBlockEntity {
-  /** Max capacity for the tank */
   public static final int DEFAULT_CAPACITY = FluidType.BUCKET_VOLUME * 4;
 
-  /**
-   * Gets the capacity for the given block
-   * @param block  block
-   * @return  Capacity
-   */
   public static int getCapacity(Block block) {
     if (block instanceof ITankBlock) {
       return ((ITankBlock) block).getCapacity();
@@ -42,11 +37,6 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
     return DEFAULT_CAPACITY;
   }
 
-  /**
-   * Gets the capacity for the given item
-   * @param item  item
-   * @return  Capacity
-   */
   public static int getCapacity(Item item) {
     if (item instanceof BlockItem) {
       return getCapacity(((BlockItem)item).getBlock());
@@ -54,10 +44,8 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
     return DEFAULT_CAPACITY;
   }
 
-  /** Internal fluid tank instance. Exposed to NeoForge through a registered block capability provider. */
   @Getter
   protected final FluidTankAnimated tank;
-  /** Last comparator strength to reduce block updates */
   @Getter @Setter
   private int lastStrength = -1;
 
@@ -67,22 +55,15 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
                      : TinkerSmeltery.searedTank.get(TankType.FUEL_TANK));
   }
 
-  /** Main constructor */
   public TankBlockEntity(BlockPos pos, BlockState state, ITankBlock block) {
     this(TinkerSmeltery.tank.get(), pos, state, block);
   }
 
-  /** Extendable constructor */
   @SuppressWarnings("WeakerAccess")
   protected TankBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, ITankBlock block) {
     super(type, pos, state);
     tank = new FluidTankAnimated(block.getCapacity(), this);
   }
-
-
-  /*
-   * Tank methods
-   */
 
   @Nonnull
   @Override
@@ -92,7 +73,6 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
                     .with(ModelProperties.TANK_CAPACITY, tank.getCapacity()).build();
   }
 
-  /** Updates the light for this tank using {@link SearedTankBlock#LIGHT} */
   public static void updateLight(BlockEntity be, IFluidTank tank) {
     Level level = be.getLevel();
     if (level != null && !level.isClientSide) {
@@ -125,19 +105,11 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
     }
   }
 
-  /*
-   * NBT
-   */
-
-  /**
-   * Updates the tank from an NBT tag, used in the block
-   * @param nbt  tank NBT
-   */
   public void updateTank(CompoundTag nbt) {
     if (nbt.isEmpty()) {
       tank.setFluid(FluidStack.EMPTY);
     } else {
-      tank.readFromNBT(nbt);
+      tank.readFromNBT(TagUtil.BUILTIN_LOOKUP, nbt);
       updateLight(this, tank);
     }
   }
@@ -157,15 +129,12 @@ public class TankBlockEntity extends SmelteryComponentBlockEntity implements ITa
   @Override
   public void saveSynced(CompoundTag tag) {
     super.saveSynced(tag);
-    // want tank on the client on world load
     if (!tank.isEmpty()) {
-      tag.put(NBTTags.TANK, tank.writeToNBT(new CompoundTag()));
+      tag.put(NBTTags.TANK, tank.writeToNBT(TagUtil.BUILTIN_LOOKUP, new CompoundTag()));
     }
   }
 
-  /** Interface for blocks to return their capacity */
   public interface ITankBlock {
-    /** Gets the capacity for this tank */
     int getCapacity();
   }
 }
