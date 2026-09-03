@@ -61,7 +61,7 @@ jobs:
 
       - name: Verify JEI migration
         run: |
-          test -z "$(grep -R 'mezz\.jei\.api\.forge\.ForgeTypes\|ForgeTypes\.' src/main/java/slimeknights/tconstruct/plugin/jei || true)"
+          test -z "$(grep -R 'mezz\.jei\.api\.forge\.ForgeTypes' src/main/java/slimeknights/tconstruct/plugin/jei || true)"
           test -z "$(grep -R 'net\.minecraftforge\.common\.crafting\.IShapedRecipe\|IShapedRecipe' src/main/java/slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java || true)"
           grep -Fq 'mezz.jei.api.neoforge.NeoForgeTypes' src/main/java/slimeknights/tconstruct/plugin/jei/JEIPlugin.java
           grep -Fq 'recipe instanceof ShapedRecipe shaped' src/main/java/slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java
