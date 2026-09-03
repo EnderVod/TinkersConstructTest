@@ -30,47 +30,66 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate recipe builder FinishedRecipe imports
+      - name: Migrate book client APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path('src/main/java')
-          old = 'import net.minecraft.data.recipes.FinishedRecipe;'
-          new = 'import slimeknights.mantle.recipe.data.FinishedRecipe;'
+          root = Path('src/main/java/slimeknights/tconstruct/library/client/book/content')
           changed = []
 
-          for path in root.rglob('*.java'):
-              text = path.read_text(encoding='utf-8')
-              if old in text:
-                  path.write_text(text.replace(old, new), encoding='utf-8')
+          def edit(rel, replacements):
+              path = root / rel
+              original = path.read_text(encoding='utf-8')
+              text = original
+              for old, new in replacements:
+                  if old not in text:
+                      raise SystemExit(f'Missing expected source in {rel}: {old!r}')
+                  text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          if not changed:
-              raise SystemExit('No legacy FinishedRecipe imports found; refusing empty migration')
+          for rel in ['ContentModifier.java', 'AbstractMaterialContent.java', 'FluidEffectContent.java']:
+              edit(rel, [
+                  ('import net.minecraftforge.common.ForgeI18n;', 'import net.minecraft.client.resources.language.I18n;'),
+                  ('ForgeI18n.getPattern(', 'I18n.get('),
+              ])
 
-          print(f'Updated {len(changed)} Java files')
+          edit('ContentTool.java', [
+              ('import net.minecraftforge.common.ForgeI18n;\n', ''),
+              ('import net.minecraftforge.common.crafting.IShapedRecipe;', 'import net.minecraft.world.item.crafting.ShapedRecipe;'),
+              ('import net.neoforged.neoforge.registries.ForgeRegistries;', 'import net.minecraft.core.registries.BuiltInRegistries;'),
+              ('ForgeI18n.getPattern(', 'I18n.get('),
+              ('ForgeRegistries.ITEMS.getValue(new ResourceLocation(this.toolName))', 'BuiltInRegistries.ITEM.get(ResourceLocation.parse(this.toolName))'),
+              ('recipe instanceof IShapedRecipe<?> shaped', 'recipe instanceof ShapedRecipe shaped'),
+              ('shaped.getRecipeWidth()', 'shaped.getWidth()'),
+              ('shaped.getRecipeHeight()', 'shaped.getHeight()'),
+          ])
+
+          print(f'Updated {len(changed)} book files')
           for path in changed:
               print(path)
           PY
 
-      - name: Verify FinishedRecipe bridge migration
+      - name: Verify book client API migration
         run: |
-          if grep -R "import net.minecraft.data.recipes.FinishedRecipe;" -n src/main/java; then
-            echo 'Found stale vanilla FinishedRecipe imports.'
+          if grep -R "ForgeI18n\|IShapedRecipe\|ForgeRegistries\|new ResourceLocation(this.toolName)" -n \
+            src/main/java/slimeknights/tconstruct/library/client/book/content; then
+            echo 'Found stale book client APIs.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No FinishedRecipe migration changes needed.'
+            echo 'No book client migration changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Use Mantle FinishedRecipe bridge'
+          git commit -m 'Migrate book client APIs to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
