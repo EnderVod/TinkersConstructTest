@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   migrate:
@@ -22,67 +23,27 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate TinkerSmeltery holder generics
+      - name: Replace removed stack copy helper
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          path = Path("src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java")
+          path = Path("src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java")
           source = path.read_text()
-
-          legacy_count = source.count("DeferredHolder<?,")
-          if legacy_count != 56:
-              raise SystemExit(f"expected 56 legacy DeferredHolder declarations, got {legacy_count}")
-          never_count = source.count("Blocks::never")
-          if never_count != 2:
-              raise SystemExit(f"expected 2 Blocks::never references, got {never_count}")
-
-          source = source.replace(
-              "private static final StatePredicate NEVER = Blocks::never;",
-              "private static final StatePredicate NEVER = (state, getter, pos) -> false;"
-          )
-          source = source.replace(
-              ".isValidSpawn(Blocks::never)",
-              ".isValidSpawn((state, getter, pos, type) -> false)"
-          )
-
-          source, creative = re.subn(
-              r"DeferredHolder<\?,CreativeModeTab>",
-              "DeferredHolder<CreativeModeTab,CreativeModeTab>", source)
-          source, block_entities = re.subn(
-              r"DeferredHolder<\?,BlockEntityType<([^>]+)>>",
-              r"DeferredHolder<BlockEntityType<?>,BlockEntityType<\1>>", source)
-          source, typed_recipes = re.subn(
-              r"DeferredHolder<\?,TypeAwareRecipeSerializer<([^>]+)>>",
-              r"DeferredHolder<RecipeSerializer<?>,TypeAwareRecipeSerializer<\1>>", source)
-          source, recipes = re.subn(
-              r"DeferredHolder<\?,RecipeSerializer<([^>]+)>>",
-              r"DeferredHolder<RecipeSerializer<?>,RecipeSerializer<\1>>", source)
-          source, menus = re.subn(
-              r"DeferredHolder<\?,MenuType<([^>]+)>>",
-              r"DeferredHolder<MenuType<?>,MenuType<\1>>", source)
-
-          counts = (creative, block_entities, typed_recipes, recipes, menus)
-          if counts != (1, 19, 24, 8, 4):
-              raise SystemExit(f"unexpected replacement counts: {counts}")
-          if "DeferredHolder<?," in source:
-              raise SystemExit("legacy DeferredHolder generic remains")
-          if "Blocks::never" in source:
-              raise SystemExit("private Blocks::never reference remains")
-
+          old = "ItemHandlerHelper.copyStackWithSize(held, 1)"
+          new = "held.copyWithCount(1)"
+          if source.count(old) != 1:
+              raise SystemExit(f"expected exactly one removed stack-copy helper, got {source.count(old)}")
+          source = source.replace(old, new)
           path.write_text(source)
           PY
 
       - name: Verify migration
         shell: bash
         run: |
-          file=src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java
-          ! grep -Fq 'DeferredHolder<?,' "$file"
-          ! grep -Fq 'Blocks::never' "$file"
-          grep -Fq 'DeferredHolder<CreativeModeTab,CreativeModeTab>' "$file"
-          grep -Fq 'DeferredHolder<BlockEntityType<?>,BlockEntityType<SmelteryComponentBlockEntity>>' "$file"
+          file=src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          ! grep -Fq 'ItemHandlerHelper.copyStackWithSize(held, 1)' "$file"
+          grep -Fq 'held.copyWithCount(1)' "$file"
           git diff --check
 
       - name: Commit migration
@@ -90,7 +51,13 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java
-          git diff --cached --quiet && exit 0
-          git commit -m 'Migrate smeltery registry holder generics to 1.21'
-          git push origin HEAD:1.21.1-neoforge
+          git add src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          git diff --cached --quiet || {
+            git commit -m 'Replace removed casting stack copy helper'
+            git push origin HEAD:1.21.1-neoforge
+          }
+
+      - name: Trigger fresh compile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run port-compile.yml --repo "$GITHUB_REPOSITORY" --ref 1.21.1-neoforge
