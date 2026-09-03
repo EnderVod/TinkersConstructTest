@@ -23,19 +23,24 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply guarded recipe compatibility batch
+      - name: Apply guarded shared and fluid compatibility batch
         run: python3 .github/scripts/port-smeltery-batch.py
 
       - name: Verify migration
         shell: bash
         run: |
-          ! grep -R -Fq 'new FluidStack(fluid, fluid.getAmount() * itemCost)' src/main/java/slimeknights/tconstruct/library/recipe
-          grep -Fq 'RecipeHolder<ICastingRecipe>' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
-          grep -Fq 'currentRecipeId' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
-          grep -Fq 'ResourceLocation.parse(tags.getString(TAG_RECIPE))' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
-          grep -Fq 'HolderLookup.Provider access' src/main/java/slimeknights/tconstruct/library/recipe/casting/ItemCastingRecipe.java
-          grep -Fq 'copyWithAmount' src/main/java/slimeknights/tconstruct/library/recipe/melting/MaterialMeltingRecipe.java
-          grep -Fq 'new ArrayList<>(getLevel().getRecipeManager().getRecipesFor' src/main/java/slimeknights/tconstruct/smeltery/block/entity/module/alloying/MultiAlloyingModule.java
+          ! grep -Fq 'Blocks::never' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          grep -Fq 'Registries.TRIGGER_TYPE, getResource("block_container_opened")' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          grep -Fq 'Integer getBeaconColorMultiplier' src/main/java/slimeknights/tconstruct/shared/block/ClearStainedGlassPaneBlock.java
+          grep -Fq 'source.pos().relative(source.state()' src/main/java/slimeknights/tconstruct/shared/block/PlaceBlockDispenserBehavior.java
+          grep -Fq 'TConstruct.getResource("fluid_container")' src/main/java/slimeknights/tconstruct/fluids/FluidClientEvents.java
+          grep -R -Fq 'public ItemInteractionResult interact(' src/main/java/slimeknights/tconstruct/fluids/util
+          grep -Fq 'CauldronInteraction.WATER.map().put' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          grep -Fq 'TinkerEffects.holder(TinkerEffects.bouncy)' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          grep -Fq 'effect.getCures().clear()' src/main/java/slimeknights/tconstruct/fluids/block/MobEffectLiquidBlock.java
+          grep -Fq 'entity.igniteForSeconds(burnTime)' src/main/java/slimeknights/tconstruct/fluids/block/BurningLiquidBlock.java
+          grep -Fq 'EffectCures.MILK' src/main/java/slimeknights/tconstruct/shared/item/CheeseItem.java
+          grep -Fq 'FoodProperties.PossibleEffect' src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java
           git diff --check
 
       - name: Commit compatibility batch
@@ -45,7 +50,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate recipe holders and fluid copies to 1.21'
+            git commit -m 'Migrate shared and fluid APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
