@@ -30,116 +30,89 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate RegistryObject declarations to DeferredHolder
+      - name: Migrate shared runtime APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path('src/main/java')
-
-          def replace_registry_types(text: str) -> str:
-              token = 'RegistryObject<'
-              pos = 0
-              output = []
-              while True:
-                  idx = text.find(token, pos)
-                  if idx < 0:
-                      output.append(text[pos:])
-                      break
-                  output.append(text[pos:idx])
-                  lt = idx + len('RegistryObject')
-                  depth = 0
-                  end = lt
-                  while end < len(text):
-                      char = text[end]
-                      if char == '<':
-                          depth += 1
-                      elif char == '>':
-                          depth -= 1
-                          if depth == 0:
-                              break
-                      end += 1
-                  if end >= len(text):
-                      raise SystemExit('Unmatched RegistryObject generic in source')
-                  inner = text[lt + 1:end].strip()
-                  if inner.startswith('? extends '):
-                      base = inner[len('? extends '):].strip()
-                      replacement = f'DeferredHolder<{base}, ? extends {base}>'
-                  else:
-                      replacement = f'DeferredHolder<? super {inner}, {inner}>'
-                  output.append(replacement)
-                  pos = end + 1
-              return ''.join(output)
-
+          root = Path('src/main/java/slimeknights/tconstruct')
           changed = []
-          for path in root.rglob('*.java'):
+
+          def edit(rel, replacements):
+              path = root / rel
               original = path.read_text(encoding='utf-8')
-              if 'import net.neoforged.neoforge.registries.RegistryObject;' not in original:
-                  continue
-
-              text = replace_registry_types(original)
-              text = text.replace(
-                  'import net.neoforged.neoforge.registries.RegistryObject;',
-                  'import net.neoforged.neoforge.registries.DeferredHolder;')
-
-              if path.name == 'TinkerTools.java':
-                  text = text.replace(
-                      'RegistryObject.create(getResource("minotaur_axe"), ForgeRegistries.ITEMS)',
-                      'DeferredHolder.create(Registries.ITEM, getResource("minotaur_axe"))')
-                  if 'import net.minecraft.core.registries.Registries;' not in text:
-                      marker = 'package slimeknights.tconstruct.tools;\n\n'
-                      text = text.replace(marker, marker + 'import net.minecraft.core.registries.Registries;\n')
-
-              if path.name == 'TinkerCommons.java':
-                  text = text.replace(
-                      'RegistryObject.create(glowBlock.getId(), ForgeRegistries.BLOCKS)',
-                      'DeferredHolder.create(Registries.BLOCK, glowBlock.getId())')
-
-              if path.name == 'TinkerStructures.java':
-                  text = text.replace('ForgeRegistries.FEATURES', 'Registries.FEATURE')
-
-              if path.name == 'TinkerWorld.java':
-                  text = text.replace('ForgeRegistries.Keys.BIOME_MODIFIERS', 'NeoForgeRegistries.Keys.BIOME_MODIFIERS')
-                  if 'import net.neoforged.neoforge.registries.NeoForgeRegistries;' not in text:
-                      marker = 'import net.neoforged.neoforge.registries.DeferredHolder;\n'
-                      text = text.replace(marker, marker + 'import net.neoforged.neoforge.registries.NeoForgeRegistries;\n')
-
-              remaining = text.replace('NeoForgeRegistries.', '')
-              if 'ForgeRegistries.' not in remaining:
-                  text = text.replace('import net.neoforged.neoforge.registries.ForgeRegistries;\n', '')
-
+              text = original
+              for old, new in replacements:
+                  if old not in text:
+                      raise SystemExit(f'Missing expected source in {rel}: {old!r}')
+                  text = text.replace(old, new)
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
+
+          # AbstractGlassBlock/GlassBlock were removed in 1.21; TransparentBlock is the vanilla glass base now.
+          edit('shared/TinkerCommons.java', [
+              ('import net.minecraft.world.level.block.GlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
+              ('ItemObject<GlassBlock> clearGlass', 'ItemObject<TransparentBlock> clearGlass'),
+              ('new GlassBlock(glassBuilder(MapColor.NONE))', 'new TransparentBlock(glassBuilder(MapColor.NONE))'),
+              ('ItemObject<GlassBlock> soulGlass', 'ItemObject<TransparentBlock> soulGlass'),
+          ])
+          edit('shared/block/SoulGlassBlock.java', [
+              ('import net.minecraft.world.level.block.GlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
+              ('extends GlassBlock', 'extends TransparentBlock'),
+          ])
+          edit('shared/block/ClearStainedGlassBlock.java', [
+              ('import net.minecraft.world.level.block.AbstractGlassBlock;', 'import net.minecraft.world.level.block.TransparentBlock;'),
+              ('extends AbstractGlassBlock', 'extends TransparentBlock'),
+              ('public float[] getBeaconColorMultiplier(BlockState state, LevelReader world, BlockPos pos, BlockPos beaconPos) {\n    return this.glassColor.getRgb();\n  }',
+               'public Integer getBeaconColorMultiplier(BlockState state, LevelReader world, BlockPos pos, BlockPos beaconPos) {\n    return 0xFF000000 | this.glassColor.getColor();\n  }'),
+          ])
+
+          # Forge ToolAction was replaced by NeoForge ItemAbility in 1.21.
+          for rel in ['shared/block/WeatheringPlatformBlock.java', 'shared/block/WaxedPlatformBlock.java']:
+              edit(rel, [
+                  ('import net.minecraftforge.common.ToolAction;', 'import net.neoforged.neoforge.common.ItemAbility;'),
+                  ('import net.minecraftforge.common.ToolActions;', 'import net.neoforged.neoforge.common.ItemAbilities;'),
+                  ('ToolAction toolAction', 'ItemAbility toolAction'),
+                  ('ToolActions.AXE_', 'ItemAbilities.AXE_'),
+              ])
+
+          # Block pathfinding types were renamed in vanilla 1.21.
+          edit('shared/block/KnightMetalBlock.java', [
+              ('import net.minecraft.world.level.pathfinder.BlockPathTypes;', 'import net.minecraft.world.level.pathfinder.PathType;'),
+              ('public BlockPathTypes getBlockPathType(', 'public PathType getBlockPathType('),
+              ('return BlockPathTypes.DAMAGE_OTHER;', 'return PathType.DAMAGE_OTHER;'),
+          ])
+
+          # NeoForge patches ServerPlayer.openMenu directly; NetworkHooks is gone.
+          edit('shared/CommonsEvents.java', [
+              ('import net.minecraftforge.network.NetworkHooks;\n', ''),
+              ('NetworkHooks.openScreen(serverPlayer, provider, pos);', 'serverPlayer.openMenu(provider, pos);'),
+          ])
 
           print(f'Updated {len(changed)} Java files')
           for path in changed:
               print(path)
           PY
 
-      - name: Verify registry migration
+      - name: Verify shared runtime migration
         run: |
-          if grep -R "net.neoforged.neoforge.registries.RegistryObject\|RegistryObject.create" -n src/main/java; then
-            echo 'Found stale RegistryObject references.'
-            exit 1
-          fi
-          if grep -n "DeferredRegister.create(ForgeRegistries.FEATURES\|key(ForgeRegistries.Keys.BIOME_MODIFIERS" \
-            src/main/java/slimeknights/tconstruct/world/TinkerStructures.java \
-            src/main/java/slimeknights/tconstruct/world/TinkerWorld.java; then
-            echo 'Found stale world registry keys.'
+          if grep -R "AbstractGlassBlock\|world.level.block.GlassBlock\|net.minecraftforge.common.ToolAction\|net.minecraftforge.common.ToolActions\|BlockPathTypes\|net.minecraftforge.network.NetworkHooks" -n \
+            src/main/java/slimeknights/tconstruct/shared; then
+            echo 'Found stale shared runtime API references.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No registry changes needed.'
+            echo 'No shared runtime changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate RegistryObject declarations to DeferredHolder'
+          git commit -m 'Migrate shared runtime APIs to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
