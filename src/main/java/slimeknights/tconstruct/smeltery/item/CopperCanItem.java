@@ -13,9 +13,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.registries.ForgeRegistries;
 import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.recipe.FluidValues;
@@ -34,11 +32,6 @@ public class CopperCanItem extends Item {
 
   public CopperCanItem(Properties properties) {
     super(properties);
-  }
-
-  @Override
-  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
-    return new CopperCanFluidHandler(stack);
   }
 
   @Override
@@ -132,8 +125,8 @@ public class CopperCanItem extends Item {
     CompoundTag nbt = stack.getTag();
     if (nbt != null && nbt.contains(TAG_FLUID, Tag.TAG_STRING)) {
       ResourceLocation location = ResourceLocation.tryParse(nbt.getString(TAG_FLUID));
-      if (location != null && ForgeRegistries.FLUIDS.containsKey(location)) {
-        Fluid fluid = ForgeRegistries.FLUIDS.getValue(location);
+      if (location != null && BuiltInRegistries.FLUID.containsKey(location)) {
+        Fluid fluid = BuiltInRegistries.FLUID.get(location);
         if (fluid != null) {
           return fluid;
         }

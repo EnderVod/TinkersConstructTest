@@ -35,6 +35,7 @@ import slimeknights.tconstruct.shared.TinkerMaterials;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 import slimeknights.tconstruct.smeltery.item.TankItem;
 import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;
+import slimeknights.tconstruct.smeltery.item.CopperCanFluidHandler;
 import slimeknights.tconstruct.tables.TinkerTables;
 import slimeknights.tconstruct.tools.TinkerModifiers;
 import slimeknights.tconstruct.tools.TinkerToolParts;
@@ -142,6 +143,7 @@ public class TConstruct {
         event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);
       }
     }
+    event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new CopperCanFluidHandler(stack), TinkerSmeltery.copperCan.get());
   }
 
   public static ResourceLocation getResource(String name) {

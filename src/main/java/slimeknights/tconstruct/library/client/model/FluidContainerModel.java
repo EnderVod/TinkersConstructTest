@@ -41,7 +41,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluid;
-import net.minecraftforge.client.RenderTypeGroup;
+import net.neoforged.neoforge.client.RenderTypeGroup;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.client.model.CompositeModel;
 import net.neoforged.neoforge.client.model.DynamicFluidContainerModel;

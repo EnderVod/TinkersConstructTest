@@ -8,7 +8,6 @@ import net.minecraft.world.level.block.SoundType;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.neoforge.registries.ForgeRegistries;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.registration.GeodeItemObject.BudSize;
@@ -91,11 +90,11 @@ public enum Sounds {
 
   @SubscribeEvent
   public static void registerSounds(RegisterEvent event) {
-    if (event.getRegistryKey() == Registries.SOUND_EVENT) {
+    event.register(Registries.SOUND_EVENT, helper -> {
       for (Sounds sound : values()) {
-        ForgeRegistries.SOUND_EVENTS.register(sound.sound.getLocation(), sound.getSound());
+        helper.register(sound.sound.getLocation(), sound.getSound());
       }
-    }
+    });
   }
 
   /** Makes sound type for crystals */

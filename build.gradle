@@ -88,6 +88,15 @@ sourceSets {
             exclude 'slimeknights/tconstruct/tools/data/material/MaterialStatsDataProvider.java'
             exclude 'slimeknights/tconstruct/tools/data/material/MaterialTraitsDataProvider.java'
             exclude 'slimeknights/tconstruct/tools/data/material/TrimMaterialProvider.java'
+            // 1.20 recipe generator adapters still use FinishedRecipe; runtime recipes do not depend on them.
+            exclude 'slimeknights/tconstruct/library/recipe/molding/MoldingRecipeBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/material/ShapedMaterialConsumerBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialsConsumerBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialRecipeBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/entitymelting/EntityMeltingRecipeBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/fuel/MeltingFuelBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/MaterialSwappingRecipeBuilder.java'
+            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/ToolBuildingRecipeBuilder.java'
         }
         resources {
             srcDir 'src/generated/resources'
