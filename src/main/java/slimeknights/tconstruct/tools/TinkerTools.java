@@ -1,6 +1,6 @@
 package slimeknights.tconstruct.tools;
 
-import net.minecraft.advancements.critereon.ItemPredicate;
+import net.minecraft.advancements.critereon.ItemSubPredicate;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.DataGenerator;
@@ -185,6 +185,10 @@ public final class TinkerTools extends TinkerModule {
   public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =
     INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));
 
+  /** Item sub-predicate matching Tinkers tool data in advancements and commands. */
+  public static final DeferredHolder<ItemSubPredicate.Type<?>, ItemSubPredicate.Type<ToolStackItemPredicate>> toolStackItemPredicateType =
+    ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath(), () -> new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC));
+
   /*
    * Items
    */
@@ -315,7 +319,6 @@ public final class TinkerTools extends TinkerModule {
   @SubscribeEvent
   void registerRecipeSerializers(RegisterEvent event) {
     if (event.getRegistryKey() == Registries.RECIPE_SERIALIZER) {
-      ItemPredicate.register(ToolStackItemPredicate.ID, ToolStackItemPredicate::deserialize);
 
       // register tool stats that are not defined directly in the class; safer than static init registration
       ToolStats.register(OverslimeModule.OVERSLIME_STAT);
