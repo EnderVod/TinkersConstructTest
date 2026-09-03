@@ -30,93 +30,115 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate deprecated tag preference loot entry to codec
+      - name: Migrate item display contexts to NeoForge enum extensions
         run: |
-          cat > src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java <<'JAVA'
-          package slimeknights.tconstruct.library.json.loot;
+          cat > src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java <<'JAVA'
+          package slimeknights.tconstruct.library;
 
-          import com.mojang.serialization.MapCodec;
-          import com.mojang.serialization.codecs.RecordCodecBuilder;
-          import net.minecraft.core.registries.Registries;
-          import net.minecraft.tags.TagKey;
-          import net.minecraft.world.item.Item;
-          import net.minecraft.world.item.ItemStack;
-          import net.minecraft.world.level.storage.loot.LootContext;
-          import net.minecraft.world.level.storage.loot.entries.LootPoolEntryType;
-          import net.minecraft.world.level.storage.loot.entries.LootPoolSingletonContainer;
-          import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
-          import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
-          import slimeknights.mantle.recipe.helper.TagPreference;
-          import slimeknights.tconstruct.shared.TinkerCommons;
+          import net.minecraft.world.item.ItemDisplayContext;
 
-          import java.util.List;
-          import java.util.function.Consumer;
+          /** Custom transform types used for Tinkers item rendering. */
+          public class TinkerItemDisplays {
+            private TinkerItemDisplays() {}
 
-          /** @deprecated use {@link slimeknights.mantle.loot.entry.TagPreferenceLootEntry} */
-          @Deprecated(forRemoval = true)
-          public class TagPreferenceLootEntry extends LootPoolSingletonContainer {
-            public static final MapCodec<TagPreferenceLootEntry> CODEC = RecordCodecBuilder.mapCodec(
-              instance -> instance.group(TagKey.codec(Registries.ITEM).fieldOf("tag").forGetter(entry -> entry.tag))
-                                  .and(singletonFields(instance))
-                                  .apply(instance, TagPreferenceLootEntry::new)
-            );
+            /**
+             * Kept as the existing bootstrap hook. NeoForge 1.21 loads the actual enum values from
+             * META-INF/enumextensions.json before normal mod construction, so no runtime registry call is needed.
+             */
+            public static void init() {}
 
-            private final TagKey<Item> tag;
-
-            protected TagPreferenceLootEntry(TagKey<Item> tag, int weight, int quality, List<LootItemCondition> conditions, List<LootItemFunction> functions) {
-              super(weight, quality, conditions, functions);
-              this.tag = tag;
-            }
-
-            @SuppressWarnings("removal")
-            @Override
-            public LootPoolEntryType getType() {
-              return TinkerCommons.lootTagPreference.get();
-            }
-
-            @Override
-            protected void createItemStack(Consumer<ItemStack> consumer, LootContext context) {
-              TagPreference.getPreference(tag).ifPresent(item -> consumer.accept(new ItemStack(item)));
-            }
-
-            /** @deprecated use {@link slimeknights.mantle.loot.entry.TagPreferenceLootEntry#tagPreference(TagKey)} */
-            @Deprecated(forRemoval = true)
-            public static LootPoolSingletonContainer.Builder<?> tagPreference(TagKey<Item> tag) {
-              return slimeknights.mantle.loot.entry.TagPreferenceLootEntry.tagPreference(tag);
-            }
+            /** Used by the melter and smeltery for display of items being melted. */
+            public static final ItemDisplayContext MELTER = ItemDisplayContext.valueOf("TCONSTRUCT_MELTER");
+            /** Used by the part builder, crafting station, tinkers station, and tinker anvil. */
+            public static final ItemDisplayContext TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_TABLE");
+            /** Used by the casting table for item rendering. */
+            public static final ItemDisplayContext CASTING_TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_TABLE");
+            /** Used by the casting basin for item rendering. */
+            public static final ItemDisplayContext CASTING_BASIN = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_BASIN");
+            /** Used by the fluid cannon for display of the item in front. */
+            public static final ItemDisplayContext FLUID_CANNON = ItemDisplayContext.valueOf("TCONSTRUCT_FLUID_CANNON");
+            /** Used by throwing to allow adjusting the tool position. */
+            public static final ItemDisplayContext THROWN = ItemDisplayContext.valueOf("TCONSTRUCT_THROWN");
           }
           JAVA
 
+          cat > src/main/resources/META-INF/enumextensions.json <<'JSON'
+          {
+            "entries": [
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_MELTER",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:melter", null ]
+              },
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_TABLE",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:table", null ]
+              },
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_CASTING_TABLE",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:casting_table", "FIXED" ]
+              },
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_CASTING_BASIN",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:casting_basin", null ]
+              },
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_FLUID_CANNON",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:fluid_cannon", "FIXED" ]
+              },
+              {
+                "enum": "net/minecraft/world/item/ItemDisplayContext",
+                "name": "TCONSTRUCT_THROWN",
+                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
+                "parameters": [ -1, "tconstruct:thrown", "FIXED" ]
+              }
+            ]
+          }
+          JSON
+
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java')
+          path = Path('src/main/resources/META-INF/neoforge.mods.toml')
           text = path.read_text(encoding='utf-8')
-          old = 'LOOT_ENTRIES.register("tag_preference", () -> new LootPoolEntryType(new TagPreferenceLootEntry.Serializer()))'
-          new = 'LOOT_ENTRIES.register("tag_preference", () -> new LootPoolEntryType(TagPreferenceLootEntry.CODEC))'
-          if old not in text:
-            raise SystemExit('Missing legacy tag preference loot entry registration')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          if 'enumExtensions="META-INF/enumextensions.json"' not in text:
+            anchor = '    displayURL="https://www.curseforge.com/minecraft/mc-mods/tinkers-construct"\n'
+            if anchor not in text:
+              raise SystemExit('Missing Tinkers mod displayURL anchor')
+            text = text.replace(anchor, anchor + '    enumExtensions="META-INF/enumextensions.json"\n', 1)
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify tag preference loot codec migration
+      - name: Verify item display enum extension migration
         run: |
-          grep -Fq 'MapCodec<TagPreferenceLootEntry> CODEC' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java
-          grep -Fq 'singletonFields(instance)' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java
-          grep -Fq 'new LootPoolEntryType(TagPreferenceLootEntry.CODEC)' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          test -z "$(grep 'LootPoolSingletonContainer.Serializer' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java || true)"
+          grep -Fq 'ItemDisplayContext.valueOf("TCONSTRUCT_MELTER")' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java
+          grep -Fq 'ItemDisplayContext.valueOf("TCONSTRUCT_THROWN")' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java
+          grep -Fq '"name": "TCONSTRUCT_CASTING_TABLE"' src/main/resources/META-INF/enumextensions.json
+          grep -Fq '"parameters": [ -1, "tconstruct:casting_table", "FIXED" ]' src/main/resources/META-INF/enumextensions.json
+          grep -Fq 'enumExtensions="META-INF/enumextensions.json"' src/main/resources/META-INF/neoforge.mods.toml
+          test -z "$(grep -E 'ForgeRegistries|IForgeRegistry|RegisterEvent|ItemDisplayContext.create' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Tag preference loot codec is already migrated.'
+            echo 'Item display enum extensions are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java \
-            src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          git commit -m 'Migrate tag preference loot entry to 1.21 codec'
+            src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java \
+            src/main/resources/META-INF/enumextensions.json \
+            src/main/resources/META-INF/neoforge.mods.toml
+          git commit -m 'Migrate item display contexts to NeoForge enum extensions'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
