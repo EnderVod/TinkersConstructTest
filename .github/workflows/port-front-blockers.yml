@@ -31,134 +31,488 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate potion components and alpha-blocked hooks
+      - name: Migrate final loot serializers to MapCodec
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
+          Path('src/main/java/slimeknights/tconstruct/library/json/loot/LootCodecs.java').write_text(r'''package slimeknights.tconstruct.library.json.loot;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
+import slimeknights.mantle.util.typed.TypedMap;
+import slimeknights.tconstruct.library.materials.RandomMaterial;
+
+/** Bridges Tinkers legacy Mantle JSON loaders into Minecraft 1.21 codecs. */
+public final class LootCodecs {
+  private LootCodecs() {}
+
+  public static final Codec<RandomMaterial> RANDOM_MATERIAL = Codec.PASSTHROUGH.xmap(
+    dynamic -> RandomMaterial.LOADER.convert(dynamic.convert(JsonOps.INSTANCE).getValue(), "material", TypedMap.empty()),
+    material -> new Dynamic<>(JsonOps.INSTANCE, RandomMaterial.LOADER.serialize(material))
+  );
+}
+''', encoding='utf-8')
+
+          Path('src/main/java/slimeknights/tconstruct/tools/modifiers/loot/BonusFormula.java').write_text(r'''package slimeknights.tconstruct.tools.modifiers.loot;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
+
+/** 1.21-compatible copy of the vanilla bonus-count formula data used by Tinkers loot functions. */
+public record BonusFormula(ResourceLocation id, Parameters parameters) {
+  private static final ResourceLocation ORE_DROPS = ResourceLocation.withDefaultNamespace("ore_drops");
+  private static final ResourceLocation UNIFORM_BONUS = ResourceLocation.withDefaultNamespace("uniform_bonus_count");
+  private static final ResourceLocation BINOMIAL_BONUS = ResourceLocation.withDefaultNamespace("binomial_with_bonus_count");
+
+  public static final MapCodec<BonusFormula> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+    ResourceLocation.CODEC.fieldOf("formula").forGetter(BonusFormula::id),
+    Parameters.CODEC.optionalFieldOf("parameters", Parameters.DEFAULT).forGetter(BonusFormula::parameters)
+  ).apply(instance, BonusFormula::new));
+
+  public static BonusFormula oreDrops() {
+    return new BonusFormula(ORE_DROPS, Parameters.DEFAULT);
+  }
+
+  public static BonusFormula uniformBonus(int multiplier) {
+    return new BonusFormula(UNIFORM_BONUS, new Parameters(multiplier, 0, 0));
+  }
+
+  public static BonusFormula binomialBonus(int extra, float probability) {
+    return new BonusFormula(BINOMIAL_BONUS, new Parameters(1, extra, probability));
+  }
+
+  public int calculateNewCount(RandomSource random, int count, int level) {
+    if (id.equals(ORE_DROPS)) {
+      if (level > 0) {
+        int bonus = random.nextInt(level + 2) - 1;
+        if (bonus < 0) {
+          bonus = 0;
+        }
+        return count * (bonus + 1);
+      }
+      return count;
+    }
+    if (id.equals(UNIFORM_BONUS)) {
+      return count + random.nextInt(parameters.bonusMultiplier() * level + 1);
+    }
+    if (id.equals(BINOMIAL_BONUS)) {
+      int result = count;
+      for (int i = 0; i < level + parameters.extra(); i++) {
+        if (random.nextFloat() < parameters.probability()) {
+          result++;
+        }
+      }
+      return result;
+    }
+    return count;
+  }
+
+  public record Parameters(int bonusMultiplier, int extra, float probability) {
+    private static final Parameters DEFAULT = new Parameters(1, 0, 0);
+    private static final Codec<Parameters> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+      Codec.INT.optionalFieldOf("bonusMultiplier", 1).forGetter(Parameters::bonusMultiplier),
+      Codec.INT.optionalFieldOf("extra", 0).forGetter(Parameters::extra),
+      Codec.FLOAT.optionalFieldOf("probability", 0f).forGetter(Parameters::probability)
+    ).apply(instance, Parameters::new));
+  }
+}
+''', encoding='utf-8')
+
+          Path('src/main/java/slimeknights/tconstruct/library/json/loot/AddToolDataFunction.java').write_text(r'''package slimeknights.tconstruct.library.json.loot;
+
+import com.google.common.collect.ImmutableList;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import lombok.experimental.Accessors;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctionType;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import slimeknights.tconstruct.TConstruct;
+import slimeknights.tconstruct.common.TinkerTags;
+import slimeknights.tconstruct.library.materials.RandomMaterial;
+import slimeknights.tconstruct.library.materials.definition.MaterialId;
+import slimeknights.tconstruct.library.tools.definition.ToolDefinition;
+import slimeknights.tconstruct.library.tools.definition.module.material.ToolMaterialHook;
+import slimeknights.tconstruct.library.tools.nbt.ToolStack;
+import slimeknights.tconstruct.library.tools.stat.ToolStats;
+import slimeknights.tconstruct.tools.TinkerTools;
+
+import java.util.List;
+
+/** Loot function to add data to a tool. */
+public class AddToolDataFunction extends LootItemConditionalFunction {
+  public static final ResourceLocation ID = TConstruct.getResource("add_tool_data");
+  public static final MapCodec<AddToolDataFunction> CODEC = RecordCodecBuilder.mapCodec(instance ->
+    commonFields(instance).and(instance.group(
+      Codec.floatRange(0f, 1f).optionalFieldOf("damage_percent", 0f).forGetter(function -> function.damage),
+      LootCodecs.RANDOM_MATERIAL.listOf().optionalFieldOf("materials", List.of()).forGetter(function -> function.materials)
+    )).apply(instance, AddToolDataFunction::new));
+
+  private final float damage;
+  private final List<RandomMaterial> materials;
+
+  protected AddToolDataFunction(List<LootItemCondition> conditions, float damage, List<RandomMaterial> materials) {
+    super(conditions);
+    this.damage = damage;
+    this.materials = materials;
+  }
+
+  public static AddToolDataFunction.Builder builder() {
+    return new AddToolDataFunction.Builder();
+  }
+
+  @Override
+  public LootItemFunctionType getType() {
+    return TinkerTools.lootAddToolData.get();
+  }
+
+  @Override
+  protected ItemStack run(ItemStack stack, LootContext context) {
+    if (stack.is(TinkerTags.Items.MODIFIABLE)) {
+      ToolStack tool = ToolStack.from(stack);
+      ToolDefinition definition = tool.getDefinition();
+      if (definition.hasMaterials() && !materials.isEmpty()) {
+        tool.setMaterials(RandomMaterial.build(ToolMaterialHook.stats(definition), materials, context.getRandom()));
+      } else {
+        tool.rebuildStats();
+      }
+      if (damage > 0) {
+        tool.setDamage((int)(tool.getStats().get(ToolStats.DURABILITY) * damage));
+      }
+    }
+    return stack;
+  }
+
+  @Accessors(chain = true)
+  public static class Builder extends LootItemConditionalFunction.Builder<AddToolDataFunction.Builder> {
+    private final ImmutableList.Builder<RandomMaterial> materials = ImmutableList.builder();
+    private float damage = 0;
+
+    protected Builder() {}
+
+    @Override
+    protected Builder getThis() {
+      return this;
+    }
+
+    public void setDamage(float damage) {
+      if (damage < 0 || damage > 1) {
+        throw new IllegalArgumentException("Damage must be between 0 and 1, given " + damage);
+      }
+      this.damage = damage;
+    }
+
+    public Builder addMaterial(RandomMaterial mat) {
+      materials.add(mat);
+      return this;
+    }
+
+    public Builder addMaterial(MaterialId mat) {
+      return addMaterial(RandomMaterial.fixed(mat));
+    }
+
+    @Override
+    public LootItemFunction build() {
+      return new AddToolDataFunction(getConditions(), damage, materials.build());
+    }
+  }
+}
+''', encoding='utf-8')
+
+          Path('src/main/java/slimeknights/tconstruct/library/json/loot/ToolPartLootEntry.java').write_text(r'''package slimeknights.tconstruct.library.json.loot;
+
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.entries.LootPoolEntryType;
+import net.minecraft.world.level.storage.loot.entries.LootPoolSingletonContainer;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import slimeknights.mantle.util.RegistryHelper;
+import slimeknights.tconstruct.library.materials.RandomMaterial;
+import slimeknights.tconstruct.library.materials.definition.MaterialVariantId;
+import slimeknights.tconstruct.library.tools.part.IToolPart;
+import slimeknights.tconstruct.tools.TinkerToolParts;
+
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+/** Entry for a random tool part from a list with a random material. */
+public class ToolPartLootEntry extends LootPoolSingletonContainer {
+  public static final MapCodec<ToolPartLootEntry> CODEC = RecordCodecBuilder.mapCodec(instance ->
+    singletonFields(instance).and(instance.group(
+      TagKey.codec(Registries.ITEM).fieldOf("tag").forGetter(entry -> entry.tag),
+      LootCodecs.RANDOM_MATERIAL.fieldOf("material").forGetter(entry -> entry.material)
+    )).apply(instance, ToolPartLootEntry::new));
+
+  private final TagKey<Item> tag;
+  private final RandomMaterial material;
+
+  protected ToolPartLootEntry(int weight, int quality, List<LootItemCondition> conditions, List<LootItemFunction> functions, TagKey<Item> tag, RandomMaterial material) {
+    super(weight, quality, conditions, functions);
+    this.tag = tag;
+    this.material = material;
+  }
+
+  @Override
+  public LootPoolEntryType getType() {
+    return TinkerToolParts.toolPartLootEntry.get();
+  }
+
+  @SuppressWarnings("deprecation")
+  @Override
+  protected void createItemStack(Consumer<ItemStack> consumer, LootContext context) {
+    List<IToolPart> options = RegistryHelper.getTagValueStream(BuiltInRegistries.ITEM, tag)
+      .flatMap(item -> item instanceof IToolPart mat ? Stream.of(mat) : Stream.empty()).toList();
+    if (!options.isEmpty()) {
+      RandomSource random = context.getRandom();
+      IToolPart choice = options.get(random.nextInt(options.size()));
+      MaterialVariantId material = this.material.getMaterial(choice.getStatType(), random);
+      if (choice.canUseMaterial(material.getId())) {
+        consumer.accept(choice.withMaterial(material));
+      }
+    }
+  }
+
+  public static LootPoolSingletonContainer.Builder<?> entry(TagKey<Item> tag, RandomMaterial material) {
+    return simpleBuilder((weight, quality, conditions, functions) -> new ToolPartLootEntry(weight, quality, conditions, functions, tag, material));
+  }
+
+  public static LootPoolSingletonContainer.Builder<?> fixed(TagKey<Item> tag, MaterialVariantId material) {
+    return entry(tag, RandomMaterial.fixed(material));
+  }
+}
+''', encoding='utf-8')
+
+          Path('src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ModifierBonusLootFunction.java').write_text(r'''package slimeknights.tconstruct.tools.modifiers.loot;
+
+import com.google.common.collect.ImmutableSet;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctionType;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParam;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import slimeknights.tconstruct.library.modifiers.ModifierId;
+import slimeknights.tconstruct.library.tools.helper.ModifierUtil;
+import slimeknights.tconstruct.tools.TinkerModifiers;
+
+import java.util.List;
+import java.util.Set;
+
+/** Boosts drop rates based on modifier level. */
+public class ModifierBonusLootFunction extends LootItemConditionalFunction {
+  private static final Codec<ModifierId> MODIFIER_CODEC = ResourceLocation.CODEC.xmap(ModifierId::new, id -> id);
+  public static final MapCodec<ModifierBonusLootFunction> CODEC = RecordCodecBuilder.mapCodec(instance ->
+    commonFields(instance).and(instance.group(
+      MODIFIER_CODEC.fieldOf("modifier").forGetter(function -> function.modifier),
+      BonusFormula.CODEC.forGetter(function -> function.formula),
+      Codec.BOOL.optionalFieldOf("include_base", true).forGetter(function -> function.includeBase)
+    )).apply(instance, ModifierBonusLootFunction::new));
+
+  private final ModifierId modifier;
+  private final BonusFormula formula;
+  private final boolean includeBase;
+
+  protected ModifierBonusLootFunction(List<LootItemCondition> conditions, ModifierId modifier, BonusFormula formula, boolean includeBase) {
+    super(conditions);
+    this.modifier = modifier;
+    this.formula = formula;
+    this.includeBase = includeBase;
+  }
+
+  public static Builder<?> builder(ModifierId modifier, BonusFormula formula, boolean includeBase) {
+    return simpleBuilder(conditions -> new ModifierBonusLootFunction(conditions, modifier, formula, includeBase));
+  }
+
+  public static Builder<?> binomialWithBonusCount(ModifierId modifier, float probability, int extra, boolean includeBase) {
+    return builder(modifier, BonusFormula.binomialBonus(extra, probability), includeBase);
+  }
+
+  public static Builder<?> oreDrops(ModifierId modifier, boolean includeBase) {
+    return builder(modifier, BonusFormula.oreDrops(), includeBase);
+  }
+
+  public static Builder<?> uniformBonusCount(ModifierId modifier, int bonusMultiplier, boolean includeBase) {
+    return builder(modifier, BonusFormula.uniformBonus(bonusMultiplier), includeBase);
+  }
+
+  @Override
+  public LootItemFunctionType getType() {
+    return TinkerModifiers.modifierBonusFunction.get();
+  }
+
+  @Override
+  public Set<LootContextParam<?>> getReferencedContextParams() {
+    return ImmutableSet.of(LootContextParams.TOOL);
+  }
+
+  @Override
+  protected ItemStack run(ItemStack stack, LootContext context) {
+    int level = ModifierUtil.getModifierLevel(context.getParam(LootContextParams.TOOL), modifier);
+    if (!includeBase) {
+      level--;
+    }
+    if (level > 0) {
+      stack.setCount(formula.calculateNewCount(context.getRandom(), stack.getCount(), level));
+    }
+    return stack;
+  }
+}
+''', encoding='utf-8')
+
+          Path('src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ChrysophiliteBonusFunction.java').write_text(r'''package slimeknights.tconstruct.tools.modifiers.loot;
+
+import com.google.common.collect.ImmutableSet;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunction;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunctionType;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParam;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import slimeknights.tconstruct.shared.TinkerAttributes;
+import slimeknights.tconstruct.tools.TinkerModifiers;
+
+import java.util.List;
+import java.util.Set;
+
+/** Loot modifier to boost drops based on chrysophilite amount. */
+public class ChrysophiliteBonusFunction extends LootItemConditionalFunction {
+  public static final MapCodec<ChrysophiliteBonusFunction> CODEC = RecordCodecBuilder.mapCodec(instance ->
+    commonFields(instance).and(instance.group(
+      BonusFormula.CODEC.forGetter(function -> function.formula),
+      Codec.BOOL.optionalFieldOf("include_base", true).forGetter(function -> function.includeBase)
+    )).apply(instance, ChrysophiliteBonusFunction::new));
+
+  private final BonusFormula formula;
+  private final boolean includeBase;
+
+  protected ChrysophiliteBonusFunction(List<LootItemCondition> conditions, BonusFormula formula, boolean includeBase) {
+    super(conditions);
+    this.formula = formula;
+    this.includeBase = includeBase;
+  }
+
+  public static Builder<?> builder(BonusFormula formula, boolean includeBase) {
+    return simpleBuilder(conditions -> new ChrysophiliteBonusFunction(conditions, formula, includeBase));
+  }
+
+  public static Builder<?> binomialWithBonusCount(float probability, int extra, boolean includeBase) {
+    return builder(BonusFormula.binomialBonus(extra, probability), includeBase);
+  }
+
+  public static Builder<?> oreDrops(boolean includeBase) {
+    return builder(BonusFormula.oreDrops(), includeBase);
+  }
+
+  public static Builder<?> uniformBonusCount(int bonusMultiplier, boolean includeBase) {
+    return builder(BonusFormula.uniformBonus(bonusMultiplier), includeBase);
+  }
+
+  @Override
+  protected ItemStack run(ItemStack stack, LootContext context) {
+    if (context.getParamOrNull(LootContextParams.THIS_ENTITY) instanceof LivingEntity entity) {
+      int level = (int) entity.getAttributeValue(TinkerAttributes.CHRYSOPHILITE.get());
+      if (!includeBase) {
+        level--;
+      }
+      if (level > 0) {
+        stack.setCount(formula.calculateNewCount(context.getRandom(), stack.getCount(), level));
+      }
+    }
+    return stack;
+  }
+
+  @Override
+  public Set<LootContextParam<?>> getReferencedContextParams() {
+    return ImmutableSet.of(LootContextParams.THIS_ENTITY);
+  }
+
+  @Override
+  public LootItemFunctionType getType() {
+    return TinkerModifiers.chrysophiliteBonusFunction.get();
+  }
+}
+''', encoding='utf-8')
+
           def replace(path, old, new):
               p = Path(path)
               text = p.read_text(encoding='utf-8')
               if old not in text:
-                  raise SystemExit(f'Missing expected token in {path}: {old!r}')
+                  raise SystemExit(f'Missing expected registration in {path}: {old}')
               p.write_text(text.replace(old, new), encoding='utf-8')
 
-          # Fluid potion effects now read the POTION_CONTENTS data component.
-          path = 'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java'
-          replace(path,
-                  'package slimeknights.tconstruct.library.modifiers.fluid.entity;\n\n',
-                  'package slimeknights.tconstruct.library.modifiers.fluid.entity;\n\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.nbt.CompoundTag;\n')
-          replace(path,
-                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
-                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          replace(path, 'import java.util.List;\n', 'import java.util.ArrayList;\nimport java.util.List;\n')
-          replace(path,
-                  '    // must match the tag predicate\n    if (target != null && predicate.test(fluid.getTag())) {\n      List<MobEffectInstance> effects = PotionUtils.getPotion(fluid.getTag()).getEffects();',
-                  '    // 1.21 fluid stacks store potion data in components; synthesize the legacy base-potion tag for existing predicates.\n    PotionContents contents = fluid.get(DataComponents.POTION_CONTENTS);\n    CompoundTag potionTag = new CompoundTag();\n    if (contents != null) {\n      contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key -> potionTag.putString("Potion", key.location().toString()));\n    }\n    if (target != null && contents != null && predicate.test(potionTag)) {\n      List<MobEffectInstance> effects = new ArrayList<>();\n      contents.forEachEffect(effects::add);')
-
-          path = 'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java'
-          replace(path,
-                  'package slimeknights.tconstruct.library.modifiers.fluid.block;\n\n',
-                  'package slimeknights.tconstruct.library.modifiers.fluid.block;\n\nimport net.minecraft.core.component.DataComponents;\n')
-          replace(path, 'import net.minecraft.world.item.alchemy.Potion;\n', '')
-          replace(path,
-                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
-                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          replace(path, 'import java.util.List;\n', 'import java.util.ArrayList;\nimport java.util.List;\n')
-          replace(path,
-                  '    CompoundTag tag = fluid.getTag();\n    if (predicate.test(tag) && context.isOffsetReplaceable()) {\n      Potion potion = PotionUtils.getPotion(fluid.getTag());\n      List<MobEffectInstance> effects = potion.getEffects();',
-                  '    PotionContents contents = fluid.get(DataComponents.POTION_CONTENTS);\n    CompoundTag tag = new CompoundTag();\n    if (contents != null) {\n      contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key -> tag.putString("Potion", key.location().toString()));\n    }\n    if (contents != null && predicate.test(tag) && context.isOffsetReplaceable()) {\n      List<MobEffectInstance> effects = new ArrayList<>();\n      contents.forEachEffect(effects::add);')
-
-          path = 'src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java'
-          replace(path,
-                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
-                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          replace(path, '          PotionUtils.getColor(potion);\n', '')
-          replace(path,
-                  '          PotionUtils.addPotionTooltip(potion.getEffects(), tooltip, 1f / getDivisor(modifier));',
-                  '          PotionContents.addPotionTooltip(potion.getEffects(), tooltip::add, 1f / getDivisor(modifier), 20.0f);')
-          replace(path,
-                  '          ).withStyle(style -> style.withColor(PotionUtils.getColor(potion)));',
-                  '          ).withStyle(style -> style.withColor(PotionContents.getColor(potion.getEffects())));')
-
-          path = 'src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java'
-          replace(path,
-                  'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.Tag;\n',
-                  'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.component.DataComponents;\n')
-          replace(path,
-                  'import net.minecraft.world.item.alchemy.PotionUtils;\n',
-                  'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          replace(path,
-                  '          CompoundTag tag = stack.getTag();\n          if (tag != null && tag.contains(PotionUtils.TAG_POTION, Tag.TAG_STRING)) {\n            tool.getPersistentData().putString(modifier, tag.getString(PotionUtils.TAG_POTION));\n          }',
-                  '          PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);\n          if (contents != null) {\n            contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key ->\n              tool.getPersistentData().putString(modifier, key.location().toString()));\n          }')
-          replace(path,
-                  '          CompoundTag tag = stack.getTag();\n          if (tag != null) {\n            ItemStack copy = result.copy();\n            ToolStack.from(copy).getPersistentData().putString(modifier, tag.getString(PotionUtils.TAG_POTION));\n            return copy;\n          }\n          return result;',
-                  '          PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);\n          if (contents != null) {\n            var potionKey = contents.potion().flatMap(holder -> holder.unwrapKey());\n            if (potionKey.isPresent()) {\n              ItemStack copy = result.copy();\n              ToolStack.from(copy).getPersistentData().putString(modifier, potionKey.get().location().toString());\n              return copy;\n            }\n          }\n          return result;')
-
-          # This JEI helper still receives a legacy CompoundTag. Preserve subtype uniqueness without the removed PotionUtils parser.
-          path = 'src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java'
-          replace(path, 'import net.minecraft.world.item.alchemy.PotionUtils;\n', '')
-          p = Path(path)
-          text = p.read_text(encoding='utf-8')
-          old = '''    Potion potionType = PotionUtils.getPotion(tag);\n    String potionTypeString = potionType.getName("");\n    StringBuilder stringBuilder = new StringBuilder(potionTypeString);\n    List<MobEffectInstance> effects = PotionUtils.getAllEffects(tag);\n    for (MobEffectInstance effect : effects) {\n      stringBuilder.append(";").append(effect);\n    }\n    return stringBuilder.toString();'''
-          if old not in text:
-              raise SystemExit('Missing JEI potion subtype body')
-          p.write_text(text.replace(old, '    return tag.toString();'), encoding='utf-8')
-
-          # NeoForge 21.1 removed LootingLevelEvent. Keep slot bookkeeping, but defer Tinkers-specific looting until the new loot-context hook is ported.
-          path = 'src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java'
-          p = Path(path)
-          text = p.read_text(encoding='utf-8')
-          text = text.replace('import net.neoforged.neoforge.event.entity.living.LootingLevelEvent;\n', '')
-          text = text.replace('    NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, ModifierLootingHandler::onLooting);\n', '')
-          start = text.find('  /** Applies the looting bonus for modifiers */')
-          end = text.find('  /** Called when a player leaves the server to clear the face */')
-          if start < 0 or end < 0 or end <= start:
-              raise SystemExit('Could not locate legacy looting handler block')
-          text = text[:start] + '  // TODO 1.21 alpha: port Tinkers-specific looting to the new loot-context/enchantment pipeline.\n\n' + text[end:]
-          p.write_text(text, encoding='utf-8')
-
-          # The old LivingHurtEvent pipeline manually recomputed armor/protection. Disable only that legacy stage for alpha rather than double-reducing damage.
-          path = 'src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java'
-          p = Path(path)
-          text = p.read_text(encoding='utf-8').replace('import net.neoforged.neoforge.event.entity.living.LivingHurtEvent;\n', '')
-          start = text.find('  // low priority to minimize conflict as we apply reduction as if we are the final change to damage before vanilla')
-          end = text.find('  @SubscribeEvent\n  static void livingDamage(LivingDamageEvent.Pre event)')
-          if start < 0 or end < 0 or end <= start:
-              raise SystemExit('Could not locate legacy LivingHurtEvent block')
-          text = text[:start] + '  // TODO 1.21 alpha: port legacy MODIFY_HURT/protection math to DamageContainer reduction modifiers.\n\n' + text[end:]
-          p.write_text(text, encoding='utf-8')
+          replace('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java',
+                  'new LootItemFunctionType(AddToolDataFunction.SERIALIZER)',
+                  'new LootItemFunctionType<>(AddToolDataFunction.CODEC)')
+          replace('src/main/java/slimeknights/tconstruct/tools/TinkerToolParts.java',
+                  'new LootPoolEntryType(new ToolPartLootEntry.Serializer())',
+                  'new LootPoolEntryType(ToolPartLootEntry.CODEC)')
+          replace('src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java',
+                  'new LootItemFunctionType(new ModifierBonusLootFunction.Serializer())',
+                  'new LootItemFunctionType<>(ModifierBonusLootFunction.CODEC)')
+          replace('src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java',
+                  'new LootItemFunctionType(ChrysophiliteBonusFunction.SERIALIZER)',
+                  'new LootItemFunctionType<>(ChrysophiliteBonusFunction.CODEC)')
           PY
 
-      - name: Verify targeted migration
+      - name: Verify final loot migration
         shell: bash
         run: |
-          test -z "$(grep -R -F 'PotionUtils' \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java \
-            src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java \
-            src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java || true)"
-          grep -Fq 'DataComponents.POTION_CONTENTS' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
-          grep -Fq 'PotionContents.addPotionTooltip' src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java
-          test -z "$(grep -F 'LootingLevelEvent' src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java || true)"
-          test -z "$(grep -F 'LivingHurtEvent' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java || true)"
+          test -z "$(grep -R -E 'LootItemConditionalFunction\.Serializer|LootPoolSingletonContainer\.Serializer|FormulaDeserializer' \
+            src/main/java/slimeknights/tconstruct/library/json/loot/AddToolDataFunction.java \
+            src/main/java/slimeknights/tconstruct/library/json/loot/ToolPartLootEntry.java \
+            src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ModifierBonusLootFunction.java \
+            src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ChrysophiliteBonusFunction.java || true)"
+          grep -Fq 'MapCodec<AddToolDataFunction>' src/main/java/slimeknights/tconstruct/library/json/loot/AddToolDataFunction.java
+          grep -Fq 'MapCodec<ToolPartLootEntry>' src/main/java/slimeknights/tconstruct/library/json/loot/ToolPartLootEntry.java
+          grep -Fq 'BonusFormula.CODEC' src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ModifierBonusLootFunction.java
+          grep -Fq 'ModifierBonusLootFunction.CODEC' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
 
-      - name: Commit grouped migration
+      - name: Commit final loot migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
-                  src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
-                  src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/TippedModule.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/TippedToolTransformRecipe.java \
-                  src/main/java/slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java \
-                  src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
-                  src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
+          git add src/main/java/slimeknights/tconstruct/library/json/loot/LootCodecs.java \
+                  src/main/java/slimeknights/tconstruct/library/json/loot/AddToolDataFunction.java \
+                  src/main/java/slimeknights/tconstruct/library/json/loot/ToolPartLootEntry.java \
+                  src/main/java/slimeknights/tconstruct/tools/modifiers/loot/BonusFormula.java \
+                  src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ModifierBonusLootFunction.java \
+                  src/main/java/slimeknights/tconstruct/tools/modifiers/loot/ChrysophiliteBonusFunction.java \
+                  src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
+                  src/main/java/slimeknights/tconstruct/tools/TinkerToolParts.java \
+                  src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate potion components and isolate alpha combat hooks'
+          git commit -m 'Migrate Tinkers loot serializers to 1.21 codecs'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
