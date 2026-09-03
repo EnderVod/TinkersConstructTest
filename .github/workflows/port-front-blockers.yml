@@ -31,7 +31,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate projectile impact and chest dye components
+      - name: Migrate combat and tick events
         shell: bash
         run: |
           python3 - <<'PY'
@@ -44,70 +44,70 @@ jobs:
                   raise SystemExit(f'Missing expected token in {path}: {old!r}')
               p.write_text(text.replace(old, new), encoding='utf-8')
 
-          # ProjectileImpactEvent no longer exposes ImpactResult in NeoForge 21.1.
-          modifier_events = 'src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java'
-          replace(modifier_events,
-                  'import net.neoforged.neoforge.event.entity.ProjectileImpactEvent.ImpactResult;\n',
+          tool_events = 'src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java'
+          replace(tool_events,
+                  'import net.neoforged.neoforge.event.entity.living.LivingAttackEvent;\n',
+                  'import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;\n')
+          replace(tool_events,
+                  'import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;\n',
+                  'import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;\nimport net.neoforged.neoforge.event.tick.EntityTickEvent;\n')
+          replace(tool_events,
+                  'import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;\n',
                   '')
-          replace(modifier_events,
-                  'event.setImpactResult(ImpactResult.SKIP_ENTITY);',
-                  'event.setCanceled(true);')
+          replace(tool_events,
+                  '  static void livingAttack(LivingAttackEvent event) {',
+                  '  static void livingAttack(LivingIncomingDamageEvent event) {')
+          replace(tool_events,
+                  '  static void livingDamage(LivingDamageEvent event) {',
+                  '  static void livingDamage(LivingDamageEvent.Pre event) {')
+          replace(tool_events,
+                  '    float amount = event.getAmount();',
+                  '    float amount = event.getNewDamage();')
+          replace(tool_events,
+                  '      event.setAmount(amount);',
+                  '      event.setNewDamage(amount);')
+          replace(tool_events,
+                  '        event.setCanceled(true);',
+                  '        event.setNewDamage(0);')
+          replace(tool_events,
+                  '&& entity.getType() == EntityType.ENDER_DRAGON && event.getAmount() > 0',
+                  '&& entity.getType() == EntityType.ENDER_DRAGON && event.getNewDamage() > 0')
+          replace(tool_events,
+                  '  static void livingWalk(LivingTickEvent event) {\n    LivingEntity living = event.getEntity();',
+                  '  static void livingWalk(EntityTickEvent.Pre event) {\n    if (!(event.getEntity() instanceof LivingEntity living)) {\n      return;\n    }')
 
-          # DyeableLeatherItem was replaced by the DYED_COLOR data component in 1.21.
-          chest_item = 'src/main/java/slimeknights/tconstruct/tables/item/TinkersChestBlockItem.java'
-          replace(chest_item,
-                  'import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.Tag;\n',
-                  'import net.minecraft.core.component.DataComponents;\n')
-          replace(chest_item,
-                  'import net.minecraft.world.item.DyeableLeatherItem;\n',
-                  'import net.minecraft.world.item.component.DyedItemColor;\n')
-          replace(chest_item,
-                  'public class TinkersChestBlockItem extends BlockItem implements DyeableLeatherItem {',
-                  'public class TinkersChestBlockItem extends BlockItem {')
-          replace(chest_item,
-                  '  @Override\n  public int getColor(ItemStack stack) {\n    CompoundTag tag = stack.getTagElement("display");\n    return tag != null && tag.contains("color", Tag.TAG_ANY_NUMERIC) ? tag.getInt("color") : TinkersChestBlockEntity.DEFAULT_COLOR;\n  }',
-                  '  public int getColor(ItemStack stack) {\n    DyedItemColor color = stack.get(DataComponents.DYED_COLOR);\n    return color != null ? color.rgb() : TinkersChestBlockEntity.DEFAULT_COLOR;\n  }')
-          replace(chest_item,
-                  '    if (hasCustomColor(stack) && world.getBlockEntity(pos) instanceof TinkersChestBlockEntity te) {',
-                  '    if (stack.get(DataComponents.DYED_COLOR) != null && world.getBlockEntity(pos) instanceof TinkersChestBlockEntity te) {')
-
-          chest_block = 'src/main/java/slimeknights/tconstruct/tables/block/TinkersChestBlock.java'
-          replace(chest_block,
-                  'import net.minecraft.world.entity.player.Player;\nimport net.minecraft.world.item.DyeableLeatherItem;\n',
-                  'import net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.entity.player.Player;\nimport net.minecraft.world.item.component.DyedItemColor;\n')
-          replace(chest_block,
-                  '      ((DyeableLeatherItem) stack.getItem()).setColor(stack, te.getColor());',
-                  '      stack.set(DataComponents.DYED_COLOR, new DyedItemColor(te.getColor(), true));')
-
-          client_events = 'src/main/java/slimeknights/tconstruct/tables/TableClientEvents.java'
-          replace(client_events,
-                  'import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;\nimport net.minecraft.world.item.DyeableLeatherItem;\n',
-                  'import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.component.DyedItemColor;\n')
-          replace(client_events,
-                  '    event.register((stack, index) -> ((DyeableLeatherItem)stack.getItem()).getColor(stack), TinkerTables.tinkersChest.asItem());',
-                  '    event.register((stack, index) -> {\n      DyedItemColor color = stack.get(DataComponents.DYED_COLOR);\n      return color != null ? color.rgb() : TinkersChestBlockEntity.DEFAULT_COLOR;\n    }, TinkerTables.tinkersChest.asItem());')
+          interaction = 'src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java'
+          replace(interaction,
+                  'import net.neoforged.neoforge.event.entity.living.ShieldBlockEvent;\n',
+                  'import net.neoforged.neoforge.event.entity.living.LivingShieldBlockEvent;\n')
+          replace(interaction,
+                  '  static void onBlock(ShieldBlockEvent event) {',
+                  '  static void onBlock(LivingShieldBlockEvent event) {')
+          replace(interaction,
+                  '          event.setShieldTakesDamage(false);',
+                  '          event.setShieldDamage(0);')
           PY
 
       - name: Verify targeted migration
         shell: bash
         run: |
-          test -z "$(grep -F 'ImpactResult' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java || true)"
-          grep -Fq 'event.setCanceled(true);' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
-          test -z "$(grep -R -F 'DyeableLeatherItem' src/main/java/slimeknights/tconstruct/tables/TableClientEvents.java src/main/java/slimeknights/tconstruct/tables/block/TinkersChestBlock.java src/main/java/slimeknights/tconstruct/tables/item/TinkersChestBlockItem.java || true)"
-          grep -Fq 'DataComponents.DYED_COLOR' src/main/java/slimeknights/tconstruct/tables/item/TinkersChestBlockItem.java
-          grep -Fq 'new DyedItemColor' src/main/java/slimeknights/tconstruct/tables/block/TinkersChestBlock.java
+          grep -Fq 'LivingIncomingDamageEvent event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
+          grep -Fq 'LivingDamageEvent.Pre event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
+          grep -Fq 'EntityTickEvent.Pre event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
+          test -z "$(grep -E 'LivingAttackEvent|LivingTickEvent' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java || true)"
+          grep -Fq 'LivingShieldBlockEvent event' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
+          grep -Fq 'setShieldDamage(0)' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
+          test -z "$(grep -F 'ShieldBlockEvent' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java | grep -v LivingShieldBlockEvent || true)"
 
       - name: Commit grouped migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java \
-                  src/main/java/slimeknights/tconstruct/tables/TableClientEvents.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/TinkersChestBlock.java \
-                  src/main/java/slimeknights/tconstruct/tables/item/TinkersChestBlockItem.java
+          git add src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
+                  src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate projectile impact and chest dye APIs to 1.21'
+          git commit -m 'Migrate combat events to NeoForge 21.1'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
