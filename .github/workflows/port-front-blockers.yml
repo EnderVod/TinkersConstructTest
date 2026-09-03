@@ -30,64 +30,62 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate flowing fluid base APIs
+      - name: Migrate mechanical NeoForge APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           root = Path('src/main/java/slimeknights/tconstruct')
           changed = []
-
-          def edit(rel, replacements):
-              path = root / rel
+          for path in root.rglob('*.java'):
               original = path.read_text(encoding='utf-8')
               text = original
-              for old, new in replacements:
-                  if old not in text:
-                      raise SystemExit(f'Missing expected source in {rel}: {old!r}')
-                  text = text.replace(old, new)
+
+              # Forge ToolAction became NeoForge ItemAbility in 1.21.
+              if 'import net.minecraftforge.common.ToolAction;' in text:
+                  text = text.replace('import net.minecraftforge.common.ToolAction;', 'import net.neoforged.neoforge.common.ItemAbility;')
+                  text = re.sub(r'\bToolAction\b', 'ItemAbility', text)
+              if 'import net.minecraftforge.common.ToolActions;' in text:
+                  text = text.replace('import net.minecraftforge.common.ToolActions;', 'import net.neoforged.neoforge.common.ItemAbilities;')
+                  text = re.sub(r'\bToolActions\b', 'ItemAbilities', text)
+
+              # CraftingHelper remains in NeoForge, under the NeoForge namespace.
+              text = text.replace(
+                  'import net.minecraftforge.common.crafting.CraftingHelper;',
+                  'import net.neoforged.neoforge.common.crafting.CraftingHelper;')
+
+              # ForgeHooks was renamed CommonHooks; method-level changes are intentionally left for javac to expose.
+              if 'import net.minecraftforge.common.ForgeHooks;' in text:
+                  text = text.replace('import net.minecraftforge.common.ForgeHooks;', 'import net.neoforged.neoforge.common.CommonHooks;')
+                  text = re.sub(r'\bForgeHooks\b', 'CommonHooks', text)
+
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
-
-          # Mantle 1.21 builds all standard flowing fluids on NeoForge BaseFlowingFluid.
-          edit('fluids/TinkerFluids.java', [
-              ('import net.minecraft.world.level.pathfinder.BlockPathTypes;', 'import net.minecraft.world.level.pathfinder.PathType;'),
-              ('import net.minecraftforge.common.ForgeMod;', 'import net.neoforged.neoforge.common.NeoForgeMod;'),
-              ('import net.minecraftforge.common.SoundActions;', 'import net.neoforged.neoforge.common.SoundActions;'),
-              ('import net.neoforged.neoforge.fluids.ForgeFlowingFluid;', 'import net.neoforged.neoforge.fluids.BaseFlowingFluid;'),
-              ('ForgeMod.enableMilkFluid();', 'NeoForgeMod.enableMilkFluid();'),
-              ('FlowingFluidObject<ForgeFlowingFluid>', 'FlowingFluidObject<BaseFlowingFluid>'),
-              ('BlockPathTypes.LAVA', 'PathType.LAVA'),
-          ])
-          edit('fluids/fluids/SlimeFluid.java', [
-              ('import net.neoforged.neoforge.fluids.ForgeFlowingFluid;', 'import net.neoforged.neoforge.fluids.BaseFlowingFluid;'),
-              ('extends ForgeFlowingFluid', 'extends BaseFlowingFluid'),
-          ])
 
           print(f'Updated {len(changed)} Java files')
           for path in changed:
               print(path)
           PY
 
-      - name: Verify flowing fluid migration
+      - name: Verify mechanical migration
         run: |
-          if grep -R "ForgeFlowingFluid\|net.minecraftforge.common.ForgeMod\|net.minecraftforge.common.SoundActions\|BlockPathTypes" -n \
-            src/main/java/slimeknights/tconstruct/fluids; then
-            echo 'Found stale flowing-fluid API references.'
+          if grep -R "import net.minecraftforge.common.ToolAction;\|import net.minecraftforge.common.ToolActions;\|import net.minecraftforge.common.crafting.CraftingHelper;\|import net.minecraftforge.common.ForgeHooks;" -n src/main/java/slimeknights/tconstruct; then
+            echo 'Found stale mechanical API imports.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No flowing-fluid changes needed.'
+            echo 'No mechanical API changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate fluids to BaseFlowingFluid'
+          git commit -m 'Migrate item abilities and common hooks'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
