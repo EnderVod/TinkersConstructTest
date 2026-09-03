@@ -13,6 +13,7 @@ license="MIT"
 A little of this, a little of that, a lot of tinkering, and a lot of tools
     '''
     displayURL="https://www.curseforge.com/minecraft/mc-mods/tinkers-construct"
+    enumExtensions="META-INF/enumextensions.json"
 
 [[dependencies.tconstruct]]
     modId="neoforge"

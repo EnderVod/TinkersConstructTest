@@ -1,60 +1,27 @@
 package slimeknights.tconstruct.library;
 
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
-import net.neoforged.neoforge.registries.ForgeRegistries;
-import net.neoforged.neoforge.registries.IForgeRegistry;
-import net.neoforged.neoforge.registries.RegisterEvent;
-import slimeknights.tconstruct.TConstruct;
 
-import java.util.Locale;
-
-/** Custom transform types used for tinkers item rendering */
+/** Custom transform types used for Tinkers item rendering. */
 public class TinkerItemDisplays {
   private TinkerItemDisplays() {}
 
-  public static void init() {
-    slimeknights.tconstruct.TConstruct.getModBus().addListener(TinkerItemDisplays::registerDisplay);
-  }
+  /**
+   * Kept as the existing bootstrap hook. NeoForge 1.21 loads the actual enum values from
+   * META-INF/enumextensions.json before normal mod construction, so no runtime registry call is needed.
+   */
+  public static void init() {}
 
-  /** Used by the melter and smeltery for display of items its melting */
-  public static ItemDisplayContext MELTER = create("melter", ItemDisplayContext.NONE);
-  /** Used by the part builder, crafting station, tinkers station, and tinker anvil */
-  public static ItemDisplayContext TABLE = create("table", ItemDisplayContext.NONE);
-  /** Used by the casting table for item rendering */
-  public static ItemDisplayContext CASTING_TABLE = create("casting_table", ItemDisplayContext.FIXED);
-  /** Used by the casting basin for item rendering */
-  public static ItemDisplayContext CASTING_BASIN = create("casting_basin", ItemDisplayContext.NONE);
-  /** Used by the fluid cannon for display of the item in front */
-  public static ItemDisplayContext FLUID_CANNON = create("fluid_cannon", ItemDisplayContext.FIXED);
-  /** Used by throwing to allow adjusting the tool position */
-  public static ItemDisplayContext THROWN = create("thrown", ItemDisplayContext.FIXED);
-
-  /** Creates a transform type */
-  private static ItemDisplayContext create(String name, ItemDisplayContext fallback) {
-    String key = "TCONSTRUCT_" + name.toUpperCase(Locale.ROOT);
-    if (fallback == ItemDisplayContext.NONE) {
-      return ItemDisplayContext.create(key, TConstruct.getResource(name), null);
-    }
-    return ItemDisplayContext.create(key, TConstruct.getResource(name), fallback);
-  }
-
-  /** Registers all item display types */
-  private static void registerDisplay(RegisterEvent event) {
-    if (event.getRegistryKey() == ForgeRegistries.Keys.DISPLAY_CONTEXTS) {
-      IForgeRegistry<ItemDisplayContext> registry = ForgeRegistries.DISPLAY_CONTEXTS.get();
-      register(registry, MELTER);
-      register(registry, TABLE);
-      register(registry, CASTING_TABLE);
-      register(registry, CASTING_BASIN);
-      register(registry, FLUID_CANNON);
-      register(registry, THROWN);
-    }
-  }
-
-  /** Registers a display type */
-  @SuppressWarnings("removal")
-  private static void register(IForgeRegistry<ItemDisplayContext> registry, ItemDisplayContext context) {
-    registry.register(new ResourceLocation(context.getSerializedName()), context);
-  }
+  /** Used by the melter and smeltery for display of items being melted. */
+  public static final ItemDisplayContext MELTER = ItemDisplayContext.valueOf("TCONSTRUCT_MELTER");
+  /** Used by the part builder, crafting station, tinkers station, and tinker anvil. */
+  public static final ItemDisplayContext TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_TABLE");
+  /** Used by the casting table for item rendering. */
+  public static final ItemDisplayContext CASTING_TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_TABLE");
+  /** Used by the casting basin for item rendering. */
+  public static final ItemDisplayContext CASTING_BASIN = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_BASIN");
+  /** Used by the fluid cannon for display of the item in front. */
+  public static final ItemDisplayContext FLUID_CANNON = ItemDisplayContext.valueOf("TCONSTRUCT_FLUID_CANNON");
+  /** Used by throwing to allow adjusting the tool position. */
+  public static final ItemDisplayContext THROWN = ItemDisplayContext.valueOf("TCONSTRUCT_THROWN");
 }
