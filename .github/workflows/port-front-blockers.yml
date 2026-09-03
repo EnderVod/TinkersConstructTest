@@ -82,7 +82,6 @@ jobs:
                   'import net.neoforged.neoforge.registries.RegistryObject;',
                   'import net.neoforged.neoforge.registries.DeferredHolder;')
 
-              # Two old aliases were manually created from existing registry IDs.
               if path.name == 'TinkerTools.java':
                   text = text.replace(
                       'RegistryObject.create(getResource("minotaur_axe"), ForgeRegistries.ITEMS)',
@@ -96,7 +95,6 @@ jobs:
                       'RegistryObject.create(glowBlock.getId(), ForgeRegistries.BLOCKS)',
                       'DeferredHolder.create(Registries.BLOCK, glowBlock.getId())')
 
-              # Registry keys that have direct 1.21 equivalents.
               if path.name == 'TinkerStructures.java':
                   text = text.replace('ForgeRegistries.FEATURES', 'Registries.FEATURE')
 
@@ -106,7 +104,6 @@ jobs:
                       marker = 'import net.neoforged.neoforge.registries.DeferredHolder;\n'
                       text = text.replace(marker, marker + 'import net.neoforged.neoforge.registries.NeoForgeRegistries;\n')
 
-              # Remove ForgeRegistries imports only when no true ForgeRegistries reference remains.
               remaining = text.replace('NeoForgeRegistries.', '')
               if 'ForgeRegistries.' not in remaining:
                   text = text.replace('import net.neoforged.neoforge.registries.ForgeRegistries;\n', '')
@@ -126,7 +123,7 @@ jobs:
             echo 'Found stale RegistryObject references.'
             exit 1
           fi
-          if grep -n "ForgeRegistries.FEATURES\|ForgeRegistries.Keys.BIOME_MODIFIERS" \
+          if grep -n "DeferredRegister.create(ForgeRegistries.FEATURES\|key(ForgeRegistries.Keys.BIOME_MODIFIERS" \
             src/main/java/slimeknights/tconstruct/world/TinkerStructures.java \
             src/main/java/slimeknights/tconstruct/world/TinkerWorld.java; then
             echo 'Found stale world registry keys.'
