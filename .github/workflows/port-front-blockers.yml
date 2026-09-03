@@ -30,52 +30,99 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Register tool stack item sub-predicate
+      - name: Migrate dummy armor material to holder model
         run: |
+          cat > src/main/java/slimeknights/tconstruct/library/tools/item/armor/DummyArmorMaterial.java <<'JAVA'
+          package slimeknights.tconstruct.library.tools.item.armor;
+
+          import lombok.Getter;
+          import net.minecraft.core.Holder;
+          import net.minecraft.core.registries.BuiltInRegistries;
+          import net.minecraft.resources.ResourceLocation;
+          import net.minecraft.sounds.SoundEvent;
+          import net.minecraft.world.item.ArmorItem.Type;
+          import net.minecraft.world.item.ArmorMaterial;
+          import net.minecraft.world.item.crafting.Ingredient;
+          import slimeknights.mantle.registration.object.IdAwareObject;
+
+          import java.util.EnumMap;
+          import java.util.List;
+          import java.util.Map;
+
+          /**
+           * Lightweight armor material wrapper used by modifiable armor.
+           * Tinkers supplies its real protection and durability through tool stats, while vanilla 1.21 requires
+           * armor items to receive a {@link Holder} containing an {@link ArmorMaterial} record.
+           */
+          @Getter
+          public class DummyArmorMaterial implements IdAwareObject {
+            private final ResourceLocation id;
+            private final SoundEvent equipSound;
+            private final Holder<ArmorMaterial> material;
+
+            public DummyArmorMaterial(ResourceLocation id, SoundEvent equipSound) {
+              this.id = id;
+              this.equipSound = equipSound;
+
+              Map<Type,Integer> defense = new EnumMap<>(Type.class);
+              for (Type type : Type.values()) {
+                defense.put(type, 0);
+              }
+              this.material = Holder.direct(new ArmorMaterial(
+                defense,
+                0,
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(equipSound),
+                () -> Ingredient.EMPTY,
+                List.of(new ArmorMaterial.Layer(id)),
+                0.0F,
+                0.0F));
+            }
+          }
+          JAVA
+
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java')
           text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraft.world.item.ArmorMaterial;\n', '', 1)
+          old = '''  public ModifiableArmorItem(ArmorMaterial materialIn, ArmorItem.Type type, Properties builderIn, ToolDefinition toolDefinition) {\n    super(materialIn, type, builderIn);\n    this.toolDefinition = toolDefinition;\n  }'''
+          new = '''  public ModifiableArmorItem(DummyArmorMaterial materialIn, ArmorItem.Type type, Properties builderIn, ToolDefinition toolDefinition) {\n    super(materialIn.getMaterial(), type, builderIn);\n    this.toolDefinition = toolDefinition;\n  }'''
+          if old not in text:
+              raise SystemExit('Missing ModifiableArmorItem armor material constructor')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          old_import = 'import net.minecraft.advancements.critereon.ItemPredicate;\n'
-          new_import = 'import net.minecraft.advancements.critereon.ItemSubPredicate;\n'
-          if old_import in text:
-              text = text.replace(old_import, new_import, 1)
-          elif new_import not in text:
-              raise SystemExit('Could not locate ItemPredicate import')
-
-          anchor = '  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =\n    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));\n'
-          registration = '\n  /** Item sub-predicate matching Tinkers tool data in advancements and commands. */\n  public static final DeferredHolder<ItemSubPredicate.Type<?>, ItemSubPredicate.Type<ToolStackItemPredicate>> toolStackItemPredicateType =\n    ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath(), () -> new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC));\n'
-          if 'toolStackItemPredicateType' not in text:
-              if anchor not in text:
-                  raise SystemExit('Could not locate ingredient registration anchor')
-              text = text.replace(anchor, anchor + registration, 1)
-
-          stale = '      ItemPredicate.register(ToolStackItemPredicate.ID, ToolStackItemPredicate::deserialize);\n'
-          text = text.replace(stale, '', 1)
-
-          path.write_text(text, encoding='utf-8')
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/item/armor/MultilayerArmorItem.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraft.world.item.ArmorMaterial;\n', '', 1)
+          old = '''  @SuppressWarnings("removal")\n  public MultilayerArmorItem(ArmorMaterial material, ArmorItem.Type slot, Properties properties, ToolDefinition toolDefinition) {\n    this(material, slot, properties, toolDefinition, new ResourceLocation(material.getName()));\n  }\n\n  public MultilayerArmorItem(ArmorMaterial material, ArmorItem.Type slot, Properties properties, ToolDefinition toolDefinition, ResourceLocation name) {'''
+          new = '''  public MultilayerArmorItem(DummyArmorMaterial material, ArmorItem.Type slot, Properties properties, ToolDefinition toolDefinition) {\n    this(material, slot, properties, toolDefinition, material.getId());\n  }\n\n  public MultilayerArmorItem(DummyArmorMaterial material, ArmorItem.Type slot, Properties properties, ToolDefinition toolDefinition, ResourceLocation name) {'''
+          if old not in text:
+              raise SystemExit('Missing MultilayerArmorItem legacy armor material constructors')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Verify item sub-predicate migration
+      - name: Verify armor material migration
         run: |
-          grep -q 'import net.minecraft.advancements.critereon.ItemSubPredicate;' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'toolStackItemPredicateType' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath()' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC)' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          test -z "$(grep 'ItemPredicate.register(ToolStackItemPredicate' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
+          grep -q 'Holder<ArmorMaterial> material' src/main/java/slimeknights/tconstruct/library/tools/item/armor/DummyArmorMaterial.java
+          grep -q 'Holder.direct(new ArmorMaterial' src/main/java/slimeknights/tconstruct/library/tools/item/armor/DummyArmorMaterial.java
+          grep -q 'super(materialIn.getMaterial(), type, builderIn);' src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java
+          grep -q 'MultilayerArmorItem(DummyArmorMaterial material' src/main/java/slimeknights/tconstruct/library/tools/item/armor/MultilayerArmorItem.java
+          test -z "$(grep 'implements ArmorMaterial' src/main/java/slimeknights/tconstruct/library/tools/item/armor/DummyArmorMaterial.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Item sub-predicate registration is already migrated.'
+            echo 'Armor material holder migration is already applied.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          git commit -m 'Register 1.21 tool item sub-predicate'
+          git add \
+            src/main/java/slimeknights/tconstruct/library/tools/item/armor/DummyArmorMaterial.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/armor/MultilayerArmorItem.java
+          git commit -m 'Migrate armor material wrapper to 1.21 holder model'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
