@@ -23,114 +23,187 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate legacy block signatures
+      - name: Migrate duct and menu APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           root = Path('src/main/java/slimeknights/tconstruct')
 
-          # 1.21 pick-block API no longer receives hit/player and now requires LevelReader.
-          clone_files = [
-            'smeltery/block/CastingTankBlock.java',
-            'smeltery/block/SearedLanternBlock.java',
-            'smeltery/block/component/RetexturedOrientableSmelteryBlock.java',
-            'smeltery/block/component/SearedDuctBlock.java',
-            'smeltery/block/component/SearedTankBlock.java',
-            'smeltery/block/controller/HeatingControllerBlock.java',
-            'tables/block/RetexturedTableBlock.java',
-            'tables/block/TinkersChestBlock.java',
-          ]
-          old_clone = 'public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter world, BlockPos pos, Player player)'
-          new_clone = 'public ItemStack getCloneItemStack(net.minecraft.world.level.LevelReader world, BlockPos pos, BlockState state)'
-          for rel in clone_files:
-            p = root / rel
-            s = p.read_text()
-            if s.count(old_clone) != 1:
-              raise SystemExit(f'{rel}: expected one legacy clone signature')
-            p.write_text(s.replace(old_clone, new_clone))
-
-          # One client call site still invokes the removed five-argument pick-block hook.
-          p = root / 'tables/client/inventory/widget/TinkerTabsWidget.java'
+          # Duct: preserve the filtered fluid wrapper while moving both exposed handlers to native NeoForge capabilities.
+          p = root / 'smeltery/block/entity/component/DuctBlockEntity.java'
           s = p.read_text()
-          old = 'state.getBlock().getCloneItemStack(state, null, level, blockPos, minecraft.player)'
-          if s.count(old) != 1:
-            raise SystemExit('unexpected TinkerTabsWidget clone call')
-          p.write_text(s.replace(old, 'state.getBlock().getCloneItemStack(level, blockPos, state)'))
-
-          # Block tooltip context changed from BlockGetter to Item.TooltipContext.
-          tooltip_files = [
-            'smeltery/block/component/RetexturedOrientableSmelteryBlock.java',
-            'smeltery/block/component/SearedDuctBlock.java',
-            'smeltery/block/controller/HeatingControllerBlock.java',
-            'tables/block/RetexturedTableBlock.java',
-          ]
-          for rel in tooltip_files:
-            p = root / rel
-            s = p.read_text()
-            s2, n = re.subn(
-              r'appendHoverText\(ItemStack stack, @Nullable BlockGetter pLevel, List<Component> tooltip, TooltipFlag (pFlag|flag)\)',
-              lambda m: f'appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag {m.group(1)})',
-              s)
-            if n != 1:
-              raise SystemExit(f'{rel}: expected one legacy tooltip signature, got {n}')
-            p.write_text(s2)
-
-          # The old four-argument block pathfinding override was removed in vanilla 1.21.
-          path_files = [
-            'smeltery/block/FaucetBlock.java',
-            'smeltery/block/ChannelBlock.java',
-            'smeltery/block/component/SearedSoulGlassBlock.java',
-            'shared/block/TableBlock.java',
-            'shared/block/SoulGlassBlock.java',
-            'shared/block/SlimesteelBlock.java',
-            'world/block/CongealedSlimeBlock.java',
-          ]
-          path_pattern = re.compile(r'\n(?:  @SuppressWarnings\("deprecation"\)\n)?(?:  @Deprecated\n)?  @Override\n  public boolean isPathfindable\(BlockState [^\n]+\) \{\n    return false;\n  \}\n')
-          for rel in path_files:
-            p = root / rel
-            s2, n = path_pattern.subn('\n', p.read_text())
-            if n != 1:
-              raise SystemExit(f'{rel}: expected one legacy pathfinding override, got {n}')
-            p.write_text(s2)
-
-          # Tank block item data moved to CUSTOM_DATA components.
-          for rel in ['smeltery/block/component/SearedTankBlock.java', 'smeltery/block/CastingTankBlock.java', 'smeltery/block/SearedLanternBlock.java']:
-            p = root / rel
-            s = p.read_text()
-            old = 'CompoundTag nbt = stack.getTag();'
+          for old in [
+            'import net.minecraftforge.common.capabilities.Capability;\n',
+            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+            'import net.minecraftforge.common.util.LazyOptional;\n',
+          ]:
             if s.count(old) != 1:
-              raise SystemExit(f'{rel}: expected one legacy stack tag read')
-            p.write_text(s.replace(old, 'CompoundTag nbt = slimeknights.tconstruct.library.utils.TagUtil.getTag(stack);'))
+              raise SystemExit(f'DuctBlockEntity: unexpected import count for {old.strip()}')
+            s = s.replace(old, '')
+          old = '  private final LazyOptional<IItemHandler> itemCapability = LazyOptional.of(() -> itemHandler);\n'
+          if s.count(old) != 1:
+            raise SystemExit('DuctBlockEntity: legacy item capability field not found exactly once')
+          s = s.replace(old, '')
+          old_block = '''  @Nonnull
+  @Override
+  public <C> LazyOptional<C> getCapability(Capability<C> capability, @Nullable Direction facing) {
+    if (capability == ForgeCapabilities.ITEM_HANDLER) {
+      return itemCapability.cast();
+    }
+    return super.getCapability(capability, facing);
+  }
 
-          # Same component transition for the heating controller texture marker.
-          p = root / 'smeltery/block/controller/HeatingControllerBlock.java'
+  @Override
+  public void invalidateCaps() {
+    super.invalidateCaps();
+    itemCapability.invalidate();
+  }
+
+  @Override
+  protected LazyOptional<IFluidHandler> makeWrapper(LazyOptional<IFluidHandler> capability) {
+    return LazyOptional.of(() -> new DuctTankWrapper(capability.orElse(emptyInstance), itemHandler));
+  }
+'''
+          new_block = '''  @Nullable
+  @Override
+  public IFluidHandler getHandler(@Nullable Direction facing) {
+    IFluidHandler handler = super.getHandler(facing);
+    return handler == null ? null : new DuctTankWrapper(handler, itemHandler);
+  }
+'''
+          if s.count(old_block) != 1:
+            raise SystemExit('DuctBlockEntity: legacy capability block did not match exactly')
+          p.write_text(s.replace(old_block, new_block))
+
+          # Register the duct's item slot explicitly; its fluid provider now calls the filtered override above.
+          p = root / 'TConstruct.java'
           s = p.read_text()
-          if s.count('if (stack.hasTag()) {') != 1:
-            raise SystemExit('unexpected heating controller tag check')
-          p.write_text(s.replace('if (stack.hasTag()) {', 'if (slimeknights.tconstruct.library.utils.TagUtil.hasTag(stack)) {'))
+          anchor = '    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.duct.get(), (io, side) -> io.getHandler(side));\n'
+          replacement = anchor + '    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.duct.get(), (duct, side) -> duct.getItemHandler());\n'
+          if s.count(anchor) != 1:
+            raise SystemExit('TConstruct: duct fluid capability registration not found exactly once')
+          p.write_text(s.replace(anchor, replacement))
+
+          # 1.21 makes MenuScreens.register private; NeoForge exposes RegisterMenuScreensEvent instead.
+          p = root / 'smeltery/SmelteryClientEvents.java'
+          s = p.read_text()
+          if s.count('import net.minecraft.client.gui.screens.MenuScreens;\n') != 1:
+            raise SystemExit('SmelteryClientEvents: MenuScreens import mismatch')
+          s = s.replace('import net.minecraft.client.gui.screens.MenuScreens;\n', '')
+          anchor = 'import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;\n'
+          if s.count(anchor) != 1:
+            raise SystemExit('SmelteryClientEvents: client event import anchor mismatch')
+          s = s.replace(anchor, anchor + 'import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;\n')
+          old = '''  @SubscribeEvent
+  static void clientSetup(final FMLClientSetupEvent event) {
+    MenuScreens.register(TinkerSmeltery.melterContainer.get(), MelterScreen::new);
+    MenuScreens.register(TinkerSmeltery.smelteryContainer.get(), HeatingStructureScreen::new);
+    MenuScreens.register(TinkerSmeltery.singleItemContainer.get(), new SingleItemScreenFactory());
+    MenuScreens.register(TinkerSmeltery.alloyerContainer.get(), AlloyerScreen::new);
+    ToolModel.registerSmallTool(TinkerItemDisplays.MELTER);
+    ToolModel.registerSmallTool(TinkerItemDisplays.CASTING_BASIN);
+    ToolModel.registerSmallTool(TinkerItemDisplays.CASTING_TABLE);
+  }
+'''
+          new = '''  @SubscribeEvent
+  static void registerScreens(RegisterMenuScreensEvent event) {
+    event.register(TinkerSmeltery.melterContainer.get(), MelterScreen::new);
+    event.register(TinkerSmeltery.smelteryContainer.get(), HeatingStructureScreen::new);
+    event.register(TinkerSmeltery.singleItemContainer.get(), new SingleItemScreenFactory());
+    event.register(TinkerSmeltery.alloyerContainer.get(), AlloyerScreen::new);
+  }
+
+  @SubscribeEvent
+  static void clientSetup(final FMLClientSetupEvent event) {
+    ToolModel.registerSmallTool(TinkerItemDisplays.MELTER);
+    ToolModel.registerSmallTool(TinkerItemDisplays.CASTING_BASIN);
+    ToolModel.registerSmallTool(TinkerItemDisplays.CASTING_TABLE);
+  }
+'''
+          if s.count(old) != 1:
+            raise SystemExit('SmelteryClientEvents: legacy client setup block mismatch')
+          p.write_text(s.replace(old, new))
+
+          p = root / 'tables/TableClientEvents.java'
+          s = p.read_text()
+          if s.count('import net.minecraft.client.gui.screens.MenuScreens;\n') != 1 or s.count('import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;\n') != 1:
+            raise SystemExit('TableClientEvents: legacy menu imports mismatch')
+          s = s.replace('import net.minecraft.client.gui.screens.MenuScreens;\n', '')
+          s = s.replace('import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;\n', '')
+          anchor = 'import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;\n'
+          if s.count(anchor) != 1:
+            raise SystemExit('TableClientEvents: import anchor mismatch')
+          s = s.replace(anchor, anchor + 'import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;\n')
+          old = '''  @SubscribeEvent
+  static void setupClient(final FMLClientSetupEvent event) {
+    MenuScreens.register(TinkerTables.craftingStationContainer.get(), CraftingStationScreen::new);
+    MenuScreens.register(TinkerTables.tinkerStationContainer.get(), TinkerStationScreen::new);
+    MenuScreens.register(TinkerTables.partBuilderContainer.get(), PartBuilderScreen::new);
+    MenuScreens.register(TinkerTables.modifierWorktableContainer.get(), ModifierWorktableScreen::new);
+    MenuScreens.register(TinkerTables.tinkerChestContainer.get(), TinkerChestScreen::new);
+  }
+'''
+          new = '''  @SubscribeEvent
+  static void registerScreens(RegisterMenuScreensEvent event) {
+    event.register(TinkerTables.craftingStationContainer.get(), CraftingStationScreen::new);
+    event.register(TinkerTables.tinkerStationContainer.get(), TinkerStationScreen::new);
+    event.register(TinkerTables.partBuilderContainer.get(), PartBuilderScreen::new);
+    event.register(TinkerTables.modifierWorktableContainer.get(), ModifierWorktableScreen::new);
+    event.register(TinkerTables.tinkerChestContainer.get(), TinkerChestScreen::new);
+  }
+'''
+          if s.count(old) != 1:
+            raise SystemExit('TableClientEvents: legacy setup block mismatch')
+          p.write_text(s.replace(old, new))
+
+          p = root / 'tools/ToolClientEvents.java'
+          s = p.read_text()
+          if s.count('import net.minecraft.client.gui.screens.MenuScreens;\n') != 1:
+            raise SystemExit('ToolClientEvents: MenuScreens import mismatch')
+          s = s.replace('import net.minecraft.client.gui.screens.MenuScreens;\n', '')
+          anchor = 'import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;\n'
+          if s.count(anchor) != 1:
+            raise SystemExit('ToolClientEvents: key mapping import anchor mismatch')
+          s = s.replace(anchor, anchor + 'import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;\n')
+          old = '      // screens\n      MenuScreens.register(TinkerTools.toolContainer.get(), ToolContainerScreen::new);\n\n'
+          if s.count(old) != 1:
+            raise SystemExit('ToolClientEvents: legacy tool screen registration mismatch')
+          s = s.replace(old, '')
+          anchor = '''  @SubscribeEvent
+  static void clientSetupEvent(FMLClientSetupEvent event) {
+'''
+          addition = '''  @SubscribeEvent
+  static void registerScreens(RegisterMenuScreensEvent event) {
+    event.register(TinkerTools.toolContainer.get(), ToolContainerScreen::new);
+  }
+
+'''
+          if s.count(anchor) != 1:
+            raise SystemExit('ToolClientEvents: client setup method anchor mismatch')
+          p.write_text(s.replace(anchor, addition + anchor))
           PY
 
       - name: Verify migration
         shell: bash
         run: |
-          ! grep -R -Fq 'getCloneItemStack(BlockState state, HitResult target, BlockGetter world, BlockPos pos, Player player)' src/main/java/slimeknights/tconstruct
-          ! grep -R -Fq 'appendHoverText(ItemStack stack, @Nullable BlockGetter' src/main/java/slimeknights/tconstruct
-          ! grep -R -Fq 'public boolean isPathfindable(BlockState' src/main/java/slimeknights/tconstruct
-          grep -Fq 'getCloneItemStack(level, blockPos, state)' src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/TinkerTabsWidget.java
-          grep -Fq 'TagUtil.getTag(stack)' src/main/java/slimeknights/tconstruct/smeltery/block/component/SearedTankBlock.java
+          ! grep -R -Fq 'MenuScreens.register' src/main/java/slimeknights/tconstruct
+          ! grep -Fq 'net.minecraftforge.common.util.LazyOptional' src/main/java/slimeknights/tconstruct/smeltery/block/entity/component/DuctBlockEntity.java
+          ! grep -Fq 'ForgeCapabilities' src/main/java/slimeknights/tconstruct/smeltery/block/entity/component/DuctBlockEntity.java
+          grep -Fq 'return handler == null ? null : new DuctTankWrapper(handler, itemHandler);' src/main/java/slimeknights/tconstruct/smeltery/block/entity/component/DuctBlockEntity.java
+          grep -Fq 'Capabilities.ItemHandler.BLOCK, TinkerSmeltery.duct.get()' src/main/java/slimeknights/tconstruct/TConstruct.java
+          grep -R -Fq 'RegisterMenuScreensEvent event' src/main/java/slimeknights/tconstruct/smeltery src/main/java/slimeknights/tconstruct/tables src/main/java/slimeknights/tconstruct/tools
           git diff --check
 
-      - name: Commit signature migration
+      - name: Commit migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate legacy block signatures to 1.21'
+            git commit -m 'Migrate duct capabilities and menu screens to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
