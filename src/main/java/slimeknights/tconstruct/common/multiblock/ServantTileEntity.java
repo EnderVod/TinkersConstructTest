@@ -130,7 +130,7 @@ public class ServantTileEntity extends MantleBlockEntity implements IServantLogi
   }
 
   @Override
-  protected void saveAdditional(CompoundTag tags, HolderLookup.Provider registries) {
+  public void saveAdditional(CompoundTag tags, HolderLookup.Provider registries) {
     super.saveAdditional(tags, registries);
     writeMaster(tags);
   }
