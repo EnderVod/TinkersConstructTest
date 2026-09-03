@@ -30,63 +30,51 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Finish custom ingredient wiring
+      - name: Register tool stack item sub-predicate
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          tools = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
-          text = tools.read_text(encoding='utf-8')
-          old_import = 'import net.neoforged.neoforge.common.crafting.CraftingHelper;\n'
-          if old_import not in text:
-              raise SystemExit('Missing legacy CraftingHelper import in TinkerTools')
-          text = text.replace(old_import, 'import net.neoforged.neoforge.common.crafting.IngredientType;\n', 1)
-          loot_line = '  public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType(AddToolDataFunction.SERIALIZER));\n'
-          if loot_line not in text:
-              raise SystemExit('Missing lootAddToolData registration')
-          if 'toolHookIngredientType = INGREDIENT_TYPES.register' not in text:
-              text = text.replace(loot_line, loot_line + '\n  /** Custom ingredient matching tools that expose a given tool hook. */\n  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =\n    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));\n', 1)
-          stale = '      CraftingHelper.register(ToolHookIngredient.Serializer.ID, ToolHookIngredient.Serializer.INSTANCE);\n'
-          if stale not in text:
-              raise SystemExit('Missing legacy ToolHookIngredient registration')
+          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          text = path.read_text(encoding='utf-8')
+
+          old_import = 'import net.minecraft.advancements.critereon.ItemPredicate;\n'
+          new_import = 'import net.minecraft.advancements.critereon.ItemSubPredicate;\n'
+          if old_import in text:
+              text = text.replace(old_import, new_import, 1)
+          elif new_import not in text:
+              raise SystemExit('Could not locate ItemPredicate import')
+
+          anchor = '  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =\n    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));\n'
+          registration = '\n  /** Item sub-predicate matching Tinkers tool data in advancements and commands. */\n  public static final DeferredHolder<ItemSubPredicate.Type<?>, ItemSubPredicate.Type<ToolStackItemPredicate>> toolStackItemPredicateType =\n    ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath(), () -> new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC));\n'
+          if 'toolStackItemPredicateType = ITEM_SUB_PREDICATES.register' not in text:
+              if anchor not in text:
+                  raise SystemExit('Could not locate ingredient registration anchor')
+              text = text.replace(anchor, anchor + registration, 1)
+
+          stale = '      ItemPredicate.register(ToolStackItemPredicate.ID, ToolStackItemPredicate::deserialize);\n'
           text = text.replace(stale, '', 1)
-          tools.write_text(text, encoding='utf-8')
 
-          shaped = Path('src/main/java/slimeknights/tconstruct/library/recipe/material/ShapedMaterialRecipe.java')
-          text = shaped.read_text(encoding='utf-8')
-          old = '        if (ingredient instanceof MaterialValueIngredient materialValue) {'
-          new = '        if (ingredient.getCustomIngredient() instanceof MaterialValueIngredient materialValue) {'
-          if old not in text:
-              raise SystemExit('Missing MaterialValueIngredient detection in ShapedMaterialRecipe')
-          shaped.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          jei = Path('src/main/java/slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
-          text = jei.read_text(encoding='utf-8')
-          old = '    this.materialSlots = IntStream.range(0, inputs.size()).filter(i -> inputs.get(i) instanceof MaterialValueIngredient).toArray();'
-          new = '    this.materialSlots = IntStream.range(0, inputs.size()).filter(i -> inputs.get(i).getCustomIngredient() instanceof MaterialValueIngredient).toArray();'
-          if old not in text:
-              raise SystemExit('Missing MaterialValueIngredient detection in ShapedMaterialExtension')
-          jei.write_text(text.replace(old, new, 1), encoding='utf-8')
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify custom ingredient wiring
+      - name: Verify item sub-predicate migration
         run: |
-          grep -q 'toolHookIngredientType' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath()' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          test -z "$(grep 'CraftingHelper.register(ToolHookIngredient' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
-          grep -q 'ingredient.getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/library/recipe/material/ShapedMaterialRecipe.java
-          grep -q 'getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java
+          grep -q 'import net.minecraft.advancements.critereon.ItemSubPredicate;' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'toolStackItemPredicateType = ITEM_SUB_PREDICATES.register' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC)' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          test -z "$(grep 'ItemPredicate.register(ToolStackItemPredicate' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No remaining custom ingredient wiring changes needed.'
+            echo 'Item sub-predicate registration is already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
-          git commit -m 'Finish 1.21 custom ingredient migration'
+          git add src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          git commit -m 'Register 1.21 tool item sub-predicate'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
