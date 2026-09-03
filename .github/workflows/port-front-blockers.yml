@@ -31,145 +31,35 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate client watcher and GUI APIs
+      - name: Replace obsolete client equipment capability watcher
+        shell: bash
+        run: |
+          echo 'cGFja2FnZSBzbGltZWtuaWdodHMudGNvbnN0cnVjdC50b29scy5sb2dpYzsKCmltcG9ydCBuZXQubWluZWNyYWZ0LndvcmxkLmVudGl0eS5FcXVpcG1lbnRTbG90OwppbXBvcnQgbmV0Lm1pbmVjcmFmdC53b3JsZC5lbnRpdHkuTGl2aW5nRW50aXR5OwppbXBvcnQgbmV0Lm1pbmVjcmFmdC53b3JsZC5lbnRpdHkucGxheWVyLlBsYXllcjsKaW1wb3J0IG5ldC5taW5lY3JhZnQud29ybGQuaXRlbS5JdGVtU3RhY2s7CmltcG9ydCBuZXQubmVvZm9yZ2VkLmFwaS5kaXN0bWFya2VyLkRpc3Q7CmltcG9ydCBuZXQubmVvZm9yZ2VkLm5lb2ZvcmdlLmNvbW1vbi5OZW9Gb3JnZTsKaW1wb3J0IG5ldC5uZW9mb3JnZWQubmVvZm9yZ2UuZXZlbnQuZW50aXR5LmxpdmluZy5MaXZpbmdFcXVpcG1lbnRDaGFuZ2VFdmVudDsKaW1wb3J0IG5ldC5uZW9mb3JnZWQubmVvZm9yZ2UuZXZlbnQudGljay5QbGF5ZXJUaWNrRXZlbnQ7CmltcG9ydCBuZXQubmVvZm9yZ2VkLmZtbC5sb2FkaW5nLkZNTEVudmlyb25tZW50OwppbXBvcnQgc2xpbWVrbmlnaHRzLnRjb25zdHJ1Y3QubGlicmFyeS5ldmVudHMuVG9vbEVxdWlwbWVudENoYW5nZUV2ZW50OwppbXBvcnQgc2xpbWVrbmlnaHRzLnRjb25zdHJ1Y3QubGlicmFyeS5tb2RpZmllcnMuTW9kaWZpZXJFbnRyeTsKaW1wb3J0IHNsaW1la25pZ2h0cy50Y29uc3RydWN0LmxpYnJhcnkubW9kaWZpZXJzLk1vZGlmaWVySG9va3M7CmltcG9ydCBzbGltZWtuaWdodHMudGNvbnN0cnVjdC5saWJyYXJ5LnRvb2xzLmNvbnRleHQuRXF1aXBtZW50Q2hhbmdlQ29udGV4dDsKaW1wb3J0IHNsaW1la25pZ2h0cy50Y29uc3RydWN0LmxpYnJhcnkudG9vbHMuaGVscGVyLk1vZGlmaWVyVXRpbDsKaW1wb3J0IHNsaW1la25pZ2h0cy50Y29uc3RydWN0LmxpYnJhcnkudG9vbHMubmJ0LklUb29sU3RhY2tWaWV3OwoKaW1wb3J0IGphdmEudXRpbC5FbnVtTWFwOwppbXBvcnQgamF2YS51dGlsLk1hcDsKaW1wb3J0IGphdmEudXRpbC5XZWFrSGFzaE1hcDsKCi8qKgogKiBXYXRjaGVzIGVxdWlwbWVudCBjaGFuZ2VzIHNvIG1vZGlmaWVyIGhvb2tzIHJlY2VpdmUgZXF1aXZhbGVudCBub3RpZmljYXRpb25zIG9uIGJvdGggbG9naWNhbCBzaWRlcy4KICovCnB1YmxpYyBjbGFzcyBFcXVpcG1lbnRDaGFuZ2VXYXRjaGVyIHsKICBwcml2YXRlIEVxdWlwbWVudENoYW5nZVdhdGNoZXIoKSB7fQoKICAvKiogQ2xpZW50LXNpZGUgc25hcHNob3RzIGtleWVkIHdlYWtseSBieSBwbGF5ZXIgc28gZGlzY29ubmVjdGVkIHBsYXllcnMgZG8gbm90IHJlbWFpbiBjYWNoZWQuICovCiAgcHJpdmF0ZSBzdGF0aWMgZmluYWwgTWFwPFBsYXllcixQbGF5ZXJMYXN0RXF1aXBtZW50PiBDTElFTlRfV0FUQ0hFUlMgPSBuZXcgV2Vha0hhc2hNYXA8PigpOwoKICAvKiogUmVnaXN0ZXJzIGVxdWlwbWVudCBjaGFuZ2UgbGlzdGVuZXJzLiAqLwogIHB1YmxpYyBzdGF0aWMgdm9pZCByZWdpc3RlcigpIHsKICAgIC8vIE5lb0ZvcmdlJ3MgZXF1aXBtZW50IGNoYW5nZSBldmVudCBpcyBzZXJ2ZXItc2lkZSBpbiAxLjIxLjEuCiAgICBOZW9Gb3JnZS5FVkVOVF9CVVMuYWRkTGlzdGVuZXIoRXF1aXBtZW50Q2hhbmdlV2F0Y2hlcjo6b25FcXVpcG1lbnRDaGFuZ2UpOwoKICAgIC8vIE1pcnJvciBlcXVpcG1lbnQgY2hhbmdlcyBvbiB0aGUgcGh5c2ljYWwgY2xpZW50IHVzaW5nIHRoZSBwb3N0IHBsYXllciB0aWNrIGV2ZW50LgogICAgaWYgKEZNTEVudmlyb25tZW50LmRpc3QgPT0gRGlzdC5DTElFTlQpIHsKICAgICAgTmVvRm9yZ2UuRVZFTlRfQlVTLmFkZExpc3RlbmVyKEVxdWlwbWVudENoYW5nZVdhdGNoZXI6Om9uUGxheWVyVGljayk7CiAgICB9CiAgfQoKCiAgLyogRXZlbnRzICovCgogIC8qKiBTZXJ2ZXItc2lkZSBtb2RpZmllciBob29rcy4gKi8KICBwcml2YXRlIHN0YXRpYyB2b2lkIG9uRXF1aXBtZW50Q2hhbmdlKExpdmluZ0VxdWlwbWVudENoYW5nZUV2ZW50IGV2ZW50KSB7CiAgICBydW5Nb2RpZmllckhvb2tzKGV2ZW50LmdldEVudGl0eSgpLCBldmVudC5nZXRTbG90KCksIGV2ZW50LmdldEZyb20oKSwgZXZlbnQuZ2V0VG8oKSk7CiAgfQoKICAvKiogQ2xpZW50LXNpZGUgbW9kaWZpZXIgaG9va3MuICovCiAgcHJpdmF0ZSBzdGF0aWMgdm9pZCBvblBsYXllclRpY2soUGxheWVyVGlja0V2ZW50LlBvc3QgZXZlbnQpIHsKICAgIFBsYXllciBwbGF5ZXIgPSBldmVudC5nZXRFbnRpdHkoKTsKICAgIGlmIChwbGF5ZXIubGV2ZWwoKS5pc0NsaWVudFNpZGUoKSkgewogICAgICBDTElFTlRfV0FUQ0hFUlMuY29tcHV0ZUlmQWJzZW50KHBsYXllciwga2V5IC0+IG5ldyBQbGF5ZXJMYXN0RXF1aXBtZW50KCkpLnVwZGF0ZShwbGF5ZXIpOwogICAgfQogIH0KCgogIC8qIEhlbHBlcnMgKi8KCiAgLyoqIFNoYXJlZCBtb2RpZmllciBob29rIGxvZ2ljICovCiAgcHJpdmF0ZSBzdGF0aWMgdm9pZCBydW5Nb2RpZmllckhvb2tzKExpdmluZ0VudGl0eSBlbnRpdHksIEVxdWlwbWVudFNsb3QgY2hhbmdlZFNsb3QsIEl0ZW1TdGFjayBvcmlnaW5hbCwgSXRlbVN0YWNrIHJlcGxhY2VtZW50KSB7CiAgICBFcXVpcG1lbnRDaGFuZ2VDb250ZXh0IGNvbnRleHQgPSBuZXcgRXF1aXBtZW50Q2hhbmdlQ29udGV4dChlbnRpdHksIGNoYW5nZWRTbG90LCBvcmlnaW5hbCwgcmVwbGFjZW1lbnQpOwoKICAgIC8vIGZpcnN0LCBmaXJlIGV2ZW50IHRvIG5vdGlmeSBhbiBpdGVtIHdhcyByZW1vdmVkCiAgICBJVG9vbFN0YWNrVmlldyB0b29sID0gY29udGV4dC5nZXRPcmlnaW5hbFRvb2woKTsKICAgIGlmICh0b29sICE9IG51bGwgJiYgTW9kaWZpZXJVdGlsLnZhbGlkQXJtb3JTbG90KHRvb2wsIGNoYW5nZWRTbG90KSkgewogICAgICBmb3IgKE1vZGlmaWVyRW50cnkgZW50cnkgOiB0b29sLmdldE1vZGlmaWVyTGlzdCgpKSB7CiAgICAgICAgZW50cnkuZ2V0SG9vayhNb2RpZmllckhvb2tzLkVRVUlQTUVOVF9DSEFOR0UpLm9uVW5lcXVpcCh0b29sLCBlbnRyeSwgY29udGV4dCk7CiAgICAgIH0KICAgIH0KCiAgICAvLyBuZXh0LCBmaXJlIGV2ZW50IHRvIG5vdGlmeSBhbiBpdGVtIHdhcyBhZGRlZAogICAgdG9vbCA9IGNvbnRleHQuZ2V0UmVwbGFjZW1lbnRUb29sKCk7CiAgICBpZiAodG9vbCAhPSBudWxsICYmIE1vZGlmaWVyVXRpbC52YWxpZEFybW9yU2xvdCh0b29sLCBjaGFuZ2VkU2xvdCkpIHsKICAgICAgZm9yIChNb2RpZmllckVudHJ5IGVudHJ5IDogdG9vbC5nZXRNb2RpZmllckxpc3QoKSkgewogICAgICAgIGVudHJ5LmdldEhvb2soTW9kaWZpZXJIb29rcy5FUVVJUE1FTlRfQ0hBTkdFKS5vbkVxdWlwKHRvb2wsIGVudHJ5LCBjb250ZXh0KTsKICAgICAgfQogICAgfQoKICAgIC8vIGZpbmFsbHksIGZpcmUgZXZlbnRzIG9uIGFsbCBvdGhlciBzbG90cyB0byBzYXkgc29tZXRoaW5nIGNoYW5nZWQKICAgIGZvciAoRXF1aXBtZW50U2xvdCBvdGhlclNsb3QgOiBFcXVpcG1lbnRTbG90LnZhbHVlcygpKSB7CiAgICAgIGlmIChvdGhlclNsb3QgIT0gY2hhbmdlZFNsb3QpIHsKICAgICAgICB0b29sID0gY29udGV4dC5nZXRWYWxpZFRvb2wob3RoZXJTbG90KTsKICAgICAgICBpZiAodG9vbCAhPSBudWxsKSB7CiAgICAgICAgICBmb3IgKE1vZGlmaWVyRW50cnkgZW50cnkgOiB0b29sLmdldE1vZGlmaWVyTGlzdCgpKSB7CiAgICAgICAgICAgIGVudHJ5LmdldEhvb2soTW9kaWZpZXJIb29rcy5FUVVJUE1FTlRfQ0hBTkdFKS5vbkVxdWlwbWVudENoYW5nZSh0b29sLCBlbnRyeSwgY29udGV4dCwgb3RoZXJTbG90KTsKICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIH0KICAgIH0KICAgIC8vIGZpcmUgZXZlbnQgZm9yIG1vZGlmaWVycyB0aGF0IHdhbnQgdG8gd2F0Y2ggZXF1aXBtZW50IHdoZW4gbm90IGVxdWlwcGVkCiAgICBOZW9Gb3JnZS5FVkVOVF9CVVMucG9zdChuZXcgVG9vbEVxdWlwbWVudENoYW5nZUV2ZW50KGNvbnRleHQpKTsKICB9CgogIC8qKiBDbGllbnQgc25hcHNob3QgdGhhdCBydW5zIHRoZSBhY3R1YWwgY29tcGFyaXNvbiBsb2dpYy4gKi8KICBwcm90ZWN0ZWQgc3RhdGljIGNsYXNzIFBsYXllckxhc3RFcXVpcG1lbnQgewogICAgcHJpdmF0ZSBmaW5hbCBNYXA8RXF1aXBtZW50U2xvdCxJdGVtU3RhY2s+IGxhc3RJdGVtcyA9IG5ldyBFbnVtTWFwPD4oRXF1aXBtZW50U2xvdC5jbGFzcyk7CgogICAgcHJpdmF0ZSBQbGF5ZXJMYXN0RXF1aXBtZW50KCkgewogICAgICBmb3IgKEVxdWlwbWVudFNsb3Qgc2xvdCA6IEVxdWlwbWVudFNsb3QudmFsdWVzKCkpIHsKICAgICAgICBsYXN0SXRlbXMucHV0KHNsb3QsIEl0ZW1TdGFjay5FTVBUWSk7CiAgICAgIH0KICAgIH0KCiAgICAvKiogQ2FsbGVkIG9uIHBsYXllciB0aWNrIHRvIHVwZGF0ZSB0aGUgc3RhY2tzIGFuZCBydW4gdGhlIGV2ZW50LiAqLwogICAgcHVibGljIHZvaWQgdXBkYXRlKFBsYXllciBwbGF5ZXIpIHsKICAgICAgZm9yIChFcXVpcG1lbnRTbG90IHNsb3QgOiBFcXVpcG1lbnRTbG90LnZhbHVlcygpKSB7CiAgICAgICAgSXRlbVN0YWNrIG5ld1N0YWNrID0gcGxheWVyLmdldEl0ZW1CeVNsb3Qoc2xvdCk7CiAgICAgICAgSXRlbVN0YWNrIG9sZFN0YWNrID0gbGFzdEl0ZW1zLmdldChzbG90KTsKICAgICAgICBpZiAoIUl0ZW1TdGFjay5tYXRjaGVzKG9sZFN0YWNrLCBuZXdTdGFjaykpIHsKICAgICAgICAgIGxhc3RJdGVtcy5wdXQoc2xvdCwgbmV3U3RhY2suY29weSgpKTsKICAgICAgICAgIHJ1bk1vZGlmaWVySG9va3MocGxheWVyLCBzbG90LCBvbGRTdGFjaywgbmV3U3RhY2spOwogICAgICAgIH0KICAgICAgfQogICAgfQogIH0KfQo=' | base64 -d > src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java
+
+      - name: Migrate GUI and item registry APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          watcher = Path('src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java')
-          watcher.write_text('''package slimeknights.tconstruct.tools.logic;
-
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.fml.loading.FMLEnvironment;
-import slimeknights.tconstruct.library.events.ToolEquipmentChangeEvent;
-import slimeknights.tconstruct.library.modifiers.ModifierEntry;
-import slimeknights.tconstruct.library.modifiers.ModifierHooks;
-import slimeknights.tconstruct.library.tools.context.EquipmentChangeContext;
-import slimeknights.tconstruct.library.tools.helper.ModifierUtil;
-import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
-
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.WeakHashMap;
-
-/**
- * Watches equipment changes so modifier hooks receive equivalent notifications on both logical sides.
- */
-public class EquipmentChangeWatcher {
-  private EquipmentChangeWatcher() {}
-
-  /** Client-side snapshots keyed weakly by player so disconnected players do not remain cached. */
-  private static final Map<Player,PlayerLastEquipment> CLIENT_WATCHERS = new WeakHashMap<>();
-
-  /** Registers equipment change listeners. */
-  public static void register() {
-    // NeoForge's equipment change event is server-side in 1.21.1.
-    NeoForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onEquipmentChange);
-
-    // Mirror equipment changes on the physical client using the post player tick event.
-    if (FMLEnvironment.dist == Dist.CLIENT) {
-      NeoForge.EVENT_BUS.addListener(EquipmentChangeWatcher::onPlayerTick);
-    }
-  }
-
-
-  /* Events */
-
-  /** Server-side modifier hooks. */
-  private static void onEquipmentChange(LivingEquipmentChangeEvent event) {
-    runModifierHooks(event.getEntity(), event.getSlot(), event.getFrom(), event.getTo());
-  }
-
-  /** Client-side modifier hooks. */
-  private static void onPlayerTick(PlayerTickEvent.Post event) {
-    Player player = event.getEntity();
-    if (player.level().isClientSide()) {
-      CLIENT_WATCHERS.computeIfAbsent(player, key -> new PlayerLastEquipment()).update(player);
-    }
-  }
-
-
-  /* Helpers */
-
-  /** Shared modifier hook logic */
-  private static void runModifierHooks(LivingEntity entity, EquipmentSlot changedSlot, ItemStack original, ItemStack replacement) {
-    EquipmentChangeContext context = new EquipmentChangeContext(entity, changedSlot, original, replacement);
-
-    // first, fire event to notify an item was removed
-    IToolStackView tool = context.getOriginalTool();
-    if (tool != null && ModifierUtil.validArmorSlot(tool, changedSlot)) {
-      for (ModifierEntry entry : tool.getModifierList()) {
-        entry.getHook(ModifierHooks.EQUIPMENT_CHANGE).onUnequip(tool, entry, context);
-      }
-    }
-
-    // next, fire event to notify an item was added
-    tool = context.getReplacementTool();
-    if (tool != null && ModifierUtil.validArmorSlot(tool, changedSlot)) {
-      for (ModifierEntry entry : tool.getModifierList()) {
-        entry.getHook(ModifierHooks.EQUIPMENT_CHANGE).onEquip(tool, entry, context);
-      }
-    }
-
-    // finally, fire events on all other slots to say something changed
-    for (EquipmentSlot otherSlot : EquipmentSlot.values()) {
-      if (otherSlot != changedSlot) {
-        tool = context.getValidTool(otherSlot);
-        if (tool != null) {
-          for (ModifierEntry entry : tool.getModifierList()) {
-            entry.getHook(ModifierHooks.EQUIPMENT_CHANGE).onEquipmentChange(tool, entry, context, otherSlot);
-          }
-        }
-      }
-    }
-    // fire event for modifiers that want to watch equipment when not equipped
-    NeoForge.EVENT_BUS.post(new ToolEquipmentChangeEvent(context));
-  }
-
-  /** Client snapshot that runs the actual comparison logic. */
-  protected static class PlayerLastEquipment {
-    private final Map<EquipmentSlot,ItemStack> lastItems = new EnumMap<>(EquipmentSlot.class);
-
-    private PlayerLastEquipment() {
-      for (EquipmentSlot slot : EquipmentSlot.values()) {
-        lastItems.put(slot, ItemStack.EMPTY);
-      }
-    }
-
-    /** Called on player tick to update the stacks and run the event. */
-    public void update(Player player) {
-      for (EquipmentSlot slot : EquipmentSlot.values()) {
-        ItemStack newStack = player.getItemBySlot(slot);
-        ItemStack oldStack = lastItems.get(slot);
-        if (!ItemStack.matches(oldStack, newStack)) {
-          lastItems.put(slot, newStack.copy());
-          runModifierHooks(player, slot, oldStack, newStack);
-        }
-      }
-    }
-  }
-}
-''', encoding='utf-8')
-
           gui = Path('src/main/java/slimeknights/tconstruct/tools/client/ModifierClientEvents.java')
           text = gui.read_text(encoding='utf-8')
-          text = text.replace('import net.neoforged.neoforge.client.event.RenderGuiOverlayEvent;\n', 'import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;\n')
-          text = text.replace('import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;\n', 'import net.neoforged.neoforge.client.gui.VanillaGuiLayers;\n')
-          text = text.replace('public static void renderHotbar(RenderGuiOverlayEvent.Post event)', 'public static void renderHotbar(RenderGuiLayerEvent.Post event)')
-          text = text.replace('event.getOverlay() != VanillaGuiOverlay.HOTBAR.type()', '!VanillaGuiLayers.HOTBAR.equals(event.getName())')
-          text = text.replace('float partialTicks = event.getPartialTick();', 'float partialTicks = event.getPartialTick().getGameTimeDeltaPartialTick(false);')
+          replacements = {
+              'import net.neoforged.neoforge.client.event.RenderGuiOverlayEvent;\n': 'import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;\n',
+              'import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;\n': 'import net.neoforged.neoforge.client.gui.VanillaGuiLayers;\n',
+              'public static void renderHotbar(RenderGuiOverlayEvent.Post event)': 'public static void renderHotbar(RenderGuiLayerEvent.Post event)',
+              'event.getOverlay() != VanillaGuiOverlay.HOTBAR.type()': '!VanillaGuiLayers.HOTBAR.equals(event.getName())',
+              'float partialTicks = event.getPartialTick();': 'float partialTicks = event.getPartialTick().getGameTimeDeltaPartialTick(false);',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Missing expected GUI token: {old!r}')
+              text = text.replace(old, new)
           gui.write_text(text, encoding='utf-8')
 
           recipe = Path('src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java')
           text = recipe.read_text(encoding='utf-8')
+          if 'import net.neoforged.neoforge.registries.ForgeRegistries;\n' not in text:
+              raise SystemExit('Missing ForgeRegistries import in enchantment conversion recipe')
           text = text.replace('import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.network.chat.Component;\n')
           text = text.replace('import net.neoforged.neoforge.registries.ForgeRegistries;\n', '')
           text = text.replace('ForgeRegistries.ITEMS.getValues().stream()', 'BuiltInRegistries.ITEM.stream()')
@@ -190,17 +80,13 @@ public class EquipmentChangeWatcher {
       - name: Commit grouped migration
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo 'Client watcher and GUI API migration is already present.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java \
-                    src/main/java/slimeknights/tconstruct/tools/client/ModifierClientEvents.java \
-                    src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
-            git commit -m 'Migrate client equipment and GUI APIs to 1.21'
-            git push origin HEAD:1.21.1-neoforge
-          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java \
+                  src/main/java/slimeknights/tconstruct/tools/client/ModifierClientEvents.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
+          git commit -m 'Migrate client equipment and GUI APIs to 1.21'
+          git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
         env:
