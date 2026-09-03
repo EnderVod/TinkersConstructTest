@@ -30,100 +30,354 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate 1.21 event and translation APIs
+      - name: Migrate tool item capabilities to NeoForge 1.21
         run: |
+          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java <<'JAVA'
+          package slimeknights.tconstruct.library.tools.capability;
+
+          import net.minecraft.core.registries.BuiltInRegistries;
+          import net.minecraft.world.item.Item;
+          import net.minecraft.world.item.ItemStack;
+          import net.neoforged.neoforge.capabilities.Capabilities;
+          import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+          import slimeknights.tconstruct.TConstruct;
+          import slimeknights.tconstruct.library.tools.capability.fluid.ToolFluidCapability;
+          import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;
+          import slimeknights.tconstruct.library.tools.item.IModifiable;
+          import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
+          import slimeknights.tconstruct.library.tools.nbt.ToolStack;
+
+          /** Registers the standard NeoForge 1.21 item capabilities exposed by modifiable tools. */
+          public final class ToolCapabilityProvider {
+            private ToolCapabilityProvider() {}
+
+            /** Registers the capability registration listener early in mod construction. */
+            public static void init() {
+              TConstruct.getModBus().addListener(ToolCapabilityProvider::registerCapabilities);
+            }
+
+            private static void registerCapabilities(RegisterCapabilitiesEvent event) {
+              Item[] tools = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof IModifiable).toArray(Item[]::new);
+              if (tools.length == 0) {
+                return;
+              }
+
+              event.registerItem(Capabilities.ItemHandler.ITEM, (stack, context) -> {
+                IToolStackView tool = ToolStack.from(stack);
+                if (tool.getVolatileData().getInt(ToolInventoryCapability.TOTAL_SLOTS) <= 0) {
+                  return null;
+                }
+                return new ToolInventoryCapability(() -> ToolStack.from(stack));
+              }, tools);
+
+              event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> {
+                IToolStackView tool = ToolStack.from(stack);
+                if (tool.getVolatileData().getInt(ToolFluidCapability.TOTAL_TANKS) <= 0) {
+                  return null;
+                }
+                return new ToolFluidCapability(stack, () -> ToolStack.from(stack));
+              }, tools);
+
+              event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> {
+                IToolStackView tool = ToolStack.from(stack);
+                if (ToolEnergyCapability.getMaxEnergy(tool) <= 0) {
+                  return null;
+                }
+                return new ToolEnergyCapability(() -> ToolStack.from(stack));
+              }, tools);
+
+              event.registerItem(BlockItemProviderCapability.CAPABILITY, (stack, context) ->
+                BlockItemProviderModifierHook.CapabilityImpl.INSTANCE, tools);
+            }
+          }
+          JAVA
+
+          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java <<'JAVA'
+          package slimeknights.tconstruct.library.tools.capability;
+
+          import net.minecraft.core.registries.BuiltInRegistries;
+          import net.minecraft.resources.ResourceLocation;
+          import net.minecraft.world.entity.LivingEntity;
+          import net.minecraft.world.entity.player.Player;
+          import net.minecraft.world.item.BlockItem;
+          import net.minecraft.world.item.Item;
+          import net.minecraft.world.item.ItemStack;
+          import net.neoforged.neoforge.capabilities.ItemCapability;
+          import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+          import org.jetbrains.annotations.ApiStatus;
+          import slimeknights.mantle.data.loadable.Loadables;
+          import slimeknights.tconstruct.TConstruct;
+
+          import javax.annotation.Nullable;
+
+          /**
+           * Provides block items to block-placement logic such as Exchanging and block-placement fluid effects.
+           */
+          public interface BlockItemProviderCapability {
+            ResourceLocation ID = TConstruct.getResource("block_provider");
+            ItemCapability<BlockItemProviderCapability, Void> CAPABILITY = ItemCapability.createVoid(ID, BlockItemProviderCapability.class);
+
+            /** Registers the default BlockItem provider through NeoForge's 1.21 item capability API. */
+            @ApiStatus.Internal
+            static void register() {
+              TConstruct.getModBus().addListener(BlockItemProviderCapability::registerCapabilities);
+            }
+
+            private static void registerCapabilities(RegisterCapabilitiesEvent event) {
+              Item[] blockItems = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof BlockItem).toArray(Item[]::new);
+              if (blockItems.length > 0) {
+                event.registerItem(CAPABILITY, (stack, context) -> SimpleBlockItem.INSTANCE, blockItems);
+              }
+            }
+
+            /** Gets the provider for this stack, or null if the stack does not provide blocks. */
+            @Nullable
+            static BlockItemProviderCapability getBlockProvider(ItemStack stack) {
+              return stack.getCapability(CAPABILITY);
+            }
+
+            /** Verifies that a provided stack contains a BlockItem. */
+            @Nullable
+            static BlockItem verifyBlockItem(ItemStack stack, BlockItemProviderCapability blockProvider) {
+              if (stack.getItem() instanceof BlockItem blockItem) {
+                return blockItem;
+              }
+              TConstruct.LOG.warn("BlockItemProviderCapability implementation tried to return a non-empty, non-blockitem stack! Cap: {}, Cap Class: {}, Provided Item: {}", blockProvider, blockProvider.getClass().getName(), Loadables.ITEM.getKey(stack.getItem()));
+              return null;
+            }
+
+            ItemStack getBlockItemStack(ItemStack stack, @Nullable LivingEntity entity);
+
+            void consume(ItemStack stack, ItemStack backingStack, @Nullable LivingEntity entity);
+
+            /** Default provider for ordinary BlockItem stacks. */
+            final class SimpleBlockItem implements BlockItemProviderCapability {
+              public static final SimpleBlockItem INSTANCE = new SimpleBlockItem();
+              private SimpleBlockItem() {}
+
+              @Override
+              public ItemStack getBlockItemStack(ItemStack capStack, @Nullable LivingEntity entity) {
+                return capStack.isEmpty() ? ItemStack.EMPTY : capStack;
+              }
+
+              @Override
+              public void consume(ItemStack capStack, ItemStack backingStack, @Nullable LivingEntity entity) {
+                capStack.shrink(1);
+              }
+            }
+          }
+          JAVA
+
+          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderModifierHook.java <<'JAVA'
+          package slimeknights.tconstruct.library.tools.capability;
+
+          import net.minecraft.world.entity.LivingEntity;
+          import net.minecraft.world.item.BlockItem;
+          import net.minecraft.world.item.Item;
+          import net.minecraft.world.item.ItemStack;
+          import slimeknights.mantle.data.loadable.Loadables;
+          import slimeknights.tconstruct.TConstruct;
+          import slimeknights.tconstruct.library.modifiers.ModifierEntry;
+          import slimeknights.tconstruct.library.modifiers.ModifierHooks;
+          import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
+          import slimeknights.tconstruct.library.tools.nbt.ToolStack;
+
+          import javax.annotation.Nullable;
+
+          /** A hook used to provide BlockItems through the BlockItemProviderCapability. */
+          public interface BlockItemProviderModifierHook {
+            ItemStack getBlockItemStack(IToolStackView tool, ModifierEntry modifier, @Nullable LivingEntity entity);
+
+            boolean consumeBlockItem(IToolStackView tool, ModifierEntry modifier, ItemStack backingStack, @Nullable LivingEntity entity);
+
+            /** Stateless capability implementation; reads the current tool stack for every operation. */
+            final class CapabilityImpl implements BlockItemProviderCapability {
+              public static final CapabilityImpl INSTANCE = new CapabilityImpl();
+              private CapabilityImpl() {}
+
+              @Override
+              public ItemStack getBlockItemStack(ItemStack capStack, @Nullable LivingEntity entity) {
+                IToolStackView tool = ToolStack.from(capStack);
+                for (ModifierEntry entry : tool.getModifiers()) {
+                  BlockItemProviderModifierHook hook = entry.getHook(ModifierHooks.BLOCK_ITEM_PROVIDER);
+                  ItemStack stack = hook.getBlockItemStack(tool, entry, entity);
+                  if (!stack.isEmpty()) {
+                    Item item = stack.getItem();
+                    if (item instanceof BlockItem) {
+                      return stack;
+                    }
+                    TConstruct.LOG.warn("ToolBlockItemProviderHook implementation tried to return a non-empty, non-blockitem stack! Hook: {}, Hook Class: {}, Provided Item: {}", hook, hook.getClass().getName(), Loadables.ITEM.getKey(item));
+                  }
+                }
+                return ItemStack.EMPTY;
+              }
+
+              @Override
+              public void consume(ItemStack capStack, ItemStack backingStack, @Nullable LivingEntity entity) {
+                IToolStackView tool = ToolStack.from(capStack);
+                for (ModifierEntry entry : tool.getModifiers()) {
+                  if (entry.getHook(ModifierHooks.BLOCK_ITEM_PROVIDER).consumeBlockItem(tool, entry, backingStack, entity)) {
+                    return;
+                  }
+                }
+                TConstruct.LOG.warn("Could not find a modifier to consume {} from after providing it from ToolBlockItemProviderHook. This is likely causing a duplication glitch! Stack nbt: {}", Loadables.ITEM.getKey(backingStack.getItem()), backingStack.getTag());
+              }
+            }
+          }
+          JAVA
+
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          # Mob finalize-spawn event moved from a nested MobSpawnEvent type to a top-level event in NeoForge 1.21.1.
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java')
+          # Standard tool item classes no longer attach providers from Item#initCapabilities.
+          item_paths = [
+            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java',
+            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java',
+            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java',
+            'src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java',
+            'src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java',
+          ]
+          init_pattern = re.compile(r'\n  @Nullable\n  @Override\n  public ICapabilityProvider initCapabilities\(ItemStack stack, @Nullable CompoundTag nbt\) \{\n    return new ToolCapabilityProvider\(stack\);\n  \}\n')
+          for filename in item_paths:
+            path = Path(filename)
+            text = path.read_text(encoding='utf-8')
+            text = text.replace('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', '')
+            text = text.replace('import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider;\n', '')
+            text, count = init_pattern.subn('\n', text, count=1)
+            if count != 1:
+              raise SystemExit(f'Missing legacy initCapabilities block in {filename}')
+            path.write_text(text, encoding='utf-8')
+
+          # Remove old provider wrappers from the concrete handlers; registration now happens centrally.
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/ToolEnergyCapability.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace(
-              'import net.neoforged.neoforge.event.entity.living.MobSpawnEvent.FinalizeSpawn;\n',
-              'import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;\n', 1)
-          text = text.replace(
-              'public static boolean apply(List<MobEquipment> replace, Mob mob, FinalizeSpawn event)',
-              'public static boolean apply(List<MobEquipment> replace, Mob mob, FinalizeSpawnEvent event)', 1)
-          old_finalize = '      mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), event.getSpawnType(), event.getSpawnData(), event.getSpawnTag());'
-          new_finalize = '      mob.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), event.getSpawnData());'
-          if old_finalize not in text:
-              raise SystemExit('Missing legacy MobEquipment finalizeSpawn call')
-          text = text.replace(old_finalize, new_finalize, 1)
+          for old in [
+            'import net.minecraftforge.common.capabilities.Capability;\n',
+            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+            'import net.minecraftforge.common.util.LazyOptional;\n',
+            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
+          ]:
+            text = text.replace(old, '')
+          text, count = re.subn(r'\n  /\*\* Provider instance for a fluid cap \*/\n  public static class Provider.*?\n  \}\n(?=\})', '\n', text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit('Missing ToolEnergyCapability.Provider block')
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/fluid/ToolFluidCapability.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace(
-              'import net.neoforged.neoforge.event.entity.living.MobSpawnEvent.FinalizeSpawn;\n',
-              'import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;\n', 1)
-          text = text.replace('FinalizeSpawn.class, INSTANCE::finalizeSpawn', 'FinalizeSpawnEvent.class, INSTANCE::finalizeSpawn', 1)
-          text = text.replace('private void finalizeSpawn(FinalizeSpawn event)', 'private void finalizeSpawn(FinalizeSpawnEvent event)', 1)
+          for old in [
+            'import net.minecraftforge.common.capabilities.Capability;\n',
+            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+            'import net.minecraftforge.common.util.LazyOptional;\n',
+            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
+          ]:
+            text = text.replace(old, '')
+          text, count = re.subn(r'\n  /\*\* Provider instance for a fluid cap \*/\n  public static class Provider.*?\n  \}\n(?=\})', '\n', text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit('Missing ToolFluidCapability.Provider block')
           path.write_text(text, encoding='utf-8')
 
-          # LivingTickEvent was removed; use the exact 1.21.1 post-entity-tick event and filter to living entities.
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java')
           text = path.read_text(encoding='utf-8')
+          for old in [
+            'import net.minecraftforge.common.capabilities.Capability;\n',
+            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+            'import net.minecraftforge.common.util.LazyOptional;\n',
+            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
+          ]:
+            text = text.replace(old, '')
+          if 'import net.neoforged.neoforge.capabilities.Capabilities;\n' not in text:
+            text = text.replace('import net.minecraft.world.item.ItemUtils;\n', 'import net.minecraft.world.item.ItemUtils;\nimport net.neoforged.neoforge.capabilities.Capabilities;\n', 1)
           text = text.replace(
-              'import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;\n',
-              'import net.neoforged.neoforge.event.tick.EntityTickEvent;\n', 1)
-          old_handler = '''  private static void onLivingTick(LivingTickEvent event) {\n    LivingEntity entity = event.getEntity();'''
-          new_handler = '''  private static void onLivingTick(EntityTickEvent.Post event) {\n    if (!(event.getEntity() instanceof LivingEntity entity)) {\n      return;\n    }'''
-          if old_handler not in text:
-              raise SystemExit('Missing legacy SlimeBounceHandler tick handler')
-          text = text.replace(old_handler, new_handler, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # ForgeI18n no longer exists. Language is common-side and exposes the same translated-key presence semantics we need.
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/Util.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraftforge.common.ForgeI18n;\n', 'import net.minecraft.locale.Language;\n', 1)
-          old = '    return !ForgeI18n.getPattern(key).equals(key);'
-          new = '    return Language.getInstance().has(key);'
+            'return !stack.getItem().canFitInsideContainerItems() || stack.is(TinkerTags.Items.TOOL_INVENTORY_BLACKLIST) || stack.getCapability(ForgeCapabilities.ITEM_HANDLER).isPresent();',
+            'return !stack.getItem().canFitInsideContainerItems() || stack.is(TinkerTags.Items.TOOL_INVENTORY_BLACKLIST) || stack.getCapability(Capabilities.ItemHandler.ITEM) != null;', 1)
+          text, count = re.subn(r'\n  /\*\* Provider for an inventory tool capability \*/\n  public static class Provider.*?\n  \}\n\n', '\n', text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit('Missing ToolInventoryCapability.Provider block')
+          old = '    IItemHandler handler = stack.getCapability(ForgeCapabilities.ITEM_HANDLER).filter(cap -> cap instanceof IItemHandlerModifiable).orElse(EmptyItemHandler.INSTANCE);'
+          new = '    IItemHandler queriedHandler = stack.getCapability(Capabilities.ItemHandler.ITEM);\n    IItemHandler handler = queriedHandler instanceof IItemHandlerModifiable ? queriedHandler : EmptyItemHandler.INSTANCE;'
           if old not in text:
-              raise SystemExit('Missing legacy Util ForgeI18n translation check')
+            raise SystemExit('Missing ToolInventoryCapability container lookup')
+          text = text.replace(old, new, 1)
+          old = '      IItemHandler handler = entity.getItem().getCapability(ForgeCapabilities.ITEM_HANDLER).orElse(EmptyItemHandler.INSTANCE);\n      if (handler.getSlots() > 0) {'
+          new = '      IItemHandler handler = entity.getItem().getCapability(Capabilities.ItemHandler.ITEM);\n      if (handler != null && handler.getSlots() > 0) {'
+          if old not in text:
+            raise SystemExit('Missing ToolInventoryCapability destruction lookup')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java')
+          # Menu-side lookup uses the same nullable 1.21 item capability API.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraftforge.common.ForgeI18n;\n', 'import net.minecraft.locale.Language;\n', 1)
-          old = '''    String langKey = "domain." + domain + ".display_name";\n    String translated = ForgeI18n.getPattern(langKey);\n    if (!translated.equals(langKey)) {\n      return translated;\n    }'''
-          new = '''    String langKey = "domain." + domain + ".display_name";\n    Language language = Language.getInstance();\n    if (language.has(langKey)) {\n      return language.getOrDefault(langKey);\n    }'''
+          text = text.replace('import net.minecraftforge.common.capabilities.ForgeCapabilities;\n', 'import net.neoforged.neoforge.capabilities.Capabilities;\n', 1)
+          old = '      handler = stack.getCapability(ForgeCapabilities.ITEM_HANDLER).filter(cap -> cap instanceof IItemHandlerModifiable).orElse(EmptyItemHandler.INSTANCE);'
+          new = '      IItemHandler queriedHandler = stack.getCapability(Capabilities.ItemHandler.ITEM);\n      handler = queriedHandler instanceof IItemHandlerModifiable ? queriedHandler : EmptyItemHandler.INSTANCE;'
           if old not in text:
-              raise SystemExit('Missing legacy DomainDisplayName ForgeI18n block')
+            raise SystemExit('Missing ToolContainerMenu capability lookup')
           text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Register the new provider listener during construction, not during common setup.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          text = path.read_text(encoding='utf-8')
+          constructor_anchor = '    RandomMaterial.init();\n'
+          if '    ToolCapabilityProvider.init();\n' not in text:
+            if constructor_anchor not in text:
+              raise SystemExit('Missing TinkerTools constructor anchor')
+            text = text.replace(constructor_anchor, constructor_anchor + '    ToolCapabilityProvider.init();\n', 1)
+          for stale in [
+            '    ToolCapabilityProvider.register(ToolFluidCapability.Provider::new);\n',
+            '    ToolCapabilityProvider.register(ToolInventoryCapability.Provider::new);\n',
+            '    ToolCapabilityProvider.register((stack, tool) -> new ToolEnergyCapability.Provider(tool));\n',
+            '    ToolCapabilityProvider.register((stack, tool) -> new BlockItemProviderModifierHook.Provider(tool));\n',
+          ]:
+            text = text.replace(stale, '', 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify 1.21 event and translation migration
+      - name: Verify tool capability migration
         run: |
-          grep -q 'FinalizeSpawnEvent' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
-          grep -q 'mob.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), event.getSpawnData())' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
-          grep -q 'FinalizeSpawnEvent.class' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
-          grep -q 'EntityTickEvent.Post event' src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java
-          grep -q 'Language.getInstance().has(key)' src/main/java/slimeknights/tconstruct/library/utils/Util.java
-          grep -q 'language.getOrDefault(langKey)' src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java
-          test -z "$(grep -R 'MobSpawnEvent.FinalizeSpawn\|LivingTickEvent\|ForgeI18n' \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment \
-            src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java \
-            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
-            src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java || true)"
+          grep -q 'RegisterCapabilitiesEvent' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
+          grep -q 'Capabilities.ItemHandler.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
+          grep -q 'Capabilities.FluidHandler.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
+          grep -q 'Capabilities.EnergyStorage.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
+          grep -q 'ItemCapability.createVoid' src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java
+          grep -q 'ToolCapabilityProvider.init();' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'Capabilities.ItemHandler.ITEM' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
+          test -z "$(grep -R 'initCapabilities(ItemStack stack' \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java || true)"
+          test -z "$(grep -R 'ToolCapabilityProvider.IToolCapabilityProvider\|ForgeCapabilities' \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/ToolEnergyCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/fluid/ToolFluidCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderModifierHook.java \
+            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Event and translation APIs are already migrated.'
+            echo 'Tool item capabilities are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java \
-            src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java \
-            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
-            src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java
-          git commit -m 'Migrate 1.21 spawn tick and translation APIs'
+            src/main/java/slimeknights/tconstruct/library/tools/capability \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java \
+            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
+            src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          git commit -m 'Migrate tool item capabilities to NeoForge 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
