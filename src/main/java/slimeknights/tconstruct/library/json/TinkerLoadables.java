@@ -88,7 +88,7 @@ public class TinkerLoadables {
     }
     throw error.create("Unknown harvest tier " + id);
   }, (tier, error) -> {
-    ResourceLocation id = HarvestTiers.getName(tier);
+    ResourceLocation id = HarvestTiers.getId(tier);
     if (id != null) {
       return id;
     }
