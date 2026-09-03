@@ -54,7 +54,7 @@ public class HarvestTiers {
 
   /** Gets the stable persisted ID for a vanilla tier. */
   @Nullable
-  public static ResourceLocation getName(Tier tier) {
+  public static ResourceLocation getId(Tier tier) {
     return NAMES_BY_TIER.get(tier);
   }
 
@@ -75,7 +75,7 @@ public class HarvestTiers {
 
   /** Makes a translation key for the given name */
   private static MutableComponent makeLevelKey(Tier tier) {
-    ResourceLocation id = getName(tier);
+    ResourceLocation id = getId(tier);
     if (id == null) {
       id = ResourceLocation.fromNamespaceAndPath(TConstruct.MOD_ID, "unknown");
     }
