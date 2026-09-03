@@ -30,197 +30,220 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate tool item capabilities to NeoForge 1.21
+      - name: Migrate entity capabilities to data attachments
         run: |
-          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java <<'JAVA'
+          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java <<'JAVA'
           package slimeknights.tconstruct.library.tools.capability;
 
-          import net.minecraft.core.registries.BuiltInRegistries;
-          import net.minecraft.world.item.Item;
-          import net.minecraft.world.item.ItemStack;
-          import net.neoforged.neoforge.capabilities.Capabilities;
-          import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-          import slimeknights.tconstruct.TConstruct;
-          import slimeknights.tconstruct.library.tools.capability.fluid.ToolFluidCapability;
-          import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;
-          import slimeknights.tconstruct.library.tools.item.IModifiable;
-          import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
-          import slimeknights.tconstruct.library.tools.nbt.ToolStack;
-
-          /** Registers the standard NeoForge 1.21 item capabilities exposed by modifiable tools. */
-          public final class ToolCapabilityProvider {
-            private ToolCapabilityProvider() {}
-
-            /** Registers the capability registration listener early in mod construction. */
-            public static void init() {
-              TConstruct.getModBus().addListener(ToolCapabilityProvider::registerCapabilities);
-            }
-
-            private static void registerCapabilities(RegisterCapabilitiesEvent event) {
-              Item[] tools = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof IModifiable).toArray(Item[]::new);
-              if (tools.length == 0) {
-                return;
-              }
-
-              event.registerItem(Capabilities.ItemHandler.ITEM, (stack, context) -> {
-                IToolStackView tool = ToolStack.from(stack);
-                if (tool.getVolatileData().getInt(ToolInventoryCapability.TOTAL_SLOTS) <= 0) {
-                  return null;
-                }
-                return new ToolInventoryCapability(() -> ToolStack.from(stack));
-              }, tools);
-
-              event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> {
-                IToolStackView tool = ToolStack.from(stack);
-                if (tool.getVolatileData().getInt(ToolFluidCapability.TOTAL_TANKS) <= 0) {
-                  return null;
-                }
-                return new ToolFluidCapability(stack, () -> ToolStack.from(stack));
-              }, tools);
-
-              event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> {
-                IToolStackView tool = ToolStack.from(stack);
-                if (ToolEnergyCapability.getMaxEnergy(tool) <= 0) {
-                  return null;
-                }
-                return new ToolEnergyCapability(() -> ToolStack.from(stack));
-              }, tools);
-
-              event.registerItem(BlockItemProviderCapability.CAPABILITY, (stack, context) ->
-                BlockItemProviderModifierHook.CapabilityImpl.INSTANCE, tools);
-            }
-          }
-          JAVA
-
-          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java <<'JAVA'
-          package slimeknights.tconstruct.library.tools.capability;
-
-          import net.minecraft.core.registries.BuiltInRegistries;
+          import net.minecraft.core.HolderLookup;
+          import net.minecraft.nbt.CompoundTag;
           import net.minecraft.resources.ResourceLocation;
+          import net.minecraft.world.entity.Entity;
           import net.minecraft.world.entity.LivingEntity;
           import net.minecraft.world.entity.player.Player;
-          import net.minecraft.world.item.BlockItem;
-          import net.minecraft.world.item.Item;
-          import net.minecraft.world.item.ItemStack;
-          import net.neoforged.neoforge.capabilities.ItemCapability;
-          import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-          import org.jetbrains.annotations.ApiStatus;
-          import slimeknights.mantle.data.loadable.Loadables;
+          import net.neoforged.neoforge.attachment.AttachmentType;
+          import net.neoforged.neoforge.attachment.IAttachmentHolder;
+          import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+          import net.neoforged.neoforge.common.NeoForge;
+          import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+          import net.neoforged.neoforge.registries.DeferredRegister;
+          import net.neoforged.neoforge.registries.NeoForgeRegistries;
           import slimeknights.tconstruct.TConstruct;
+          import slimeknights.tconstruct.common.network.SyncPersistentDataPacket;
+          import slimeknights.tconstruct.common.network.TinkerNetwork;
+          import slimeknights.tconstruct.library.tools.nbt.ModDataNBT;
 
-          import javax.annotation.Nullable;
+          import java.util.function.Consumer;
+          import java.util.function.Supplier;
 
-          /**
-           * Provides block items to block-placement logic such as Exchanging and block-placement fluid effects.
-           */
-          public interface BlockItemProviderCapability {
-            ResourceLocation ID = TConstruct.getResource("block_provider");
-            ItemCapability<BlockItemProviderCapability, Void> CAPABILITY = ItemCapability.createVoid(ID, BlockItemProviderCapability.class);
+          /** Persistent per-entity Tinkers modifier data, stored through NeoForge 1.21 data attachments. */
+          public final class PersistentDataCapability {
+            private PersistentDataCapability() {}
 
-            /** Registers the default BlockItem provider through NeoForge's 1.21 item capability API. */
-            @ApiStatus.Internal
-            static void register() {
-              TConstruct.getModBus().addListener(BlockItemProviderCapability::registerCapabilities);
+            private static final ResourceLocation ID = TConstruct.getResource("persistent_data");
+            private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
+              DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, TConstruct.MOD_ID);
+
+            /** Persistent attachment replacing the old Forge entity capability. */
+            public static final Supplier<AttachmentType<ModDataNBT>> ATTACHMENT = ATTACHMENT_TYPES.register(ID.getPath(), () ->
+              AttachmentType.builder(ModDataNBT::new)
+                .serialize(new IAttachmentSerializer<CompoundTag, ModDataNBT>() {
+                  @Override
+                  public ModDataNBT read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
+                    return ModDataNBT.readFromNBT(tag.copy());
+                  }
+
+                  @Override
+                  public CompoundTag write(ModDataNBT attachment, HolderLookup.Provider provider) {
+                    return attachment.getCopy();
+                  }
+                })
+                .copyOnDeath()
+                .build());
+
+            /** Gets the data, creating the attachment on first use. */
+            public static ModDataNBT getOrWarn(Entity entity) {
+              if (!(entity instanceof LivingEntity) && !EntityModifierCapability.supportCapability(entity)) {
+                TConstruct.LOG.warn("Creating Tinkers persistent data on unsupported entity {}", entity.getType());
+              }
+              return entity.getData(ATTACHMENT);
             }
 
-            private static void registerCapabilities(RegisterCapabilitiesEvent event) {
-              Item[] blockItems = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof BlockItem).toArray(Item[]::new);
-              if (blockItems.length > 0) {
-                event.registerItem(CAPABILITY, (stack, context) -> SimpleBlockItem.INSTANCE, blockItems);
+            /** Gets existing data or an empty detached value when none has been created. */
+            public static ModDataNBT getOrEmpty(Entity entity) {
+              ModDataNBT data = entity.getExistingDataOrNull(ATTACHMENT);
+              return data == null ? new ModDataNBT() : data;
+            }
+
+            /** Runs the consumer only if data is already present. */
+            public static void getIfPresent(Entity entity, Consumer<ModDataNBT> consumer) {
+              ModDataNBT data = entity.getExistingDataOrNull(ATTACHMENT);
+              if (data != null) {
+                consumer.accept(data);
               }
             }
 
-            /** Gets the provider for this stack, or null if the stack does not provide blocks. */
-            @Nullable
-            static BlockItemProviderCapability getBlockProvider(ItemStack stack) {
-              return stack.getCapability(CAPABILITY);
+            /** Registers the attachment and player sync listeners during mod construction. */
+            public static void register() {
+              ATTACHMENT_TYPES.register(TConstruct.getModBus());
+              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerRespawn);
+              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerChangeDimension);
+              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerLoggedIn);
             }
 
-            /** Verifies that a provided stack contains a BlockItem. */
-            @Nullable
-            static BlockItem verifyBlockItem(ItemStack stack, BlockItemProviderCapability blockProvider) {
-              if (stack.getItem() instanceof BlockItem blockItem) {
-                return blockItem;
-              }
-              TConstruct.LOG.warn("BlockItemProviderCapability implementation tried to return a non-empty, non-blockitem stack! Cap: {}, Cap Class: {}, Provided Item: {}", blockProvider, blockProvider.getClass().getName(), Loadables.ITEM.getKey(stack.getItem()));
-              return null;
+            private static void sync(Player player) {
+              ModDataNBT data = player.getData(ATTACHMENT);
+              TinkerNetwork.getInstance().sendTo(new SyncPersistentDataPacket(data.getCopy()), player);
             }
 
-            ItemStack getBlockItemStack(ItemStack stack, @Nullable LivingEntity entity);
+            private static void playerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+              sync(event.getEntity());
+            }
 
-            void consume(ItemStack stack, ItemStack backingStack, @Nullable LivingEntity entity);
+            private static void playerChangeDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+              sync(event.getEntity());
+            }
 
-            /** Default provider for ordinary BlockItem stacks. */
-            final class SimpleBlockItem implements BlockItemProviderCapability {
-              public static final SimpleBlockItem INSTANCE = new SimpleBlockItem();
-              private SimpleBlockItem() {}
-
-              @Override
-              public ItemStack getBlockItemStack(ItemStack capStack, @Nullable LivingEntity entity) {
-                return capStack.isEmpty() ? ItemStack.EMPTY : capStack;
-              }
-
-              @Override
-              public void consume(ItemStack capStack, ItemStack backingStack, @Nullable LivingEntity entity) {
-                capStack.shrink(1);
-              }
+            private static void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+              sync(event.getEntity());
             }
           }
           JAVA
 
-          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderModifierHook.java <<'JAVA'
+          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java <<'JAVA'
           package slimeknights.tconstruct.library.tools.capability;
 
-          import net.minecraft.world.entity.LivingEntity;
-          import net.minecraft.world.item.BlockItem;
-          import net.minecraft.world.item.Item;
-          import net.minecraft.world.item.ItemStack;
-          import slimeknights.mantle.data.loadable.Loadables;
+          import net.minecraft.core.HolderLookup;
+          import net.minecraft.nbt.ListTag;
+          import net.minecraft.resources.ResourceLocation;
+          import net.minecraft.world.entity.Entity;
+          import net.neoforged.neoforge.attachment.AttachmentType;
+          import net.neoforged.neoforge.attachment.IAttachmentHolder;
+          import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+          import net.neoforged.neoforge.registries.DeferredRegister;
+          import net.neoforged.neoforge.registries.NeoForgeRegistries;
+          import org.jetbrains.annotations.Nullable;
           import slimeknights.tconstruct.TConstruct;
-          import slimeknights.tconstruct.library.modifiers.ModifierEntry;
-          import slimeknights.tconstruct.library.modifiers.ModifierHooks;
-          import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
-          import slimeknights.tconstruct.library.tools.nbt.ToolStack;
+          import slimeknights.tconstruct.library.tools.nbt.ModifierNBT;
 
-          import javax.annotation.Nullable;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.function.Predicate;
+          import java.util.function.Supplier;
 
-          /** A hook used to provide BlockItems through the BlockItemProviderCapability. */
-          public interface BlockItemProviderModifierHook {
-            ItemStack getBlockItemStack(IToolStackView tool, ModifierEntry modifier, @Nullable LivingEntity entity);
-
-            boolean consumeBlockItem(IToolStackView tool, ModifierEntry modifier, ItemStack backingStack, @Nullable LivingEntity entity);
-
-            /** Stateless capability implementation; reads the current tool stack for every operation. */
-            final class CapabilityImpl implements BlockItemProviderCapability {
-              public static final CapabilityImpl INSTANCE = new CapabilityImpl();
-              private CapabilityImpl() {}
-
+          /** Data attachment allowing supported entities (notably projectiles) to carry tool modifiers. */
+          public final class EntityModifierCapability {
+            public static final EntityModifiers EMPTY = new EntityModifiers() {
               @Override
-              public ItemStack getBlockItemStack(ItemStack capStack, @Nullable LivingEntity entity) {
-                IToolStackView tool = ToolStack.from(capStack);
-                for (ModifierEntry entry : tool.getModifiers()) {
-                  BlockItemProviderModifierHook hook = entry.getHook(ModifierHooks.BLOCK_ITEM_PROVIDER);
-                  ItemStack stack = hook.getBlockItemStack(tool, entry, entity);
-                  if (!stack.isEmpty()) {
-                    Item item = stack.getItem();
-                    if (item instanceof BlockItem) {
-                      return stack;
-                    }
-                    TConstruct.LOG.warn("ToolBlockItemProviderHook implementation tried to return a non-empty, non-blockitem stack! Hook: {}, Hook Class: {}, Provided Item: {}", hook, hook.getClass().getName(), Loadables.ITEM.getKey(item));
-                  }
-                }
-                return ItemStack.EMPTY;
+              public ModifierNBT getModifiers() {
+                return ModifierNBT.EMPTY;
               }
 
               @Override
-              public void consume(ItemStack capStack, ItemStack backingStack, @Nullable LivingEntity entity) {
-                IToolStackView tool = ToolStack.from(capStack);
-                for (ModifierEntry entry : tool.getModifiers()) {
-                  if (entry.getHook(ModifierHooks.BLOCK_ITEM_PROVIDER).consumeBlockItem(tool, entry, backingStack, entity)) {
-                    return;
+              public void setModifiers(ModifierNBT nbt) {}
+            };
+
+            private EntityModifierCapability() {}
+
+            private static final List<Predicate<Entity>> ENTITY_PREDICATES = new ArrayList<>();
+            private static final ResourceLocation ID = TConstruct.getResource("modifiers");
+            private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
+              DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, TConstruct.MOD_ID);
+
+            /** Serialized modifier attachment replacing the old Forge entity capability. */
+            public static final Supplier<AttachmentType<ModifierNBT>> ATTACHMENT = ATTACHMENT_TYPES.register(ID.getPath(), () ->
+              AttachmentType.builder(() -> ModifierNBT.EMPTY)
+                .serialize(new IAttachmentSerializer<ListTag, ModifierNBT>() {
+                  @Override
+                  public ModifierNBT read(IAttachmentHolder holder, ListTag tag, HolderLookup.Provider provider) {
+                    return ModifierNBT.readFromNBT(tag);
                   }
+
+                  @Nullable
+                  @Override
+                  public ListTag write(ModifierNBT attachment, HolderLookup.Provider provider) {
+                    return attachment.isEmpty() ? null : attachment.serializeToNBT();
+                  }
+                })
+                .build());
+
+            public static EntityModifiers getCapability(Entity entity) {
+              if (!supportCapability(entity)) {
+                return EMPTY;
+              }
+              return new AttachmentEntityModifiers(entity);
+            }
+
+            public static ModifierNBT getOrEmpty(Entity entity) {
+              if (!supportCapability(entity)) {
+                return ModifierNBT.EMPTY;
+              }
+              ModifierNBT modifiers = entity.getExistingDataOrNull(ATTACHMENT);
+              return modifiers == null ? ModifierNBT.EMPTY : modifiers;
+            }
+
+            public static boolean supportCapability(Entity entity) {
+              for (Predicate<Entity> entityPredicate : ENTITY_PREDICATES) {
+                if (entityPredicate.test(entity)) {
+                  return true;
                 }
-                TConstruct.LOG.warn("Could not find a modifier to consume {} from after providing it from ToolBlockItemProviderHook. This is likely causing a duplication glitch! Stack nbt: {}", Loadables.ITEM.getKey(backingStack.getItem()), backingStack.getTag());
+              }
+              return false;
+            }
+
+            public static void registerEntityPredicate(Predicate<Entity> predicate) {
+              ENTITY_PREDICATES.add(predicate);
+            }
+
+            /** Registers the attachment type during mod construction. */
+            public static void register() {
+              ATTACHMENT_TYPES.register(TConstruct.getModBus());
+            }
+
+            private record AttachmentEntityModifiers(Entity entity) implements EntityModifiers {
+              @Override
+              public ModifierNBT getModifiers() {
+                return entity.getData(ATTACHMENT);
+              }
+
+              @Override
+              public void setModifiers(ModifierNBT nbt) {
+                entity.setData(ATTACHMENT, nbt);
+              }
+            }
+
+            public interface EntityModifiers {
+              ModifierNBT getModifiers();
+
+              void setModifiers(ModifierNBT nbt);
+
+              default void addModifiers(ModifierNBT nbt) {
+                ModifierNBT existing = getModifiers();
+                if (existing.isEmpty()) {
+                  setModifiers(nbt);
+                } else {
+                  setModifiers(ModifierNBT.builder().add(existing).add(nbt).build());
+                }
               }
             }
           }
@@ -228,156 +251,89 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          # Standard tool item classes no longer attach providers from Item#initCapabilities.
-          item_paths = [
-            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java',
-            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java',
-            'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java',
-            'src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java',
-            'src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java',
-          ]
-          init_pattern = re.compile(r'\n  @Nullable\n  @Override\n  public ICapabilityProvider initCapabilities\(ItemStack stack, @Nullable CompoundTag nbt\) \{\n    return new ToolCapabilityProvider\(stack\);\n  \}\n')
-          for filename in item_paths:
+          replacements = {
+            'src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java': [
+              ('projectile.getCapability(PersistentDataCapability.CAPABILITY).orElseGet(ModDataNBT::new)', 'PersistentDataCapability.getOrEmpty(projectile)')
+            ],
+            'src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java': [
+              ('direct.getCapability(PersistentDataCapability.CAPABILITY).orElseGet(ModDataNBT::new)', 'PersistentDataCapability.getOrEmpty(direct)')
+            ],
+            'src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java': [
+              ('player.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.copyFrom(packet.data));', 'PersistentDataCapability.getOrWarn(player).copyFrom(packet.data);')
+            ],
+            'src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java': [
+              ('living.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));', 'PersistentDataCapability.getIfPresent(living, data -> data.remove(JUMPS));'),
+              ('event.getEntity().getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));', 'PersistentDataCapability.getIfPresent(event.getEntity(), data -> data.remove(JUMPS));')
+            ],
+          }
+          for filename, pairs in replacements.items():
             path = Path(filename)
             text = path.read_text(encoding='utf-8')
-            text = text.replace('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', '')
-            text = text.replace('import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider;\n', '')
-            text, count = init_pattern.subn('\n', text, count=1)
-            if count != 1:
-              raise SystemExit(f'Missing legacy initCapabilities block in {filename}')
+            for old, new in pairs:
+              if old not in text:
+                raise SystemExit(f'Missing persistent-data capability use in {filename}: {old}')
+              text = text.replace(old, new, 1)
             path.write_text(text, encoding='utf-8')
 
-          # Remove old provider wrappers from the concrete handlers; registration now happens centrally.
-          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/ToolEnergyCapability.java')
+          # Attachment/capability registration listeners must be installed during module construction, before lifecycle events fire.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java')
           text = path.read_text(encoding='utf-8')
-          for old in [
-            'import net.minecraftforge.common.capabilities.Capability;\n',
-            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
-            'import net.minecraftforge.common.util.LazyOptional;\n',
-            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
-          ]:
-            text = text.replace(old, '')
-          text, count = re.subn(r'\n  /\*\* Provider instance for a fluid cap \*/\n  public static class Provider.*?\n  \}\n(?=\})', '\n', text, count=1, flags=re.S)
-          if count != 1:
-            raise SystemExit('Missing ToolEnergyCapability.Provider block')
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/fluid/ToolFluidCapability.java')
-          text = path.read_text(encoding='utf-8')
-          for old in [
-            'import net.minecraftforge.common.capabilities.Capability;\n',
-            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
-            'import net.minecraftforge.common.util.LazyOptional;\n',
-            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
-          ]:
-            text = text.replace(old, '')
-          text, count = re.subn(r'\n  /\*\* Provider instance for a fluid cap \*/\n  public static class Provider.*?\n  \}\n(?=\})', '\n', text, count=1, flags=re.S)
-          if count != 1:
-            raise SystemExit('Missing ToolFluidCapability.Provider block')
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java')
-          text = path.read_text(encoding='utf-8')
-          for old in [
-            'import net.minecraftforge.common.capabilities.Capability;\n',
-            'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
-            'import net.minecraftforge.common.util.LazyOptional;\n',
-            'import slimeknights.tconstruct.library.tools.capability.ToolCapabilityProvider.IToolCapabilityProvider;\n',
-          ]:
-            text = text.replace(old, '')
-          if 'import net.neoforged.neoforge.capabilities.Capabilities;\n' not in text:
-            text = text.replace('import net.minecraft.world.item.ItemUtils;\n', 'import net.minecraft.world.item.ItemUtils;\nimport net.neoforged.neoforge.capabilities.Capabilities;\n', 1)
-          text = text.replace(
-            'return !stack.getItem().canFitInsideContainerItems() || stack.is(TinkerTags.Items.TOOL_INVENTORY_BLACKLIST) || stack.getCapability(ForgeCapabilities.ITEM_HANDLER).isPresent();',
-            'return !stack.getItem().canFitInsideContainerItems() || stack.is(TinkerTags.Items.TOOL_INVENTORY_BLACKLIST) || stack.getCapability(Capabilities.ItemHandler.ITEM) != null;', 1)
-          text, count = re.subn(r'\n  /\*\* Provider for an inventory tool capability \*/\n  public static class Provider.*?\n  \}\n\n', '\n', text, count=1, flags=re.S)
-          if count != 1:
-            raise SystemExit('Missing ToolInventoryCapability.Provider block')
-          old = '    IItemHandler handler = stack.getCapability(ForgeCapabilities.ITEM_HANDLER).filter(cap -> cap instanceof IItemHandlerModifiable).orElse(EmptyItemHandler.INSTANCE);'
-          new = '    IItemHandler queriedHandler = stack.getCapability(Capabilities.ItemHandler.ITEM);\n    IItemHandler handler = queriedHandler instanceof IItemHandlerModifiable ? queriedHandler : EmptyItemHandler.INSTANCE;'
-          if old not in text:
-            raise SystemExit('Missing ToolInventoryCapability container lookup')
-          text = text.replace(old, new, 1)
-          old = '      IItemHandler handler = entity.getItem().getCapability(ForgeCapabilities.ITEM_HANDLER).orElse(EmptyItemHandler.INSTANCE);\n      if (handler.getSlots() > 0) {'
-          new = '      IItemHandler handler = entity.getItem().getCapability(Capabilities.ItemHandler.ITEM);\n      if (handler != null && handler.getSlots() > 0) {'
-          if old not in text:
-            raise SystemExit('Missing ToolInventoryCapability destruction lookup')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Menu-side lookup uses the same nullable 1.21 item capability API.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraftforge.common.capabilities.ForgeCapabilities;\n', 'import net.neoforged.neoforge.capabilities.Capabilities;\n', 1)
-          old = '      handler = stack.getCapability(ForgeCapabilities.ITEM_HANDLER).filter(cap -> cap instanceof IItemHandlerModifiable).orElse(EmptyItemHandler.INSTANCE);'
-          new = '      IItemHandler queriedHandler = stack.getCapability(Capabilities.ItemHandler.ITEM);\n      handler = queriedHandler instanceof IItemHandlerModifiable ? queriedHandler : EmptyItemHandler.INSTANCE;'
-          if old not in text:
-            raise SystemExit('Missing ToolContainerMenu capability lookup')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Register the new provider listener during construction, not during common setup.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
-          text = path.read_text(encoding='utf-8')
-          constructor_anchor = '    RandomMaterial.init();\n'
-          if '    ToolCapabilityProvider.init();\n' not in text:
-            if constructor_anchor not in text:
-              raise SystemExit('Missing TinkerTools constructor anchor')
-            text = text.replace(constructor_anchor, constructor_anchor + '    ToolCapabilityProvider.init();\n', 1)
+          anchor = 'public final class TinkerModifiers extends TinkerModule {\n'
+          constructor = '''public final class TinkerModifiers extends TinkerModule {\n  public TinkerModifiers() {\n    PersistentDataCapability.register();\n    EntityModifierCapability.register();\n    BlockItemProviderCapability.register();\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n  }\n'''
+          if 'public TinkerModifiers() {' not in text:
+            if anchor not in text:
+              raise SystemExit('Missing TinkerModifiers class declaration')
+            text = text.replace(anchor, constructor, 1)
           for stale in [
-            '    ToolCapabilityProvider.register(ToolFluidCapability.Provider::new);\n',
-            '    ToolCapabilityProvider.register(ToolInventoryCapability.Provider::new);\n',
-            '    ToolCapabilityProvider.register((stack, tool) -> new ToolEnergyCapability.Provider(tool));\n',
-            '    ToolCapabilityProvider.register((stack, tool) -> new BlockItemProviderModifierHook.Provider(tool));\n',
+            '    PersistentDataCapability.register();\n',
+            '    EntityModifierCapability.register();\n',
+            '    BlockItemProviderCapability.register();\n',
+            '    // by default, we support modifying projectiles (arrows or fireworks mainly, but maybe other stuff). other entities may come in the future\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n',
           ]:
-            text = text.replace(stale, '', 1)
+            # Remove only the commonSetup copy, leaving constructor calls intact. Search from the commonSetup method onward.
+            idx = text.find('  void commonSetup(final FMLCommonSetupEvent event)')
+            if idx >= 0:
+              before, after = text[:idx], text[idx:]
+              after = after.replace(stale, '', 1)
+              text = before + after
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify tool capability migration
+      - name: Verify entity attachment migration
         run: |
-          grep -q 'RegisterCapabilitiesEvent' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
-          grep -q 'Capabilities.ItemHandler.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
-          grep -q 'Capabilities.FluidHandler.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
-          grep -q 'Capabilities.EnergyStorage.ITEM' src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java
-          grep -q 'ItemCapability.createVoid' src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java
-          grep -q 'ToolCapabilityProvider.init();' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'Capabilities.ItemHandler.ITEM' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
-          test -z "$(grep -R 'initCapabilities(ItemStack stack' \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java || true)"
-          test -z "$(grep -R 'ToolCapabilityProvider.IToolCapabilityProvider\|ForgeCapabilities' \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/ToolCapabilityProvider.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/ToolEnergyCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/fluid/ToolFluidCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/BlockItemProviderModifierHook.java \
-            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java || true)"
+          grep -q 'DeferredRegister<AttachmentType' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
+          grep -q '.copyOnDeath()' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
+          grep -q 'getExistingDataOrNull(ATTACHMENT)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
+          grep -q 'entity.setData(ATTACHMENT, nbt)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
+          grep -q 'public TinkerModifiers()' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          grep -q 'BlockItemProviderCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          test -z "$(grep -R 'CapabilityManager\|CapabilityToken\|ICapabilitySerializable\|AttachCapabilitiesEvent\|LazyOptional' \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java || true)"
+          test -z "$(grep -R 'PersistentDataCapability.CAPABILITY' \
+            src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java \
+            src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
+            src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java \
+            src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Tool item capabilities are already migrated.'
+            echo 'Entity attachments are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/tools/capability \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableShurikenItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/armor/ModifiableArmorItem.java \
-            src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java \
-            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
-            src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          git commit -m 'Migrate tool item capabilities to NeoForge 1.21'
+            src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java \
+            src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java \
+            src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
+            src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java \
+            src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java \
+            src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          git commit -m 'Migrate entity state to NeoForge data attachments'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
