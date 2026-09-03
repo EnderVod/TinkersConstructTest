@@ -25,7 +25,7 @@ import net.minecraft.world.level.storage.loot.entries.LootPoolEntryType;
 import net.minecraft.world.level.storage.loot.predicates.LootItemConditionType;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.conditions.ICondition;
-import net.neoforged.neoforge.common.crafting.CraftingHelper;
+import net.neoforged.neoforge.common.crafting.IngredientType;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -150,6 +150,11 @@ public final class TinkerCommons extends TinkerModule {
 
   public static final DeferredHolder<? super ParticleType<FluidParticleData>, ParticleType<FluidParticleData>> fluidParticle = PARTICLE_TYPES.register("fluid", FluidParticleData.Type::new);
 
+  /* Custom ingredients */
+  public static final DeferredHolder<IngredientType<?>, IngredientType<NoContainerIngredient>> noContainerIngredientType = INGREDIENT_TYPES.register(NoContainerIngredient.ID.getPath(), () -> new IngredientType<>(NoContainerIngredient.CODEC));
+  public static final DeferredHolder<IngredientType<?>, IngredientType<BlockTagIngredient>> blockTagIngredientType = INGREDIENT_TYPES.register(BlockTagIngredient.ID.getPath(), () -> new IngredientType<>(BlockTagIngredient.CODEC));
+  public static final DeferredHolder<IngredientType<?>, IngredientType<InstrumentIngredient>> instrumentIngredientType = INGREDIENT_TYPES.register(InstrumentIngredient.ID.getPath(), () -> new IngredientType<>(InstrumentIngredient.CODEC));
+
   /* Resource conditions */
 public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<ConfigEnabledCondition>> configCondition = CONDITION_CODECS.register(ConfigEnabledCondition.ID.getPath(), () -> ConfigEnabledCondition.CODEC);
 @SuppressWarnings("removal")
@@ -194,9 +199,6 @@ public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<TagN
   @SubscribeEvent
   void registerRecipeSerializers(RegisterEvent event) {
     if (event.getRegistryKey() == Registries.RECIPE_SERIALIZER) {
-      CraftingHelper.register(NoContainerIngredient.ID, NoContainerIngredient.Serializer.INSTANCE);
-      CraftingHelper.register(BlockTagIngredient.Serializer.ID, BlockTagIngredient.Serializer.INSTANCE);
-      CraftingHelper.register(InstrumentIngredient.ID, InstrumentIngredient.SERIALIZER);
       CriteriaTriggers.register(CONTAINER_OPENED_TRIGGER);
 
       //noinspection removal
