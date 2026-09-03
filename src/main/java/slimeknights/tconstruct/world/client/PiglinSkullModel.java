@@ -12,10 +12,10 @@ public class PiglinSkullModel extends PiglinHeadModel {
   }
 
   @Override
-  public void renderToBuffer(PoseStack poseStack, VertexConsumer buffer, int light, int overlay, float red, float green, float blue, float alpha) {
+  public void renderToBuffer(PoseStack poseStack, VertexConsumer buffer, int light, int overlay, int color) {
     poseStack.pushPose();
     poseStack.scale(0.97f, 0.97f, 0.97f);
-    super.renderToBuffer(poseStack, buffer, light, overlay, red, green, blue, alpha);
+    super.renderToBuffer(poseStack, buffer, light, overlay, color);
     poseStack.popPose();
   }
 }

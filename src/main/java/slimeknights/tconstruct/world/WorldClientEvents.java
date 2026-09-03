@@ -5,7 +5,6 @@ import net.minecraft.client.color.item.ItemColors;
 import net.minecraft.client.model.PiglinHeadModel;
 import net.minecraft.client.model.SkullModel;
 import net.minecraft.client.model.geom.EntityModelSet;
-import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.renderer.blockentity.SkullBlockRenderer;
@@ -204,16 +203,6 @@ public class WorldClientEvents extends ClientEventBase {
   private static void registerPiglinHeadModel(TinkerHeadType skull, MaterialId materialId, ResourceLocation texture) {
     SkullBlockRenderer.SKIN_BY_TYPE.put(skull, texture);
     SlimeskullArmorModel.registerPiglinHeadModel(materialId, SkullModelHelper.HEAD_LAYERS.get(skull), texture);
-  }
-
-  /** Register a layer without being under the minecraft domain. TODO: is this needed? */
-  private static ModelLayerLocation registerLayer(String name) {
-    ModelLayerLocation location = new ModelLayerLocation(TConstruct.getResource(name), "main");
-    if (!ModelLayers.ALL_MODELS.add(location)) {
-      throw new IllegalStateException("Duplicate registration for " + location);
-    } else {
-      return location;
-    }
   }
 
   /** Register a head layer definition with forge */

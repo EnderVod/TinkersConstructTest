@@ -36,7 +36,7 @@ public class BlockModelSkullRenderer extends SkullModelBase {
   }
 
   @Override
-  public void renderToBuffer(PoseStack poseStack, VertexConsumer buffer, int light, int overlay, float red, float green, float blue, float alpha) {
+  public void renderToBuffer(PoseStack poseStack, VertexConsumer buffer, int light, int overlay, int color) {
     poseStack.pushPose();
 
     // from CustomHeadLayer#translateToHead, with final scale adjusted
@@ -51,9 +51,9 @@ public class BlockModelSkullRenderer extends SkullModelBase {
     if (yRot != 0 || xRot != 0) {
       poseStack.mulPose((new Quaternionf()).rotationZYX(0, yRot, xRot));
     }
-    // applying tint is a pain with these, sop hope we don't need it
-    if (red != 1 || green != 1 || blue != 1 || alpha != 1) {
-      buffer = new TintedVertexBuilder(buffer, (int) (red * 255), (int) (green * 255), (int) (blue * 255), (int) (alpha * 255));
+    // Model rendering now supplies one packed ARGB color; preserve the old per-channel tint wrapper.
+    if (color != -1) {
+      buffer = new TintedVertexBuilder(buffer, (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >>> 24) & 0xFF);
     }
     itemRenderer.renderModelLists(model, stack, light, overlay, poseStack, buffer);
 
