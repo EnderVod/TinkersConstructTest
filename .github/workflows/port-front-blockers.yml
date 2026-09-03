@@ -23,20 +23,19 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply guarded 1.21 compatibility batch
+      - name: Apply guarded recipe compatibility batch
         run: python3 .github/scripts/port-smeltery-batch.py
 
       - name: Verify migration
         shell: bash
         run: |
-          ! grep -Fq 'Blocks::never' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
-          ! grep -Fq '.setCustomClientFactory' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
-          ! grep -Fq 'ComposterBlock.add' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
-          grep -Fq 'MapCodec<LeaveVineDecorator>' src/main/java/slimeknights/tconstruct/world/worldgen/trees/LeaveVineDecorator.java
-          grep -Fq 'MapCodec<ExtraRootVariantPlacer>' src/main/java/slimeknights/tconstruct/world/worldgen/trees/ExtraRootVariantPlacer.java
-          grep -Fq 'MapCodec<IslandStructure>' src/main/java/slimeknights/tconstruct/world/worldgen/islands/IslandStructure.java
-          ! grep -Fq 'ModelLayers.ALL_MODELS' src/main/java/slimeknights/tconstruct/world/WorldClientEvents.java
-          grep -Fq 'new ItemCost(Items.EMERALD, cost)' src/main/java/slimeknights/tconstruct/world/logic/AncientToolItemListing.java
+          ! grep -R -Fq 'new FluidStack(fluid, fluid.getAmount() * itemCost)' src/main/java/slimeknights/tconstruct/library/recipe
+          grep -Fq 'RecipeHolder<ICastingRecipe>' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          grep -Fq 'currentRecipeId' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          grep -Fq 'ResourceLocation.parse(tags.getString(TAG_RECIPE))' src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          grep -Fq 'HolderLookup.Provider access' src/main/java/slimeknights/tconstruct/library/recipe/casting/ItemCastingRecipe.java
+          grep -Fq 'copyWithAmount' src/main/java/slimeknights/tconstruct/library/recipe/melting/MaterialMeltingRecipe.java
+          grep -Fq 'new ArrayList<>(getLevel().getRecipeManager().getRecipesFor' src/main/java/slimeknights/tconstruct/smeltery/block/entity/module/alloying/MultiAlloyingModule.java
           git diff --check
 
       - name: Commit compatibility batch
@@ -46,7 +45,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate world and client APIs to 1.21'
+            git commit -m 'Migrate recipe holders and fluid copies to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
