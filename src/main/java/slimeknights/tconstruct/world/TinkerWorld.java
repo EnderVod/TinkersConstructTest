@@ -51,8 +51,8 @@ import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent.Operation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.registries.ForgeRegistries;
-import net.neoforged.neoforge.registries.RegistryObject;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import slimeknights.mantle.registration.object.EntityObject;
 import slimeknights.mantle.registration.object.EnumObject;
 import slimeknights.mantle.registration.object.ItemObject;
@@ -114,7 +114,7 @@ public final class TinkerWorld extends TinkerModule {
   public static final PlantType SLIME_PLANT_TYPE = PlantType.get("slime");
 
   /** Creative tab for anything that is naturally found in the world */
-  public static final RegistryObject<CreativeModeTab> tabWorld = CREATIVE_TABS.register(
+  public static final DeferredHolder<? super CreativeModeTab, CreativeModeTab> tabWorld = CREATIVE_TABS.register(
     "world", () -> CreativeModeTab.builder().title(TConstruct.makeTranslation("itemGroup", "world"))
       .icon(() -> new ItemStack(TinkerWorld.cobaltOre))
       .displayItems(TinkerWorld::addTabItems)
@@ -262,10 +262,10 @@ public final class TinkerWorld extends TinkerModule {
   public static final ResourceKey<ConfiguredFeature<?,?>> configuredEnderGeode = key(Registries.CONFIGURED_FEATURE, "ender_geode");
   public static final ResourceKey<PlacedFeature> placedEnderGeode = key(Registries.PLACED_FEATURE, "ender_geode");
 
-  public static final ResourceKey<BiomeModifier> spawnEarthGeode = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "earth_geode");
-  public static final ResourceKey<BiomeModifier> spawnSkyGeode = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "sky_geode");
-  public static final ResourceKey<BiomeModifier> spawnIchorGeode = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "ichor_geode");
-  public static final ResourceKey<BiomeModifier> spawnEnderGeode = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "ender_geode");
+  public static final ResourceKey<BiomeModifier> spawnEarthGeode = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "earth_geode");
+  public static final ResourceKey<BiomeModifier> spawnSkyGeode = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "sky_geode");
+  public static final ResourceKey<BiomeModifier> spawnIchorGeode = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "ichor_geode");
+  public static final ResourceKey<BiomeModifier> spawnEnderGeode = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "ender_geode");
 
   // heads
   public static final EnumObject<TinkerHeadType,SkullBlock> heads = BLOCKS.registerEnumNoItem(TinkerHeadType.values(), "head", TinkerWorld::makeHead);
@@ -295,21 +295,21 @@ public final class TinkerWorld extends TinkerModule {
                       .sized(2.04F, 2.04F)
                       .setCustomClientFactory((spawnEntity, world) -> TinkerWorld.terracubeEntity.get().create(world)), 0xAFB9D6, 0xA1A7B1);
 
-  public static final ResourceKey<BiomeModifier> spawnOverworldSlime = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_overworld_slime");
-  public static final ResourceKey<BiomeModifier> spawnTerracube = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_terracube");
-  public static final ResourceKey<BiomeModifier> spawnEndSlime = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_end_slime");
+  public static final ResourceKey<BiomeModifier> spawnOverworldSlime = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_overworld_slime");
+  public static final ResourceKey<BiomeModifier> spawnTerracube = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_terracube");
+  public static final ResourceKey<BiomeModifier> spawnEndSlime = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "spawn_end_slime");
 
   /*
    * Particles
    */
-  public static final RegistryObject<SimpleParticleType> skySlimeParticle = PARTICLE_TYPES.register("sky_slime", () -> new SimpleParticleType(false));
-  public static final RegistryObject<SimpleParticleType> enderSlimeParticle = PARTICLE_TYPES.register("ender_slime", () -> new SimpleParticleType(false));
-  public static final RegistryObject<SimpleParticleType> terracubeParticle = PARTICLE_TYPES.register("terracube", () -> new SimpleParticleType(false));
+  public static final DeferredHolder<? super SimpleParticleType, SimpleParticleType> skySlimeParticle = PARTICLE_TYPES.register("sky_slime", () -> new SimpleParticleType(false));
+  public static final DeferredHolder<? super SimpleParticleType, SimpleParticleType> enderSlimeParticle = PARTICLE_TYPES.register("ender_slime", () -> new SimpleParticleType(false));
+  public static final DeferredHolder<? super SimpleParticleType, SimpleParticleType> terracubeParticle = PARTICLE_TYPES.register("terracube", () -> new SimpleParticleType(false));
 
   /*
    * Features
    */
-  public static ResourceKey<BiomeModifier> spawnCobaltOre = key(ForgeRegistries.Keys.BIOME_MODIFIERS, "cobalt_ore");
+  public static ResourceKey<BiomeModifier> spawnCobaltOre = key(NeoForgeRegistries.Keys.BIOME_MODIFIERS, "cobalt_ore");
   // small veins, standard distribution
   public static ResourceKey<ConfiguredFeature<?,?>> configuredSmallCobaltOre = key(Registries.CONFIGURED_FEATURE, "cobalt_ore_small");
   public static ResourceKey<PlacedFeature> placedSmallCobaltOre = key(Registries.PLACED_FEATURE, "cobalt_ore_small");
