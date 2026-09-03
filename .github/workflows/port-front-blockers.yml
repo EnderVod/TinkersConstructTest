@@ -29,13 +29,14 @@ jobs:
       - name: Verify migration
         shell: bash
         run: |
-          ! grep -Fq 'getRenderBoundingBox()' src/main/java/slimeknights/tconstruct/smeltery/block/entity/ChannelBlockEntity.java
-          grep -Fq 'getRenderBoundingBox(ChannelBlockEntity te)' src/main/java/slimeknights/tconstruct/smeltery/client/render/ChannelBlockEntityRenderer.java
-          grep -Fq 'TConstruct.getResource("tank")' src/main/java/slimeknights/tconstruct/smeltery/SmelteryClientEvents.java
-          grep -Fq 'super(state.get(), properties);' src/main/java/slimeknights/tconstruct/smeltery/block/component/SearedStairsBlock.java
-          grep -Fq 'Item.TooltipContext context' src/main/java/slimeknights/tconstruct/smeltery/item/DummyMaterialItem.java
-          grep -Fq 'FluidStack.OPTIONAL_STREAM_CODEC.decode' src/main/java/slimeknights/tconstruct/smeltery/network/FaucetActivationPacket.java
-          test "$(grep -o 'ResourceLocation.withDefaultNamespace("textures/' src/main/java/slimeknights/tconstruct/world/WorldClientEvents.java | wc -l)" -eq 12
+          ! grep -Fq 'Blocks::never' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
+          ! grep -Fq '.setCustomClientFactory' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
+          ! grep -Fq 'ComposterBlock.add' src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
+          grep -Fq 'MapCodec<LeaveVineDecorator>' src/main/java/slimeknights/tconstruct/world/worldgen/trees/LeaveVineDecorator.java
+          grep -Fq 'MapCodec<ExtraRootVariantPlacer>' src/main/java/slimeknights/tconstruct/world/worldgen/trees/ExtraRootVariantPlacer.java
+          grep -Fq 'MapCodec<IslandStructure>' src/main/java/slimeknights/tconstruct/world/worldgen/islands/IslandStructure.java
+          ! grep -Fq 'ModelLayers.ALL_MODELS' src/main/java/slimeknights/tconstruct/world/WorldClientEvents.java
+          grep -Fq 'new ItemCost(Items.EMERALD, cost)' src/main/java/slimeknights/tconstruct/world/logic/AncientToolItemListing.java
           git diff --check
 
       - name: Commit compatibility batch
@@ -45,7 +46,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate remaining smeltery interaction APIs to 1.21'
+            git commit -m 'Migrate world and client APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
