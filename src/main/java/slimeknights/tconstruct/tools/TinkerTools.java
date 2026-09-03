@@ -17,7 +17,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.DispenserBlock;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunctionType;
-import net.neoforged.neoforge.common.crafting.CraftingHelper;
+import net.neoforged.neoforge.common.crafting.IngredientType;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -181,6 +181,10 @@ public final class TinkerTools extends TinkerModule {
   /** Loot function type for tool add data */
   public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType(AddToolDataFunction.SERIALIZER));
 
+  /** Custom ingredient matching tools that expose a given tool hook. */
+  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =
+    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));
+
   /*
    * Items
    */
@@ -312,7 +316,6 @@ public final class TinkerTools extends TinkerModule {
   void registerRecipeSerializers(RegisterEvent event) {
     if (event.getRegistryKey() == Registries.RECIPE_SERIALIZER) {
       ItemPredicate.register(ToolStackItemPredicate.ID, ToolStackItemPredicate::deserialize);
-      CraftingHelper.register(ToolHookIngredient.Serializer.ID, ToolHookIngredient.Serializer.INSTANCE);
 
       // register tool stats that are not defined directly in the class; safer than static init registration
       ToolStats.register(OverslimeModule.OVERSLIME_STAT);

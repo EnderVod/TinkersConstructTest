@@ -60,7 +60,7 @@ public class ShapedMaterialRecipe extends ShapedRecipe {
       // assume all material ingredients match the same stat type
       for (Ingredient ingredient : getIngredients()) {
         // collect all ingredients that match
-        if (ingredient instanceof MaterialValueIngredient materialValue) {
+        if (ingredient.getCustomIngredient() instanceof MaterialValueIngredient materialValue) {
           if (material == null) {
             material = materialValue;
           } else {
