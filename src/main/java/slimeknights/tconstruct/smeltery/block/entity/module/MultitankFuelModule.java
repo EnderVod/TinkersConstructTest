@@ -3,7 +3,6 @@ package slimeknights.tconstruct.smeltery.block.entity.module;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -70,14 +69,8 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     return handlers;
   }
 
-
   /* Fuel finding */
 
-  /**
-   * Tries to consume fuel from the given position
-   * @param pos  Position
-   * @return   Temperature of the consumed fuel, 0 if none found
-   */
   private int tryFuelPosition(BlockPos pos, boolean consume) {
     IFluidHandler handler = getTankHandler(pos);
     if (handler != null) {
@@ -91,13 +84,8 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     return 0;
   }
 
-  /**
-   * Attempts to consume fuel from one of the tanks
-   * @return  temperature of the found fluid, 0 if none
-   */
   @Override
   public int findFuel(boolean consume) {
-    // Prefer the tank used last, but always resolve its current native capability.
     if (lastPos != NULL_POS) {
       int posTemp = tryFuelPosition(lastPos, consume);
       if (posTemp > 0) {
@@ -105,9 +93,7 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
       }
     }
 
-    // find a new handler among our tanks
     for (BlockPos pos : tankSupplier.get()) {
-      // already checked the last position above, no reason to try again
       if (!pos.equals(lastPos)) {
         int posTemp = tryFuelPosition(pos, consume);
         if (posTemp > 0) {
@@ -116,7 +102,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
       }
     }
 
-    // no handler found, tell client of the lack of fuel
     fluidHandler = null;
     if (consume) {
       temperature = 0;
@@ -125,16 +110,14 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     return 0;
   }
 
-
   /* NBT */
   private static final String TAG_LAST_FUEL = "last_fuel";
 
   @Override
   public void readFromTag(CompoundTag nbt) {
     super.readFromTag(nbt);
-    if (nbt.contains(TAG_LAST_FUEL, Tag.TAG_COMPOUND)) {
-      lastPos = NbtUtils.readBlockPos(nbt.getCompound(TAG_LAST_FUEL)).offset(parent.getBlockPos());
-    }
+    NbtUtils.readBlockPos(nbt, TAG_LAST_FUEL)
+            .ifPresent(pos -> lastPos = pos.offset(parent.getBlockPos()));
   }
 
   @Override
@@ -145,7 +128,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     }
     return nbt;
   }
-
 
   /* UI syncing */
   private static final int LAST_X = 4;
@@ -184,11 +166,8 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
   @Override
   public FuelInfo getFuelInfo() {
     Map<BlockPos,IFluidHandler> handlers = getTankHandlers();
-
-    // Prefer the tank we last pulled fuel from.
     IFluidHandler selected = lastPos.getY() != NULL_POS.getY() ? handlers.get(lastPos) : null;
 
-    // If it is unavailable or dry, show the first tank containing fluid.
     if (selected == null || selected.getFluidInTank(0).isEmpty()) {
       selected = null;
       for (IFluidHandler handler : handlers.values()) {
@@ -201,11 +180,9 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     fluidHandler = selected;
 
     FuelInfo info = super.getFuelInfo();
-    // add extra fluid display
     if (!info.isEmpty()) {
       FluidStack currentFuel = info.getFluid();
       for (IFluidHandler handler : handlers.values()) {
-        // skip the main tank, the info above is already its contents
         if (handler != fluidHandler) {
           FluidStack fluid = handler.getFluidInTank(0);
           if (fluid.isEmpty()) {
@@ -220,10 +197,8 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     return info;
   }
 
-
   /* Fluid handler */
 
-  /** Gets the most recently used fluid */
   public FluidStack getLastFluid() {
     if (lastPos.getY() != NULL_POS.getY()) {
       IFluidHandler handler = getTankHandler(lastPos);
@@ -249,7 +224,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
     return tankSupplier.get().size();
   }
 
-  /** Gets the tank at the given index */
   private IFluidHandler getTank(int tank) {
     if (tank >= 0) {
       List<BlockPos> positions = tankSupplier.get();
@@ -283,7 +257,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
   public int fill(FluidStack resource, FluidAction action) {
     int totalFilled = 0;
     resource = resource.copy();
-    // try each handler, updating the amount we filled as we go
     for (IFluidHandler handler : getTankHandlers().values()) {
       int filled = handler.fill(resource, action);
       if (filled > 0) {
@@ -305,7 +278,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
   @Override
   public FluidStack drain(FluidStack resource, FluidAction action) {
     FluidStack drainedSoFar = FluidStack.EMPTY;
-    // try each handler, updating the amount we drained as we go
     for (IFluidHandler handler : getTankHandlers().values()) {
       FluidStack drained = handler.drain(resource, action);
       if (!drained.isEmpty()) {
@@ -332,7 +304,6 @@ public class MultitankFuelModule extends FuelModule implements IFluidHandler {
   public FluidStack drain(int maxDrain, FluidAction action) {
     FluidStack drainedSoFar = FluidStack.EMPTY;
     FluidStack toDrain = FluidStack.EMPTY;
-    // try each handler, updating the amount we drained as we go
     for (IFluidHandler handler : getTankHandlers().values()) {
       if (toDrain.isEmpty()) {
         FluidStack drained = handler.drain(maxDrain, action);
