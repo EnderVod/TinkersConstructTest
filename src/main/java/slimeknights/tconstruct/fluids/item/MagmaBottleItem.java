@@ -1,6 +1,5 @@
 package slimeknights.tconstruct.fluids.item;
 
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringUtil;
 import net.minecraft.world.InteractionHand;
@@ -14,11 +13,6 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.neoforged.neoforge.fluids.FluidStack;
-import slimeknights.tconstruct.fluids.TinkerFluids;
-import slimeknights.tconstruct.fluids.util.ConstantFluidContainerWrapper;
-import slimeknights.tconstruct.library.recipe.FluidValues;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -77,9 +71,4 @@ public class MagmaBottleItem extends Item {
     return stack;
   }
 
-  @Nullable
-  @Override
-  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
-    return new ConstantFluidContainerWrapper(new FluidStack(TinkerFluids.magma.get(), FluidValues.BOTTLE), stack);
-  }
 }

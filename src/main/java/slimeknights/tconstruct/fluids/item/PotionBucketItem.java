@@ -18,7 +18,6 @@ import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.Fluid;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.fluids.capability.wrappers.FluidBucketWrapper;
@@ -115,10 +114,6 @@ public class PotionBucketItem extends PotionItem {
     return 96; // 3x duration of potion bottles
   }
 
-  @Override
-  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
-    return new PotionBucketWrapper(stack);
-  }
 
   public static class PotionBucketWrapper extends FluidBucketWrapper {
     public PotionBucketWrapper(ItemStack container) {

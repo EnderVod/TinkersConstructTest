@@ -28,6 +28,8 @@ import net.minecraft.world.level.block.DispenserBlock;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.pathfinder.PathType;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.common.SoundActions;
 import net.neoforged.neoforge.common.brewing.BrewingRecipe;
@@ -58,6 +60,7 @@ import slimeknights.tconstruct.fluids.item.ContainerFoodItem.FluidContainerFoodI
 import slimeknights.tconstruct.fluids.item.MagmaBottleItem;
 import slimeknights.tconstruct.fluids.item.PotionBucketItem;
 import slimeknights.tconstruct.fluids.util.BottleBrewingRecipe;
+import slimeknights.tconstruct.fluids.util.ConstantFluidContainerWrapper;
 import slimeknights.tconstruct.fluids.util.EmptyBottleIntoEmpty;
 import slimeknights.tconstruct.fluids.util.EmptyBottleIntoWater;
 import slimeknights.tconstruct.fluids.util.FillBottle;
@@ -86,6 +89,28 @@ import static slimeknights.tconstruct.fluids.block.MobEffectLiquidBlock.createEf
 public final class TinkerFluids extends TinkerModule {
   public TinkerFluids() {
     NeoForgeMod.enableMilkFluid();
+    TConstruct.getModBus().addListener(TinkerFluids::registerCapabilities);
+  }
+
+  /** Registers item fluid handlers using the NeoForge 1.21 capability model. */
+  private static void registerCapabilities(RegisterCapabilitiesEvent event) {
+    event.registerItem(Capabilities.FluidHandler.ITEM,
+      (stack, context) -> new ConstantFluidContainerWrapper(new FluidStack(powderedSnow.get(), FluidType.BUCKET_VOLUME), stack, Items.BUCKET.getDefaultInstance()),
+      Items.POWDER_SNOW_BUCKET);
+    event.registerItem(Capabilities.FluidHandler.ITEM,
+      (stack, context) -> new ConstantFluidContainerWrapper(new FluidStack(magma.get(), FluidValues.BOTTLE), stack),
+      magmaBottle.get());
+    event.registerItem(Capabilities.FluidHandler.ITEM,
+      (stack, context) -> ((FluidContainerFoodItem)stack.getItem()).createFluidHandler(stack),
+      venomBottle.get());
+    for (SlimeType type : SlimeType.values()) {
+      event.registerItem(Capabilities.FluidHandler.ITEM,
+        (stack, context) -> ((FluidContainerFoodItem)stack.getItem()).createFluidHandler(stack),
+        slimeBottle.get(type));
+    }
+    event.registerItem(Capabilities.FluidHandler.ITEM,
+      (stack, context) -> new PotionBucketItem.PotionBucketWrapper(stack),
+      potion.asItem());
   }
 
   /** Creative tab for general items, or those that lack another tab */

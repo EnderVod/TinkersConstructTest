@@ -1,22 +1,14 @@
 package slimeknights.tconstruct.fluids.util;
 
 import lombok.Getter;
-import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.common.util.LazyOptional;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
-/** Represents a capability handler for a container with a constant fluid */
-public class ConstantFluidContainerWrapper implements IFluidHandlerItem, ICapabilityProvider {
-  private final LazyOptional<IFluidHandlerItem> holder = LazyOptional.of(() -> this);
-
+/** Represents a fluid handler for a container with a constant fluid. */
+public class ConstantFluidContainerWrapper implements IFluidHandlerItem {
   /** Contained fluid */
   private final FluidStack fluid;
   /** If true, the container is now empty */
@@ -67,7 +59,6 @@ public class ConstantFluidContainerWrapper implements IFluidHandlerItem, ICapabi
   @Nonnull
   @Override
   public FluidStack drain(FluidStack resource, FluidAction action) {
-    // cannot drain if: already drained, requested the wrong type, or requested too little
     if (empty || resource.getFluid() != fluid.getFluid() || resource.getAmount() < fluid.getAmount()) {
       return FluidStack.EMPTY;
     }
@@ -81,7 +72,6 @@ public class ConstantFluidContainerWrapper implements IFluidHandlerItem, ICapabi
   @Nonnull
   @Override
   public FluidStack drain(int maxDrain, FluidAction action) {
-    // cannot drain if: already drained, requested the wrong type, or requested too little
     if (empty || maxDrain < fluid.getAmount()) {
       return FluidStack.EMPTY;
     }
@@ -90,11 +80,5 @@ public class ConstantFluidContainerWrapper implements IFluidHandlerItem, ICapabi
       empty = true;
     }
     return fluid.copy();
-  }
-
-  @Nonnull
-  @Override
-  public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> capability, @Nullable Direction side) {
-    return ForgeCapabilities.FLUID_HANDLER_ITEM.orEmpty(capability, holder);
   }
 }
