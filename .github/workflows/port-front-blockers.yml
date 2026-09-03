@@ -30,326 +30,93 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate potion fluid data to 1.21 components
+      - name: Migrate deprecated tag preference loot entry to codec
         run: |
-          cat > src/main/java/slimeknights/tconstruct/fluids/fluids/PotionFluidType.java <<'JAVA'
-          package slimeknights.tconstruct.fluids.fluids;
+          cat > src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java <<'JAVA'
+          package slimeknights.tconstruct.library.json.loot;
 
-          import net.minecraft.core.Holder;
-          import net.minecraft.core.component.DataComponents;
-          import net.minecraft.world.item.ItemStack;
-          import net.minecraft.world.item.alchemy.Potion;
-          import net.minecraft.world.item.alchemy.PotionContents;
-          import net.minecraft.world.item.alchemy.Potions;
-          import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
-          import net.neoforged.neoforge.fluids.FluidStack;
-          import net.neoforged.neoforge.fluids.FluidType;
-          import slimeknights.mantle.fluid.texture.ClientTextureFluidType;
-          import slimeknights.mantle.recipe.helper.FluidOutput;
-          import slimeknights.tconstruct.fluids.TinkerFluids;
-
-          import java.util.function.Consumer;
-
-          /** Potion fluid type backed by Minecraft 1.21's standard potion data component. */
-          public class PotionFluidType extends FluidType {
-            public PotionFluidType(Properties properties) {
-              super(properties);
-            }
-
-            /** Gets potion contents from a fluid, including custom color and custom effects. */
-            public static PotionContents getPotion(FluidStack stack) {
-              return stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY);
-            }
-
-            @Override
-            public String getDescriptionId(FluidStack stack) {
-              return Potion.getName(getPotion(stack).potion(), "item.minecraft.potion.effect.");
-            }
-
-            @Override
-            public ItemStack getBucket(FluidStack fluidStack) {
-              ItemStack itemStack = new ItemStack(fluidStack.getFluid().getBucket());
-              PotionContents contents = fluidStack.get(DataComponents.POTION_CONTENTS);
-              if (contents != null) {
-                itemStack.set(DataComponents.POTION_CONTENTS, contents);
-              }
-              return itemStack;
-            }
-
-            @Override
-            public void initializeClient(Consumer<IClientFluidTypeExtensions> consumer) {
-              consumer.accept(new ClientTextureFluidType(this) {
-                @Override
-                public int getTintColor(FluidStack stack) {
-                  PotionContents contents = getPotion(stack);
-                  if ((contents.potion().isEmpty() || contents.is(Potions.EMPTY)) && contents.customColor().isEmpty() && contents.customEffects().isEmpty()) {
-                    return getTintColor();
-                  }
-                  return contents.getColor() | 0xFF000000;
-                }
-              });
-            }
-
-            /** Creates a fluid stack for the given potion holder. */
-            public static FluidStack potionFluid(Holder<Potion> potion, int size) {
-              FluidStack stack = new FluidStack(TinkerFluids.potion.get(), size);
-              if (!potion.is(Potions.EMPTY)) {
-                stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
-              }
-              return stack;
-            }
-
-            /** Creates a fluid output for the given potion holder while preserving its data component. */
-            public static FluidOutput potionResult(Holder<Potion> potion, int size) {
-              return FluidOutput.fromStack(potionFluid(potion, size));
-            }
-
-            /** Creates a potion bucket for the given potion holder. */
-            public static ItemStack potionBucket(Holder<Potion> potion) {
-              ItemStack stack = new ItemStack(TinkerFluids.potion);
-              if (!potion.is(Potions.EMPTY)) {
-                stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
-              }
-              return stack;
-            }
-          }
-          JAVA
-
-          cat > src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java <<'JAVA'
-          package slimeknights.tconstruct.fluids.item;
-
-          import net.minecraft.advancements.CriteriaTriggers;
-          import net.minecraft.core.component.DataComponents;
-          import net.minecraft.network.chat.Component;
-          import net.minecraft.server.level.ServerPlayer;
-          import net.minecraft.stats.Stats;
-          import net.minecraft.world.effect.MobEffectInstance;
-          import net.minecraft.world.entity.LivingEntity;
-          import net.minecraft.world.entity.player.Player;
+          import com.mojang.serialization.MapCodec;
+          import com.mojang.serialization.codecs.RecordCodecBuilder;
+          import net.minecraft.core.registries.Registries;
+          import net.minecraft.tags.TagKey;
           import net.minecraft.world.item.Item;
           import net.minecraft.world.item.ItemStack;
-          import net.minecraft.world.item.Items;
-          import net.minecraft.world.item.PotionItem;
-          import net.minecraft.world.item.TooltipFlag;
-          import net.minecraft.world.item.alchemy.Potion;
-          import net.minecraft.world.item.alchemy.PotionContents;
-          import net.minecraft.world.item.alchemy.Potions;
-          import net.minecraft.world.level.Level;
-          import net.minecraft.world.level.gameevent.GameEvent;
-          import net.minecraft.world.level.material.Fluid;
-          import net.neoforged.neoforge.fluids.FluidStack;
-          import net.neoforged.neoforge.fluids.FluidType;
-          import net.neoforged.neoforge.fluids.capability.wrappers.FluidBucketWrapper;
-          import slimeknights.tconstruct.library.utils.Util;
+          import net.minecraft.world.level.storage.loot.LootContext;
+          import net.minecraft.world.level.storage.loot.entries.LootPoolEntryType;
+          import net.minecraft.world.level.storage.loot.entries.LootPoolSingletonContainer;
+          import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
+          import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+          import slimeknights.mantle.recipe.helper.TagPreference;
+          import slimeknights.tconstruct.shared.TinkerCommons;
 
-          import javax.annotation.Nonnull;
           import java.util.List;
-          import java.util.function.Supplier;
+          import java.util.function.Consumer;
 
-          /** Potion bucket using the standard 1.21 potion contents component. */
-          public class PotionBucketItem extends PotionItem {
-            private final Supplier<? extends Fluid> supplier;
+          /** @deprecated use {@link slimeknights.mantle.loot.entry.TagPreferenceLootEntry} */
+          @Deprecated(forRemoval = true)
+          public class TagPreferenceLootEntry extends LootPoolSingletonContainer {
+            public static final MapCodec<TagPreferenceLootEntry> CODEC = RecordCodecBuilder.mapCodec(
+              instance -> instance.group(TagKey.codec(Registries.ITEM).fieldOf("tag").forGetter(entry -> entry.tag))
+                                  .and(singletonFields(instance))
+                                  .apply(instance, TagPreferenceLootEntry::new)
+            );
 
-            public PotionBucketItem(Supplier<? extends Fluid> supplier, Properties builder) {
-              super(builder);
-              this.supplier = supplier;
+            private final TagKey<Item> tag;
+
+            protected TagPreferenceLootEntry(TagKey<Item> tag, int weight, int quality, List<LootItemCondition> conditions, List<LootItemFunction> functions) {
+              super(weight, quality, conditions, functions);
+              this.tag = tag;
             }
 
-            public Fluid getFluid() {
-              return supplier.get();
-            }
-
-            private static PotionContents contents(ItemStack stack) {
-              return stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY);
+            @SuppressWarnings("removal")
+            @Override
+            public LootPoolEntryType getType() {
+              return TinkerCommons.lootTagPreference.get();
             }
 
             @Override
-            public String getDescriptionId(ItemStack stack) {
-              String bucketKey = Potion.getName(contents(stack).potion(), getDescriptionId() + ".effect.");
-              if (Util.canTranslate(bucketKey)) {
-                return bucketKey;
-              }
-              return super.getDescriptionId();
+            protected void createItemStack(Consumer<ItemStack> consumer, LootContext context) {
+              TagPreference.getPreference(tag).ifPresent(item -> consumer.accept(new ItemStack(item)));
             }
 
-            @Override
-            public Component getName(ItemStack stack) {
-              PotionContents contents = contents(stack);
-              String bucketKey = Potion.getName(contents.potion(), getDescriptionId() + ".effect.");
-              if (Util.canTranslate(bucketKey)) {
-                return Component.translatable(bucketKey);
-              }
-              return Component.translatable(getDescriptionId() + ".contents",
-                Component.translatable(Potion.getName(contents.potion(), "item.minecraft.potion.effect.")));
-            }
-
-            @Override
-            public ItemStack getDefaultInstance() {
-              return PotionContents.createItemStack(this, Potions.AWKWARD);
-            }
-
-            @Override
-            public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity living) {
-              Player player = living instanceof Player p ? p : null;
-              if (player instanceof ServerPlayer serverPlayer) {
-                CriteriaTriggers.CONSUME_ITEM.trigger(serverPlayer, stack);
-              }
-
-              if (!level.isClientSide) {
-                for (MobEffectInstance effect : contents(stack).getAllEffects()) {
-                  if (effect.getEffect().value().isInstantenous()) {
-                    effect.getEffect().value().applyInstantenousEffect(player, player, living, effect.getAmplifier(), 2.5D);
-                  } else {
-                    MobEffectInstance newEffect = new MobEffectInstance(effect);
-                    newEffect.mapDuration(duration -> duration * 5 / 2);
-                    living.addEffect(newEffect);
-                  }
-                }
-              }
-
-              if (player != null) {
-                player.awardStat(Stats.ITEM_USED.get(this));
-                if (!player.getAbilities().instabuild) {
-                  stack.shrink(1);
-                }
-              }
-
-              if (player == null || !player.getAbilities().instabuild) {
-                if (stack.isEmpty()) {
-                  return new ItemStack(Items.BUCKET);
-                }
-                if (player != null) {
-                  player.getInventory().add(new ItemStack(Items.BUCKET));
-                }
-              }
-              living.gameEvent(GameEvent.DRINK);
-              return stack;
-            }
-
-            @Override
-            public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-              PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
-              if (contents != null) {
-                contents.addPotionTooltip(tooltip::add, 2.5f, context.tickRate());
-              }
-            }
-
-            @Override
-            public int getUseDuration(ItemStack stack, LivingEntity entity) {
-              return 96;
-            }
-
-            public static class PotionBucketWrapper extends FluidBucketWrapper {
-              public PotionBucketWrapper(ItemStack container) {
-                super(container);
-              }
-
-              @Nonnull
-              @Override
-              public FluidStack getFluid() {
-                FluidStack fluid = new FluidStack(((PotionBucketItem)container.getItem()).getFluid(), FluidType.BUCKET_VOLUME);
-                PotionContents contents = container.get(DataComponents.POTION_CONTENTS);
-                if (contents != null) {
-                  fluid.set(DataComponents.POTION_CONTENTS, contents);
-                }
-                return fluid;
-              }
+            /** @deprecated use {@link slimeknights.mantle.loot.entry.TagPreferenceLootEntry#tagPreference(TagKey)} */
+            @Deprecated(forRemoval = true)
+            public static LootPoolSingletonContainer.Builder<?> tagPreference(TagKey<Item> tag) {
+              return slimeknights.mantle.loot.entry.TagPreferenceLootEntry.tagPreference(tag);
             }
           }
           JAVA
 
           python3 - <<'PY'
           from pathlib import Path
-
-          # Potion bucket creation now consumes Holder<Potion> directly.
-          path = Path('src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java')
+          path = Path('src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('PotionFluidType.potionBucket(holder.key())', 'PotionFluidType.potionBucket(holder)')
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/plugin/jei/JEIPlugin.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('PotionFluidType.potionFluid(holder.key(), FluidType.BUCKET_VOLUME)', 'PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)')
-          path.write_text(text, encoding='utf-8')
-
-          # Client item tint reads the same standard potion component as the fluid itself.
-          path = Path('src/main/java/slimeknights/tconstruct/fluids/FluidClientEvents.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.alchemy.PotionContents;\n')
-          text = text.replace('PotionUtils.getColor(stack)', 'stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY).getColor()')
-          path.write_text(text, encoding='utf-8')
-
-          # Water bottle creation/testing now uses PotionContents.
-          path = Path('src/main/java/slimeknights/tconstruct/fluids/util/FillBottle.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          text = text.replace('PotionUtils.setPotion(new ItemStack(filled), Potions.WATER)', 'PotionContents.createItemStack(filled, Potions.WATER)')
-          path.write_text(text, encoding='utf-8')
-
-          for filename in [
-            'src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoEmpty.java',
-            'src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoWater.java',
-          ]:
-            path = Path(filename)
-            text = path.read_text(encoding='utf-8')
-            text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.alchemy.PotionContents;\n')
-            text = text.replace('PotionUtils.getPotion(stack) != Potions.WATER', '!stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY).is(Potions.WATER)')
-            path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/fluids/item/BottleItem.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.world.item.alchemy.PotionContents;\n')
-          text = text.replace('PotionUtils.setPotion(new ItemStack(potion), Potions.WATER)', 'PotionContents.createItemStack(potion.asItem(), Potions.WATER)')
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/fluids/item/EmptyPotionTransfer.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.alchemy.PotionContents;\n')
-          old = '''    if (PotionUtils.getPotion(stack) == Potions.WATER) {\n      return new FluidStack(Fluids.WATER, fluid.getAmount());\n    }\n    return new FluidStack(fluid.get().getFluid(), fluid.getAmount(), stack.getTag());'''
-          new = '''    PotionContents contents = stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY);\n    if (contents.is(Potions.WATER)) {\n      return new FluidStack(Fluids.WATER, fluid.getAmount());\n    }\n    FluidStack output = new FluidStack(fluid.get().getFluid(), fluid.getAmount());\n    if (contents != PotionContents.EMPTY) {\n      output.set(DataComponents.POTION_CONTENTS, contents);\n    }\n    return output;'''
+          old = 'LOOT_ENTRIES.register("tag_preference", () -> new LootPoolEntryType(new TagPreferenceLootEntry.Serializer()))'
+          new = 'LOOT_ENTRIES.register("tag_preference", () -> new LootPoolEntryType(TagPreferenceLootEntry.CODEC))'
           if old not in text:
-            raise SystemExit('Missing legacy EmptyPotionTransfer fluid block')
+            raise SystemExit('Missing legacy tag preference loot entry registration')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Verify potion component migration
+      - name: Verify tag preference loot codec migration
         run: |
-          grep -Fq 'DataComponents.POTION_CONTENTS' src/main/java/slimeknights/tconstruct/fluids/fluids/PotionFluidType.java
-          grep -Fq 'FluidOutput.fromStack(potionFluid' src/main/java/slimeknights/tconstruct/fluids/fluids/PotionFluidType.java
-          grep -Fq 'PotionContents.createItemStack(this, Potions.AWKWARD)' src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java
-          grep -Fq 'contents.addPotionTooltip(tooltip::add, 2.5f, context.tickRate())' src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java
-          grep -Fq 'PotionFluidType.potionBucket(holder)' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
-          grep -Fq 'PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)' src/main/java/slimeknights/tconstruct/plugin/jei/JEIPlugin.java
-          test -z "$(grep -R 'PotionUtils' \
-            src/main/java/slimeknights/tconstruct/fluids/fluids/PotionFluidType.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java \
-            src/main/java/slimeknights/tconstruct/fluids/FluidClientEvents.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/FillBottle.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoEmpty.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoWater.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/BottleItem.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/EmptyPotionTransfer.java || true)"
+          grep -Fq 'MapCodec<TagPreferenceLootEntry> CODEC' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java
+          grep -Fq 'singletonFields(instance)' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java
+          grep -Fq 'new LootPoolEntryType(TagPreferenceLootEntry.CODEC)' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          test -z "$(grep 'LootPoolSingletonContainer.Serializer' src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Potion component migration is already applied.'
+            echo 'Tag preference loot codec is already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/fluids/fluids/PotionFluidType.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java \
-            src/main/java/slimeknights/tconstruct/fluids/FluidClientEvents.java \
-            src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java \
-            src/main/java/slimeknights/tconstruct/plugin/jei/JEIPlugin.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/FillBottle.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoEmpty.java \
-            src/main/java/slimeknights/tconstruct/fluids/util/EmptyBottleIntoWater.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/BottleItem.java \
-            src/main/java/slimeknights/tconstruct/fluids/item/EmptyPotionTransfer.java
-          git commit -m 'Migrate potion fluid data to 1.21 components'
+            src/main/java/slimeknights/tconstruct/library/json/loot/TagPreferenceLootEntry.java \
+            src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          git commit -m 'Migrate tag preference loot entry to 1.21 codec'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
