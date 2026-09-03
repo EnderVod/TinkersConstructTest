@@ -33,7 +33,7 @@ public class SyncPersistentDataPacket implements IThreadsafePacket {
     private static void handle(SyncPersistentDataPacket packet) {
       Player player = Minecraft.getInstance().player;
       if (player != null) {
-        player.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.copyFrom(packet.data));
+        PersistentDataCapability.getOrWarn(player).copyFrom(packet.data);
       }
     }
   }

@@ -56,7 +56,7 @@ public class ModifierLootModifier extends LootModifier {
 
         // no need to build the dummy tool if we lack modifiers
         if (!modifiers.isEmpty()) {
-          ModDataNBT persistentData = projectile.getCapability(PersistentDataCapability.CAPABILITY).orElseGet(ModDataNBT::new);
+          ModDataNBT persistentData = PersistentDataCapability.getOrEmpty(projectile);
           IToolStackView dummyTool = new DummyToolStack(Items.AIR, modifiers, persistentData);
           for (ModifierEntry entry : modifiers) {
             entry.getHook(ModifierHooks.PROCESS_LOOT).processLoot(dummyTool, entry, generatedLoot, context);

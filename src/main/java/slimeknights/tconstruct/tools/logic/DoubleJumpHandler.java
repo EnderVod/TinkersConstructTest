@@ -30,14 +30,14 @@ public class DoubleJumpHandler {
   static void onJump(LivingJumpEvent event) {
     LivingEntity living = event.getEntity();
     if (living.onGround() || (living.verticalCollision && !living.verticalCollisionBelow && living.getAttributeValue(ForgeMod.ENTITY_GRAVITY.get()) < 0)) {
-      living.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));
+      PersistentDataCapability.getIfPresent(living, data -> data.remove(JUMPS));
     }
   }
 
   /** Event handler to reset the number of times we have jumped in mid air */
   @SubscribeEvent
   static void onLand(LivingFallEvent event) {
-    event.getEntity().getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));
+    PersistentDataCapability.getIfPresent(event.getEntity(), data -> data.remove(JUMPS));
   }
 
   /**
