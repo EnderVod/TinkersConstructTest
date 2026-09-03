@@ -3,6 +3,7 @@ package slimeknights.tconstruct.library.recipe.casting;
 import lombok.Getter;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -98,7 +99,7 @@ public class PotionCastingRecipe implements ICastingRecipe, IMultiRecipe<Display
   }
 
   @Override
-  public ItemStack assemble(ICastingContainer inv, RegistryAccess access) {
+  public ItemStack assemble(ICastingContainer inv, HolderLookup.Provider access) {
     ItemStack result = new ItemStack(this.result);
     result.setTag(inv.getFluidTag());
     return result;
@@ -138,7 +139,7 @@ public class PotionCastingRecipe implements ICastingRecipe, IMultiRecipe<Display
   /** @deprecated use {@link #assemble(Container, RegistryAccess)} */
   @Deprecated
   @Override
-  public ItemStack getResultItem(RegistryAccess access) {
+  public ItemStack getResultItem(HolderLookup.Provider access) {
     return new ItemStack(this.result);
   }
 }
