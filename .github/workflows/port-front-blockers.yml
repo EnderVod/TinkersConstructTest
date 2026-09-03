@@ -30,220 +30,112 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate entity capabilities to data attachments
+      - name: Migrate fluid item capabilities to NeoForge 1.21
         run: |
-          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java <<'JAVA'
-          package slimeknights.tconstruct.library.tools.capability;
+          cat > src/main/java/slimeknights/tconstruct/fluids/util/ConstantFluidContainerWrapper.java <<'JAVA'
+          package slimeknights.tconstruct.fluids.util;
 
-          import net.minecraft.core.HolderLookup;
-          import net.minecraft.nbt.CompoundTag;
-          import net.minecraft.resources.ResourceLocation;
-          import net.minecraft.world.entity.Entity;
-          import net.minecraft.world.entity.LivingEntity;
-          import net.minecraft.world.entity.player.Player;
-          import net.neoforged.neoforge.attachment.AttachmentType;
-          import net.neoforged.neoforge.attachment.IAttachmentHolder;
-          import net.neoforged.neoforge.attachment.IAttachmentSerializer;
-          import net.neoforged.neoforge.common.NeoForge;
-          import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-          import net.neoforged.neoforge.registries.DeferredRegister;
-          import net.neoforged.neoforge.registries.NeoForgeRegistries;
-          import slimeknights.tconstruct.TConstruct;
-          import slimeknights.tconstruct.common.network.SyncPersistentDataPacket;
-          import slimeknights.tconstruct.common.network.TinkerNetwork;
-          import slimeknights.tconstruct.library.tools.nbt.ModDataNBT;
+          import lombok.Getter;
+          import net.minecraft.world.item.ItemStack;
+          import net.neoforged.neoforge.fluids.FluidStack;
+          import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
 
-          import java.util.function.Consumer;
-          import java.util.function.Supplier;
+          import javax.annotation.Nonnull;
 
-          /** Persistent per-entity Tinkers modifier data, stored through NeoForge 1.21 data attachments. */
-          public final class PersistentDataCapability {
-            private PersistentDataCapability() {}
+          /** Represents a fluid handler for a container with a constant fluid. */
+          public class ConstantFluidContainerWrapper implements IFluidHandlerItem {
+            /** Contained fluid */
+            private final FluidStack fluid;
+            /** If true, the container is now empty */
+            private boolean empty = false;
+            /** Item stack representing the current state */
+            @Getter
+            @Nonnull
+            protected ItemStack container;
+            /** Empty version of the container */
+            private final ItemStack emptyStack;
 
-            private static final ResourceLocation ID = TConstruct.getResource("persistent_data");
-            private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
-              DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, TConstruct.MOD_ID);
+            public ConstantFluidContainerWrapper(FluidStack fluid, ItemStack container, ItemStack emptyStack) {
+              this.fluid = fluid;
+              this.container = container;
+              this.emptyStack = emptyStack;
+            }
 
-            /** Persistent attachment replacing the old Forge entity capability. */
-            public static final Supplier<AttachmentType<ModDataNBT>> ATTACHMENT = ATTACHMENT_TYPES.register(ID.getPath(), () ->
-              AttachmentType.builder(ModDataNBT::new)
-                .serialize(new IAttachmentSerializer<CompoundTag, ModDataNBT>() {
-                  @Override
-                  public ModDataNBT read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
-                    return ModDataNBT.readFromNBT(tag.copy());
-                  }
+            public ConstantFluidContainerWrapper(FluidStack fluid, ItemStack container) {
+              this(fluid, container, container.getCraftingRemainingItem());
+            }
 
-                  @Override
-                  public CompoundTag write(ModDataNBT attachment, HolderLookup.Provider provider) {
-                    return attachment.getCopy();
-                  }
-                })
-                .copyOnDeath()
-                .build());
+            @Override
+            public int getTanks() {
+              return 1;
+            }
 
-            /** Gets the data, creating the attachment on first use. */
-            public static ModDataNBT getOrWarn(Entity entity) {
-              if (!(entity instanceof LivingEntity) && !EntityModifierCapability.supportCapability(entity)) {
-                TConstruct.LOG.warn("Creating Tinkers persistent data on unsupported entity {}", entity.getType());
+            @Override
+            public int getTankCapacity(int tank) {
+              return fluid.getAmount();
+            }
+
+            @Override
+            public boolean isFluidValid(int tank, @Nonnull FluidStack stack) {
+              return stack.isEmpty() || stack.getFluid() == fluid.getFluid();
+            }
+
+            @Nonnull
+            @Override
+            public FluidStack getFluidInTank(int tank) {
+              return empty ? FluidStack.EMPTY : fluid;
+            }
+
+            @Override
+            public int fill(FluidStack resource, FluidAction action) {
+              return 0;
+            }
+
+            @Nonnull
+            @Override
+            public FluidStack drain(FluidStack resource, FluidAction action) {
+              if (empty || resource.getFluid() != fluid.getFluid() || resource.getAmount() < fluid.getAmount()) {
+                return FluidStack.EMPTY;
               }
-              return entity.getData(ATTACHMENT);
-            }
-
-            /** Gets existing data or an empty detached value when none has been created. */
-            public static ModDataNBT getOrEmpty(Entity entity) {
-              ModDataNBT data = entity.getExistingDataOrNull(ATTACHMENT);
-              return data == null ? new ModDataNBT() : data;
-            }
-
-            /** Runs the consumer only if data is already present. */
-            public static void getIfPresent(Entity entity, Consumer<ModDataNBT> consumer) {
-              ModDataNBT data = entity.getExistingDataOrNull(ATTACHMENT);
-              if (data != null) {
-                consumer.accept(data);
+              if (action == FluidAction.EXECUTE) {
+                container = emptyStack;
+                empty = true;
               }
+              return fluid.copy();
             }
 
-            /** Registers the attachment and player sync listeners during mod construction. */
-            public static void register() {
-              ATTACHMENT_TYPES.register(TConstruct.getModBus());
-              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerRespawn);
-              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerChangeDimension);
-              NeoForge.EVENT_BUS.addListener(PersistentDataCapability::playerLoggedIn);
-            }
-
-            private static void sync(Player player) {
-              ModDataNBT data = player.getData(ATTACHMENT);
-              TinkerNetwork.getInstance().sendTo(new SyncPersistentDataPacket(data.getCopy()), player);
-            }
-
-            private static void playerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-              sync(event.getEntity());
-            }
-
-            private static void playerChangeDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
-              sync(event.getEntity());
-            }
-
-            private static void playerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-              sync(event.getEntity());
+            @Nonnull
+            @Override
+            public FluidStack drain(int maxDrain, FluidAction action) {
+              if (empty || maxDrain < fluid.getAmount()) {
+                return FluidStack.EMPTY;
+              }
+              if (action == FluidAction.EXECUTE) {
+                container = emptyStack;
+                empty = true;
+              }
+              return fluid.copy();
             }
           }
           JAVA
 
-          cat > src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java <<'JAVA'
-          package slimeknights.tconstruct.library.tools.capability;
+          cat > src/main/java/slimeknights/tconstruct/fluids/FluidEvents.java <<'JAVA'
+          package slimeknights.tconstruct.fluids;
 
-          import net.minecraft.core.HolderLookup;
-          import net.minecraft.nbt.ListTag;
-          import net.minecraft.resources.ResourceLocation;
-          import net.minecraft.world.entity.Entity;
-          import net.neoforged.neoforge.attachment.AttachmentType;
-          import net.neoforged.neoforge.attachment.IAttachmentHolder;
-          import net.neoforged.neoforge.attachment.IAttachmentSerializer;
-          import net.neoforged.neoforge.registries.DeferredRegister;
-          import net.neoforged.neoforge.registries.NeoForgeRegistries;
-          import org.jetbrains.annotations.Nullable;
+          import net.neoforged.neoforge.event.furnace.FurnaceFuelBurnTimeEvent;
+          import net.neoforged.bus.api.SubscribeEvent;
+          import net.neoforged.fml.common.EventBusSubscriber;
+          import net.neoforged.fml.common.EventBusSubscriber.Bus;
           import slimeknights.tconstruct.TConstruct;
-          import slimeknights.tconstruct.library.tools.nbt.ModifierNBT;
 
-          import java.util.ArrayList;
-          import java.util.List;
-          import java.util.function.Predicate;
-          import java.util.function.Supplier;
-
-          /** Data attachment allowing supported entities (notably projectiles) to carry tool modifiers. */
-          public final class EntityModifierCapability {
-            public static final EntityModifiers EMPTY = new EntityModifiers() {
-              @Override
-              public ModifierNBT getModifiers() {
-                return ModifierNBT.EMPTY;
-              }
-
-              @Override
-              public void setModifiers(ModifierNBT nbt) {}
-            };
-
-            private EntityModifierCapability() {}
-
-            private static final List<Predicate<Entity>> ENTITY_PREDICATES = new ArrayList<>();
-            private static final ResourceLocation ID = TConstruct.getResource("modifiers");
-            private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES =
-              DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, TConstruct.MOD_ID);
-
-            /** Serialized modifier attachment replacing the old Forge entity capability. */
-            public static final Supplier<AttachmentType<ModifierNBT>> ATTACHMENT = ATTACHMENT_TYPES.register(ID.getPath(), () ->
-              AttachmentType.builder(() -> ModifierNBT.EMPTY)
-                .serialize(new IAttachmentSerializer<ListTag, ModifierNBT>() {
-                  @Override
-                  public ModifierNBT read(IAttachmentHolder holder, ListTag tag, HolderLookup.Provider provider) {
-                    return ModifierNBT.readFromNBT(tag);
-                  }
-
-                  @Nullable
-                  @Override
-                  public ListTag write(ModifierNBT attachment, HolderLookup.Provider provider) {
-                    return attachment.isEmpty() ? null : attachment.serializeToNBT();
-                  }
-                })
-                .build());
-
-            public static EntityModifiers getCapability(Entity entity) {
-              if (!supportCapability(entity)) {
-                return EMPTY;
-              }
-              return new AttachmentEntityModifiers(entity);
-            }
-
-            public static ModifierNBT getOrEmpty(Entity entity) {
-              if (!supportCapability(entity)) {
-                return ModifierNBT.EMPTY;
-              }
-              ModifierNBT modifiers = entity.getExistingDataOrNull(ATTACHMENT);
-              return modifiers == null ? ModifierNBT.EMPTY : modifiers;
-            }
-
-            public static boolean supportCapability(Entity entity) {
-              for (Predicate<Entity> entityPredicate : ENTITY_PREDICATES) {
-                if (entityPredicate.test(entity)) {
-                  return true;
-                }
-              }
-              return false;
-            }
-
-            public static void registerEntityPredicate(Predicate<Entity> predicate) {
-              ENTITY_PREDICATES.add(predicate);
-            }
-
-            /** Registers the attachment type during mod construction. */
-            public static void register() {
-              ATTACHMENT_TYPES.register(TConstruct.getModBus());
-            }
-
-            private record AttachmentEntityModifiers(Entity entity) implements EntityModifiers {
-              @Override
-              public ModifierNBT getModifiers() {
-                return entity.getData(ATTACHMENT);
-              }
-
-              @Override
-              public void setModifiers(ModifierNBT nbt) {
-                entity.setData(ATTACHMENT, nbt);
-              }
-            }
-
-            public interface EntityModifiers {
-              ModifierNBT getModifiers();
-
-              void setModifiers(ModifierNBT nbt);
-
-              default void addModifiers(ModifierNBT nbt) {
-                ModifierNBT existing = getModifiers();
-                if (existing.isEmpty()) {
-                  setModifiers(nbt);
-                } else {
-                  setModifiers(ModifierNBT.builder().add(existing).add(nbt).build());
-                }
+          /** Common fluid gameplay events. Item fluid capabilities are registered on the mod bus in TinkerFluids. */
+          @SuppressWarnings("unused")
+          @EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.FORGE)
+          public class FluidEvents {
+            @SubscribeEvent
+            static void onFurnaceFuel(FurnaceFuelBurnTimeEvent event) {
+              if (event.getItemStack().getItem() == TinkerFluids.blazingBlood.asItem()) {
+                event.setBurnTime(30000);
               }
             }
           }
@@ -252,89 +144,93 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          replacements = {
-            'src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java': [
-              ('projectile.getCapability(PersistentDataCapability.CAPABILITY).orElseGet(ModDataNBT::new)', 'PersistentDataCapability.getOrEmpty(projectile)')
-            ],
-            'src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java': [
-              ('direct.getCapability(PersistentDataCapability.CAPABILITY).orElseGet(ModDataNBT::new)', 'PersistentDataCapability.getOrEmpty(direct)')
-            ],
-            'src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java': [
-              ('player.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.copyFrom(packet.data));', 'PersistentDataCapability.getOrWarn(player).copyFrom(packet.data);')
-            ],
-            'src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java': [
-              ('living.getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));', 'PersistentDataCapability.getIfPresent(living, data -> data.remove(JUMPS));'),
-              ('event.getEntity().getCapability(PersistentDataCapability.CAPABILITY).ifPresent(data -> data.remove(JUMPS));', 'PersistentDataCapability.getIfPresent(event.getEntity(), data -> data.remove(JUMPS));')
-            ],
-          }
-          for filename, pairs in replacements.items():
-            path = Path(filename)
-            text = path.read_text(encoding='utf-8')
-            for old, new in pairs:
-              if old not in text:
-                raise SystemExit(f'Missing persistent-data capability use in {filename}: {old}')
-              text = text.replace(old, new, 1)
-            path.write_text(text, encoding='utf-8')
-
-          # Registration must be installed from the existing module constructor, before lifecycle events fire.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java')
+          # Food/slime bottles expose a direct IFluidHandlerItem factory instead of the removed initCapabilities hook.
+          path = Path('src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java')
           text = path.read_text(encoding='utf-8')
-          constructor_anchor = '  public TinkerModifiers() {\n'
-          if constructor_anchor not in text:
-            raise SystemExit('Missing TinkerModifiers constructor')
-          registrations = '''    PersistentDataCapability.register();\n    EntityModifierCapability.register();\n    BlockItemProviderCapability.register();\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n'''
-          if '    PersistentDataCapability.register();\n' not in text[:text.find('  void commonSetup(final FMLCommonSetupEvent event)')]:
-            text = text.replace(constructor_anchor, constructor_anchor + registrations, 1)
+          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '', 1)
+          text = text.replace('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', '', 1)
+          if 'import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;\n' not in text:
+            text = text.replace('import net.neoforged.neoforge.fluids.FluidStack;\n', 'import net.neoforged.neoforge.fluids.FluidStack;\nimport net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;\n', 1)
+          old = '''    @Nullable\n    @Override\n    public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {\n      return new ConstantFluidContainerWrapper(fluid.get(), stack);\n    }'''
+          new = '''    /** Creates the 1.21 item fluid capability for this stack. */\n    public IFluidHandlerItem createFluidHandler(ItemStack stack) {\n      return new ConstantFluidContainerWrapper(fluid.get(), stack);\n    }'''
+          if old not in text:
+            raise SystemExit('Missing FluidContainerFoodItem initCapabilities block')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Remove the old commonSetup registrations, leaving the constructor copies intact.
-          common_idx = text.find('  void commonSetup(final FMLCommonSetupEvent event)')
-          if common_idx < 0:
-            raise SystemExit('Missing TinkerModifiers commonSetup')
-          before, after = text[:common_idx], text[common_idx:]
-          for stale in [
-            '    PersistentDataCapability.register();\n',
-            '    EntityModifierCapability.register();\n',
-            '    BlockItemProviderCapability.register();\n',
-            '    // by default, we support modifying projectiles (arrows or fireworks mainly, but maybe other stuff). other entities may come in the future\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n',
-          ]:
-            after = after.replace(stale, '', 1)
-          path.write_text(before + after, encoding='utf-8')
+          # Magma bottle no longer provides capabilities from the item instance; TinkerFluids registers its handler.
+          path = Path('src/main/java/slimeknights/tconstruct/fluids/item/MagmaBottleItem.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '', 1)
+          text = text.replace('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', '', 1)
+          text = text.replace('import net.neoforged.neoforge.fluids.FluidStack;\n', '', 1)
+          text = text.replace('import slimeknights.tconstruct.fluids.TinkerFluids;\n', '', 1)
+          text = text.replace('import slimeknights.tconstruct.fluids.util.ConstantFluidContainerWrapper;\n', '', 1)
+          text = text.replace('import slimeknights.tconstruct.library.recipe.FluidValues;\n', '', 1)
+          old = '''\n  @Nullable\n  @Override\n  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {\n    return new ConstantFluidContainerWrapper(new FluidStack(TinkerFluids.magma.get(), FluidValues.BOTTLE), stack);\n  }'''
+          if old not in text:
+            raise SystemExit('Missing MagmaBottleItem initCapabilities block')
+          path.write_text(text.replace(old, '', 1), encoding='utf-8')
+
+          # Potion bucket keeps its handler implementation but registration moves to RegisterCapabilitiesEvent.
+          path = Path('src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', '', 1)
+          old = '''\n  @Override\n  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {\n    return new PotionBucketWrapper(stack);\n  }\n'''
+          if old not in text:
+            raise SystemExit('Missing PotionBucketItem initCapabilities block')
+          path.write_text(text.replace(old, '\n', 1), encoding='utf-8')
+
+          # Register all fluid item handlers through NeoForge's item capability registry.
+          path = Path('src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import net.neoforged.neoforge.capabilities.Capabilities;\n' not in text:
+            text = text.replace('import net.neoforged.neoforge.common.NeoForgeMod;\n', 'import net.neoforged.neoforge.capabilities.Capabilities;\nimport net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;\nimport net.neoforged.neoforge.common.NeoForgeMod;\n', 1)
+          if 'import slimeknights.tconstruct.fluids.util.ConstantFluidContainerWrapper;\n' not in text:
+            text = text.replace('import slimeknights.tconstruct.fluids.util.BottleBrewingRecipe;\n', 'import slimeknights.tconstruct.fluids.util.BottleBrewingRecipe;\nimport slimeknights.tconstruct.fluids.util.ConstantFluidContainerWrapper;\n', 1)
+          old_ctor = '''  public TinkerFluids() {\n    NeoForgeMod.enableMilkFluid();\n  }'''
+          new_ctor = '''  public TinkerFluids() {\n    NeoForgeMod.enableMilkFluid();\n    TConstruct.getModBus().addListener(TinkerFluids::registerCapabilities);\n  }'''
+          if old_ctor not in text:
+            raise SystemExit('Missing TinkerFluids constructor')
+          text = text.replace(old_ctor, new_ctor, 1)
+          marker = '''\n  /** Creative tab for general items, or those that lack another tab */'''
+          method = '''\n  /** Registers item fluid handlers using the NeoForge 1.21 capability model. */\n  private static void registerCapabilities(RegisterCapabilitiesEvent event) {\n    event.registerItem(Capabilities.FluidHandler.ITEM,\n      (stack, context) -> new ConstantFluidContainerWrapper(new FluidStack(powderedSnow.get(), FluidType.BUCKET_VOLUME), stack, Items.BUCKET.getDefaultInstance()),\n      Items.POWDER_SNOW_BUCKET);\n    event.registerItem(Capabilities.FluidHandler.ITEM,\n      (stack, context) -> new ConstantFluidContainerWrapper(new FluidStack(magma.get(), FluidValues.BOTTLE), stack),\n      magmaBottle.get());\n    event.registerItem(Capabilities.FluidHandler.ITEM,\n      (stack, context) -> ((FluidContainerFoodItem)stack.getItem()).createFluidHandler(stack),\n      venomBottle.get());\n    for (SlimeType type : SlimeType.values()) {\n      event.registerItem(Capabilities.FluidHandler.ITEM,\n        (stack, context) -> ((FluidContainerFoodItem)stack.getItem()).createFluidHandler(stack),\n        slimeBottle.get(type));\n    }\n    event.registerItem(Capabilities.FluidHandler.ITEM,\n      (stack, context) -> new PotionBucketItem.PotionBucketWrapper(stack),\n      potion.asItem());\n  }\n'''
+          if marker not in text:
+            raise SystemExit('Missing TinkerFluids creative-tab marker')
+          if 'private static void registerCapabilities(RegisterCapabilitiesEvent event)' not in text:
+            text = text.replace(marker, method + marker, 1)
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify entity attachment migration
+      - name: Verify fluid capability migration
         run: |
-          grep -Fq 'DeferredRegister<AttachmentType' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
-          grep -Fq '.copyOnDeath()' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
-          grep -Fq 'getExistingDataOrNull(ATTACHMENT)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
-          grep -Fq 'entity.setData(ATTACHMENT, nbt)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
-          grep -Fq 'PersistentDataCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
-          grep -Fq 'BlockItemProviderCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
-          test -z "$(grep -R 'CapabilityManager\|CapabilityToken\|ICapabilitySerializable\|AttachCapabilitiesEvent\|LazyOptional' \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java || true)"
-          test -z "$(grep -R 'PersistentDataCapability.CAPABILITY' \
-            src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java \
-            src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
-            src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java \
-            src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java || true)"
+          grep -Fq 'implements IFluidHandlerItem' src/main/java/slimeknights/tconstruct/fluids/util/ConstantFluidContainerWrapper.java
+          grep -Fq 'Capabilities.FluidHandler.ITEM' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          grep -Fq 'Items.POWDER_SNOW_BUCKET' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          grep -Fq 'PotionBucketItem.PotionBucketWrapper' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
+          grep -Fq 'createFluidHandler(ItemStack stack)' src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java
+          test -z "$(grep -R 'ICapabilityProvider\|AttachCapabilitiesEvent\|initCapabilities' \
+            src/main/java/slimeknights/tconstruct/fluids/util/ConstantFluidContainerWrapper.java \
+            src/main/java/slimeknights/tconstruct/fluids/FluidEvents.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/MagmaBottleItem.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Entity attachments are already migrated.'
+            echo 'Fluid item capabilities are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java \
-            src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java \
-            src/main/java/slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java \
-            src/main/java/slimeknights/tconstruct/library/tools/helper/ModifierLootingHandler.java \
-            src/main/java/slimeknights/tconstruct/common/network/SyncPersistentDataPacket.java \
-            src/main/java/slimeknights/tconstruct/tools/logic/DoubleJumpHandler.java \
-            src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
-          git commit -m 'Migrate entity state to NeoForge data attachments'
+            src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java \
+            src/main/java/slimeknights/tconstruct/fluids/FluidEvents.java \
+            src/main/java/slimeknights/tconstruct/fluids/util/ConstantFluidContainerWrapper.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/MagmaBottleItem.java \
+            src/main/java/slimeknights/tconstruct/fluids/item/PotionBucketItem.java
+          git commit -m 'Migrate fluid item capabilities to NeoForge 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
