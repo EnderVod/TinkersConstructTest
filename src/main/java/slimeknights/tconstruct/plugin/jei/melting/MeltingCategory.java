@@ -3,7 +3,7 @@ package slimeknights.tconstruct.plugin.jei.melting;
 import com.mojang.datafixers.util.Either;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import mezz.jei.api.forge.ForgeTypes;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawableStatic;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
@@ -77,7 +77,7 @@ public class MeltingCategory extends AbstractMeltingCategory {
       .addRichTooltipCallback(tooltip)
       .setFluidRenderer(FluidValues.METAL_BLOCK, false, 32, 32)
       .setOverlay(tankOverlay, 0, 0)
-      .addIngredient(ForgeTypes.FLUID_STACK, recipe.getOutput());
+      .addIngredient(NeoForgeTypes.FLUID_STACK, recipe.getOutput());
 
     // show fuels that are valid for this recipe
     int fuelHeight = 32;
@@ -94,7 +94,7 @@ public class MeltingCategory extends AbstractMeltingCategory {
     builder.addSlot(RecipeIngredientRole.RENDER_ONLY, 4, 4)
            .addRichTooltipCallback(FUEL_TOOLTIP)
            .setFluidRenderer(1, false, 12, fuelHeight)
-           .addIngredients(ForgeTypes.FLUID_STACK, MeltingFuelHandler.getUsableFuels(recipe.getTemperature()));
+           .addIngredients(NeoForgeTypes.FLUID_STACK, MeltingFuelHandler.getUsableFuels(recipe.getTemperature()));
   }
 
   /** Adds amounts to outputs and temperatures to fuels */

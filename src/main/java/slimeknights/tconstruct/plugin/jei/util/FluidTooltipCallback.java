@@ -2,7 +2,7 @@ package slimeknights.tconstruct.plugin.jei.util;
 
 import com.mojang.datafixers.util.Either;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
-import mezz.jei.api.forge.ForgeTypes;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import net.minecraft.network.chat.Component;
@@ -35,7 +35,7 @@ public interface FluidTooltipCallback extends mezz.jei.api.gui.ingredient.IRecip
       Component component = listIterator.next();
       if (component.getContents() instanceof TranslatableContents translatable && AMOUNT_KEY.equals(translatable.getKey())) {
         listIterator.remove();
-        FluidStack fluid = recipeSlotView.getDisplayedIngredient(ForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
+        FluidStack fluid = recipeSlotView.getDisplayedIngredient(NeoForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
         List<Component> newTooltip = new ArrayList<>();
         onFluidTooltip(fluid, recipeSlotView, newTooltip);
         tooltip.addAll(listIterator.nextIndex(), newTooltip);
@@ -43,7 +43,7 @@ public interface FluidTooltipCallback extends mezz.jei.api.gui.ingredient.IRecip
       }
     }
     // failed to find the tooltip to replace, so just append our stuff at the end
-    FluidStack fluid = recipeSlotView.getDisplayedIngredient(ForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
+    FluidStack fluid = recipeSlotView.getDisplayedIngredient(NeoForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
     onFluidTooltip(fluid, recipeSlotView, tooltip);
   }
 
@@ -54,13 +54,13 @@ public interface FluidTooltipCallback extends mezz.jei.api.gui.ingredient.IRecip
       FormattedText line = listIterator.next().left().orElse(null);
       if (line instanceof Component component && component.getContents() instanceof TranslatableContents translatable && AMOUNT_KEY.equals(translatable.getKey())) {
         listIterator.remove();
-        FluidStack fluid = recipeSlotView.getDisplayedIngredient(ForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
+        FluidStack fluid = recipeSlotView.getDisplayedIngredient(NeoForgeTypes.FLUID_STACK).orElse(FluidStack.EMPTY);
         onFluidTooltip(fluid, recipeSlotView, tooltip);
         return;
       }
     }
     // failed to find the tooltip to replace, so just append our stuff at the end
-    recipeSlotView.getDisplayedIngredient(ForgeTypes.FLUID_STACK)
+    recipeSlotView.getDisplayedIngredient(NeoForgeTypes.FLUID_STACK)
       .ifPresent(fluid -> onFluidTooltip(fluid, recipeSlotView, tooltip));
   }
 

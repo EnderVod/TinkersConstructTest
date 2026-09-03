@@ -2,7 +2,7 @@ package slimeknights.tconstruct.plugin.jei.util;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import mezz.jei.api.forge.ForgeTypes;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -50,7 +50,7 @@ public final class CategoryUtil {
         builder.addSlot(role.apply(ingredient), fluidX, y)
                .addRichTooltipCallback(tooltip.apply(ingredient))
                .setFluidRenderer(maxAmount, false, width, height)
-               .addIngredients(ForgeTypes.FLUID_STACK, mapper.apply(ingredient));
+               .addIngredients(NeoForgeTypes.FLUID_STACK, mapper.apply(ingredient));
       }
       // for the last, the width is the full remaining width
       int fluidX = x + last * width;
@@ -58,7 +58,7 @@ public final class CategoryUtil {
       builder.addSlot(role.apply(ingredient), fluidX, y)
              .addRichTooltipCallback(tooltip.apply(ingredient))
              .setFluidRenderer(maxAmount, false, totalWidth - (width * last), height)
-             .addIngredients(ForgeTypes.FLUID_STACK, mapper.apply(ingredient));
+             .addIngredients(NeoForgeTypes.FLUID_STACK, mapper.apply(ingredient));
     }
     return maxAmount;
   }
