@@ -10,69 +10,87 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   migrate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - name: Wait for active port compile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          while gh run list --repo "$GITHUB_REPOSITORY" --workflow port-compile.yml --branch 1.21.1-neoforge --limit 30 --json status --jq '.[] | select(.status == "queued" or .status == "in_progress") | .status' | grep -q .; do
-            sleep 15
-          done
-
       - name: Checkout latest Tinkers port
         uses: actions/checkout@v4
         with:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply staged 1.21 gadget migration
+      - name: Migrate TinkerSmeltery holder generics
         shell: bash
         run: |
           python3 - <<'PY'
-          import base64, subprocess
           from pathlib import Path
-          previous = subprocess.check_output(['git', 'show', 'HEAD^^:.github/workflows/port-front-blockers.yml'], text=True)
-          payload = None
-          for line in previous.splitlines():
-              if 'base64 -d > /tmp/gadget-batch.tar.gz' in line and "echo '" in line:
-                  payload = line.split("echo '", 1)[1].split("' | base64", 1)[0]
-                  break
-          if not payload:
-              raise SystemExit('Could not recover staged gadget migration payload')
-          Path('/tmp/gadget-batch.tar.gz').write_bytes(base64.b64decode(payload))
-          PY
-          tar -xzf /tmp/gadget-batch.tar.gz
+          import re
 
-      - name: Verify migrated APIs
+          path = Path("src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java")
+          source = path.read_text()
+
+          legacy_count = source.count("DeferredHolder<?,")
+          if legacy_count != 56:
+              raise SystemExit(f"expected 56 legacy DeferredHolder declarations, got {legacy_count}")
+          never_count = source.count("Blocks::never")
+          if never_count != 2:
+              raise SystemExit(f"expected 2 Blocks::never references, got {never_count}")
+
+          source = source.replace(
+              "private static final StatePredicate NEVER = Blocks::never;",
+              "private static final StatePredicate NEVER = (state, getter, pos) -> false;"
+          )
+          source = source.replace(
+              ".isValidSpawn(Blocks::never)",
+              ".isValidSpawn((state, getter, pos, type) -> false)"
+          )
+
+          source, creative = re.subn(
+              r"DeferredHolder<\?,CreativeModeTab>",
+              "DeferredHolder<CreativeModeTab,CreativeModeTab>", source)
+          source, block_entities = re.subn(
+              r"DeferredHolder<\?,BlockEntityType<([^>]+)>>",
+              r"DeferredHolder<BlockEntityType<?>,BlockEntityType<\1>>", source)
+          source, typed_recipes = re.subn(
+              r"DeferredHolder<\?,TypeAwareRecipeSerializer<([^>]+)>>",
+              r"DeferredHolder<RecipeSerializer<?>,TypeAwareRecipeSerializer<\1>>", source)
+          source, recipes = re.subn(
+              r"DeferredHolder<\?,RecipeSerializer<([^>]+)>>",
+              r"DeferredHolder<RecipeSerializer<?>,RecipeSerializer<\1>>", source)
+          source, menus = re.subn(
+              r"DeferredHolder<\?,MenuType<([^>]+)>>",
+              r"DeferredHolder<MenuType<?>,MenuType<\1>>", source)
+
+          counts = (creative, block_entities, typed_recipes, recipes, menus)
+          if counts != (1, 19, 24, 8, 4):
+              raise SystemExit(f"unexpected replacement counts: {counts}")
+          if "DeferredHolder<?," in source:
+              raise SystemExit("legacy DeferredHolder generic remains")
+          if "Blocks::never" in source:
+              raise SystemExit("private Blocks::never reference remains")
+
+          path.write_text(source)
+          PY
+
+      - name: Verify migration
         shell: bash
         run: |
-          grep -Fq 'ItemStack.STREAM_CODEC.encode' src/main/java/slimeknights/tconstruct/gadgets/entity/EFLNEntity.java
-          grep -Fq 'ItemStack.STREAM_CODEC.decode' src/main/java/slimeknights/tconstruct/gadgets/entity/GlowballEntity.java
-          grep -Fq 'SynchedEntityData.Builder' src/main/java/slimeknights/tconstruct/gadgets/entity/FancyArmorStandEntity.java
-          grep -Fq 'source.state()' src/main/java/slimeknights/tconstruct/gadgets/entity/DispenseFancyArmorStand.java
-          grep -Fq 'DataComponents.ENTITY_DATA' src/main/java/slimeknights/tconstruct/gadgets/item/FancyItemFrameItem.java
-          grep -Fq 'FoodProperties.PossibleEffect' src/main/java/slimeknights/tconstruct/gadgets/block/FoodCakeBlock.java
-          grep -Fq 'EntityDataSerializer.forValueType' src/main/java/slimeknights/tconstruct/library/materials/definition/MaterialVariantId.java
-          grep -Fq 'new ClientboundExplodePacket(' src/main/java/slimeknights/tconstruct/library/utils/CustomExplosion.java
-          ! grep -Eq 'getPosition\(\)|getDamageSource\(\)|ignoreExplosion\(\)' src/main/java/slimeknights/tconstruct/library/utils/CustomExplosion.java
+          file=src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java
+          ! grep -Fq 'DeferredHolder<?,' "$file"
+          ! grep -Fq 'Blocks::never' "$file"
+          grep -Fq 'DeferredHolder<CreativeModeTab,CreativeModeTab>' "$file"
+          grep -Fq 'DeferredHolder<BlockEntityType<?>,BlockEntityType<SmelteryComponentBlockEntity>>' "$file"
+          git diff --check
 
-      - name: Commit gadget API migration
+      - name: Commit migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
+          git add src/main/java/slimeknights/tconstruct/smeltery/TinkerSmeltery.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate gadget and explosion APIs to 1.21'
+          git commit -m 'Migrate smeltery registry holder generics to 1.21'
           git push origin HEAD:1.21.1-neoforge
-
-      - name: Trigger fresh compile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run port-compile.yml --repo "$GITHUB_REPOSITORY" --ref 1.21.1-neoforge
