@@ -136,7 +136,6 @@ import slimeknights.tconstruct.tools.item.CrystalshotItem.CrystalshotEntity;
 import slimeknights.tconstruct.tools.item.ModifiableSwordItem;
 import slimeknights.tconstruct.tools.item.SlimeskullItem;
 import slimeknights.tconstruct.tools.logic.EquipmentChangeWatcher;
-import slimeknights.tconstruct.tools.logic.ModifiableArrowDispenserBehavior;
 import slimeknights.tconstruct.tools.logic.ModifiableShurikenDispenserBehavior;
 import slimeknights.tconstruct.tools.menu.ToolContainerMenu;
 import slimeknights.tconstruct.tools.modules.MeltingFluidEffectiveModule;
@@ -288,7 +287,6 @@ public final class TinkerTools extends TinkerModule {
       event.enqueueWork(action);
     }
     event.enqueueWork(() -> {
-      DispenserBlock.registerBehavior(TinkerTools.arrow.get(), ModifiableArrowDispenserBehavior.INSTANCE);
       DispenserBlock.registerBehavior(TinkerTools.shuriken.get(), ModifiableShurikenDispenserBehavior.INSTANCE);
       DispenserBlock.registerBehavior(TinkerTools.throwingAxe.get(), ModifiableShurikenDispenserBehavior.INSTANCE);
       ModifierUtil.registerShieldDisabler(entity -> {
