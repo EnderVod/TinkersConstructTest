@@ -1,0 +1,113 @@
+name: Tinkers one-shot port cleanup
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-batch-fix.yml
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout port branch
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+          fetch-depth: 0
+
+      - name: Remove runtime references to temporarily excluded datagen providers
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def remove_imports(text, imports):
+              for imp in imports:
+                  text = text.replace(f"import {imp};\n", "")
+              return text
+
+          def remove_method(text, needle="gatherData("):
+              idx = text.find(needle)
+              if idx < 0:
+                  return text
+              start = text.rfind("@SubscribeEvent", 0, idx)
+              if start < 0:
+                  start = text.rfind("\n", 0, idx) + 1
+              brace = text.find("{", idx)
+              if brace < 0:
+                  raise RuntimeError(f"Could not find method body for {needle}")
+              depth = 0
+              end = None
+              for i in range(brace, len(text)):
+                  if text[i] == "{":
+                      depth += 1
+                  elif text[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if end is None:
+                  raise RuntimeError(f"Could not match braces for {needle}")
+              while end < len(text) and text[end] in "\r\n":
+                  end += 1
+              return text[:start] + text[end:]
+
+          files = {
+              Path("src/main/java/slimeknights/tconstruct/tools/TinkerTools.java"): [
+                  "slimeknights.tconstruct.common.data.tags.MaterialTagProvider",
+                  "slimeknights.tconstruct.tools.data.ArmorModelProvider",
+                  "slimeknights.tconstruct.tools.data.StationSlotLayoutProvider",
+                  "slimeknights.tconstruct.tools.data.ToolDefinitionDataProvider",
+                  "slimeknights.tconstruct.tools.data.ToolItemModelProvider",
+                  "slimeknights.tconstruct.tools.data.ToolsRecipeProvider",
+                  "slimeknights.tconstruct.tools.data.client.ModifierModelMapProvider",
+                  "slimeknights.tconstruct.tools.data.material.MaterialDataProvider",
+                  "slimeknights.tconstruct.tools.data.material.MaterialRecipeProvider",
+                  "slimeknights.tconstruct.tools.data.material.MaterialRenderInfoProvider",
+                  "slimeknights.tconstruct.tools.data.material.MaterialStatsDataProvider",
+                  "slimeknights.tconstruct.tools.data.material.MaterialTraitsDataProvider",
+              ],
+              Path("src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java"): [
+                  "slimeknights.tconstruct.common.data.tags.ModifierTagProvider",
+                  "slimeknights.tconstruct.tools.data.EnchantmentToModifierProvider",
+                  "slimeknights.tconstruct.tools.data.FluidEffectProvider",
+                  "slimeknights.tconstruct.tools.data.ModifierProvider",
+                  "slimeknights.tconstruct.tools.data.ModifierRecipeProvider",
+              ],
+              Path("src/main/java/slimeknights/tconstruct/tables/TinkerTables.java"): [
+                  "slimeknights.tconstruct.tables.data.TableRecipeProvider",
+              ],
+          }
+
+          for path, imports in files.items():
+              text = path.read_text(encoding="utf-8")
+              text = remove_imports(text, imports)
+              text = remove_method(text)
+              path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No cleanup changes were needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
+                  src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java \
+                  src/main/java/slimeknights/tconstruct/tables/TinkerTables.java
+          git commit -m "Remove excluded datagen hooks from runtime compile"
+          git push origin HEAD:1.21.1-neoforge
+
+      - name: Dispatch full port compile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
