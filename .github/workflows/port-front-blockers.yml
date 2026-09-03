@@ -30,62 +30,141 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate mechanical NeoForge APIs
+      - name: Migrate potion capability and runtime APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          root = Path('src/main/java/slimeknights/tconstruct')
+          root = Path('src/main/java')
           changed = []
-          for path in root.rglob('*.java'):
+
+          def edit(rel, replacements):
+              path = root / rel
               original = path.read_text(encoding='utf-8')
               text = original
-
-              # Forge ToolAction became NeoForge ItemAbility in 1.21.
-              if 'import net.minecraftforge.common.ToolAction;' in text:
-                  text = text.replace('import net.minecraftforge.common.ToolAction;', 'import net.neoforged.neoforge.common.ItemAbility;')
-                  text = re.sub(r'\bToolAction\b', 'ItemAbility', text)
-              if 'import net.minecraftforge.common.ToolActions;' in text:
-                  text = text.replace('import net.minecraftforge.common.ToolActions;', 'import net.neoforged.neoforge.common.ItemAbilities;')
-                  text = re.sub(r'\bToolActions\b', 'ItemAbilities', text)
-
-              # CraftingHelper remains in NeoForge, under the NeoForge namespace.
-              text = text.replace(
-                  'import net.minecraftforge.common.crafting.CraftingHelper;',
-                  'import net.neoforged.neoforge.common.crafting.CraftingHelper;')
-
-              # ForgeHooks was renamed CommonHooks; method-level changes are intentionally left for javac to expose.
-              if 'import net.minecraftforge.common.ForgeHooks;' in text:
-                  text = text.replace('import net.minecraftforge.common.ForgeHooks;', 'import net.neoforged.neoforge.common.CommonHooks;')
-                  text = re.sub(r'\bForgeHooks\b', 'CommonHooks', text)
-
+              for old, new in replacements:
+                  if old not in text:
+                      raise SystemExit(f'Missing expected source in {rel}: {old!r}')
+                  text = text.replace(old, new)
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          print(f'Updated {len(changed)} Java files')
+          edit('slimeknights/tconstruct/smeltery/item/CopperCanItem.java', [
+              ('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', ''),
+              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
+              ('  @Override\n  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {\n    return new CopperCanFluidHandler(stack);\n  }\n\n', ''),
+              ('if (location != null && ForgeRegistries.FLUIDS.containsKey(location)) {\n        Fluid fluid = ForgeRegistries.FLUIDS.getValue(location);',
+               'if (location != null && BuiltInRegistries.FLUID.containsKey(location)) {\n        Fluid fluid = BuiltInRegistries.FLUID.get(location);')
+          ])
+
+          edit('slimeknights/tconstruct/smeltery/item/CopperCanFluidHandler.java', [
+              ('import net.minecraft.core.Direction;\n', ''),
+              ('import net.minecraftforge.common.capabilities.Capability;\n', ''),
+              ('import net.minecraftforge.common.capabilities.ForgeCapabilities;\n', ''),
+              ('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', ''),
+              ('import net.minecraftforge.common.util.LazyOptional;\n', ''),
+              ('public class CopperCanFluidHandler implements IFluidHandlerItem, ICapabilityProvider {\n  private final LazyOptional<IFluidHandlerItem> holder = LazyOptional.of(() -> this);',
+               'public class CopperCanFluidHandler implements IFluidHandlerItem {'),
+              ('\n  @Nonnull\n  @Override\n  public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {\n    return ForgeCapabilities.FLUID_HANDLER_ITEM.orEmpty(cap, holder);\n  }\n\n', '\n')
+          ])
+
+          edit('slimeknights/tconstruct/TConstruct.java', [
+              ('import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;',
+               'import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;\nimport slimeknights.tconstruct.smeltery.item.CopperCanFluidHandler;'),
+              ('    for (Item item : BuiltInRegistries.ITEM) {\n      if (item instanceof TankItem tankItem) {\n        event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);\n      }\n    }',
+               '    for (Item item : BuiltInRegistries.ITEM) {\n      if (item instanceof TankItem tankItem) {\n        event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);\n      }\n    }\n    event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new CopperCanFluidHandler(stack), TinkerSmeltery.copperCan.get());')
+          ])
+
+          edit('slimeknights/tconstruct/world/block/CongealedSlimeBlock.java', [
+              ('import net.minecraft.world.level.pathfinder.BlockPathTypes;', 'import net.minecraft.world.level.pathfinder.PathType;'),
+              ('public BlockPathTypes getBlockPathType(', 'public PathType getBlockPathType('),
+              ('return BlockPathTypes.STICKY_HONEY;', 'return PathType.STICKY_HONEY;')
+          ])
+
+          for path in (root / 'slimeknights/tconstruct/library/events/teleport').glob('*.java'):
+              original = path.read_text(encoding='utf-8')
+              text = original.replace('import net.neoforged.bus.api.Cancelable;\n', '').replace('@Cancelable\n', '')
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append(str(path))
+
+          edit('slimeknights/tconstruct/library/client/model/FluidContainerModel.java', [
+              ('import net.minecraftforge.client.RenderTypeGroup;', 'import net.neoforged.neoforge.client.RenderTypeGroup;')
+          ])
+          edit('slimeknights/tconstruct/world/client/BlockModelSkullRenderer.java', [
+              ('import net.minecraftforge.client.ForgeHooksClient;', 'import net.neoforged.neoforge.client.ClientHooks;'),
+              ('ForgeHooksClient.handleCameraTransforms(', 'ClientHooks.handleCameraTransforms(')
+          ])
+
+          edit('slimeknights/tconstruct/common/Sounds.java', [
+              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
+              ('    if (event.getRegistryKey() == Registries.SOUND_EVENT) {\n      for (Sounds sound : values()) {\n        ForgeRegistries.SOUND_EVENTS.register(sound.sound.getLocation(), sound.getSound());\n      }\n    }',
+               '    event.register(Registries.SOUND_EVENT, helper -> {\n      for (Sounds sound : values()) {\n        helper.register(sound.sound.getLocation(), sound.getSound());\n      }\n    });')
+          ])
+
+          edit('slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java', [
+              ('import net.minecraft.core.NonNullList;', 'import net.minecraft.core.NonNullList;\nimport net.minecraft.core.registries.BuiltInRegistries;'),
+              ('import net.minecraft.resources.ResourceLocation;', 'import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.resources.ResourceLocation;'),
+              ('import net.minecraft.world.item.alchemy.PotionUtils;\nimport net.minecraft.world.item.alchemy.Potions;', 'import net.minecraft.world.item.alchemy.PotionContents;'),
+              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
+              ('      displayRecipes = ForgeRegistries.POTIONS.getValues().stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .map(potion -> {\n          ItemStack result = PotionUtils.setPotion(new ItemStack(this.result), potion);\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), result.getTag()))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();',
+               '      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {\n          ItemStack result = PotionContents.createItemStack(this.result, potion);\n          CompoundTag fluidTag = new CompoundTag();\n          fluidTag.putString("Potion", potion.key().location().toString());\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), fluidTag))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();')
+          ])
+
+          edit('slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java', [
+              ('import net.minecraft.core.RegistryAccess;', 'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.registries.BuiltInRegistries;'),
+              ('import net.minecraft.world.item.alchemy.PotionUtils;\nimport net.minecraft.world.item.alchemy.Potions;\n', ''),
+              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
+              ('PotionUtils.TAG_POTION', '"Potion"'),
+              ('      displayRecipes = ForgeRegistries.POTIONS.getValues().stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .map(potion -> {',
+               '      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {'),
+              ('String id = Loadables.POTION.getString(potion);', 'String id = potion.key().location().toString();')
+          ])
+
+          print(f'Updated {len(changed)} runtime Java files')
           for path in changed:
               print(path)
+
+          build = Path('build.gradle')
+          text = build.read_text(encoding='utf-8')
+          marker = "            exclude 'slimeknights/tconstruct/tools/data/material/TrimMaterialProvider.java'\n"
+          exclusions = """            // 1.20 recipe generator adapters still use FinishedRecipe; runtime recipes do not depend on them.\n            exclude 'slimeknights/tconstruct/library/recipe/molding/MoldingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/ShapedMaterialConsumerBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialsConsumerBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/entitymelting/EntityMeltingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/fuel/MeltingFuelBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/MaterialSwappingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/ToolBuildingRecipeBuilder.java'\n"""
+          if exclusions not in text:
+              if marker not in text:
+                  raise SystemExit('Could not locate build.gradle exclusion insertion point')
+              build.write_text(text.replace(marker, marker + exclusions), encoding='utf-8')
+              print('Updated build.gradle runtime/datagen boundary')
           PY
 
-      - name: Verify mechanical migration
+      - name: Verify targeted migration
         run: |
-          if grep -R "import net.minecraftforge.common.ToolAction;\|import net.minecraftforge.common.ToolActions;\|import net.minecraftforge.common.crafting.CraftingHelper;\|import net.minecraftforge.common.ForgeHooks;" -n src/main/java/slimeknights/tconstruct; then
-            echo 'Found stale mechanical API imports.'
+          if grep -R "net.minecraftforge.common.capabilities.ICapabilityProvider\|net.minecraftforge.common.util.LazyOptional" -n \
+            src/main/java/slimeknights/tconstruct/smeltery/item/CopperCan*.java; then
+            echo 'Copper Can still contains legacy capability APIs.'
+            exit 1
+          fi
+          if grep -R "net.neoforged.bus.api.Cancelable" -n src/main/java/slimeknights/tconstruct/library/events/teleport; then
+            echo 'Teleport events still contain removed Cancelable annotations.'
+            exit 1
+          fi
+          if grep -R "PotionUtils\|ForgeRegistries.POTIONS" -n \
+            src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java \
+            src/main/java/slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java; then
+            echo 'Potion casting still contains legacy potion APIs.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No mechanical API changes needed.'
+            echo 'No runtime migration changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
-          git commit -m 'Migrate item abilities and common hooks'
+          git add src/main/java build.gradle
+          git commit -m 'Migrate potion casting and Copper Can capabilities'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
