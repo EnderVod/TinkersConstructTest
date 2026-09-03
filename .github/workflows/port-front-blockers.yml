@@ -30,56 +30,62 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Wire shared ingredient types
+      - name: Finish custom ingredient wiring
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
-          if 'import net.neoforged.neoforge.common.crafting.IngredientType;' not in text:
-              text = text.replace('import net.neoforged.neoforge.common.conditions.ICondition;\n', 'import net.neoforged.neoforge.common.conditions.ICondition;\nimport net.neoforged.neoforge.common.crafting.IngredientType;\n', 1)
-          marker = '  /* Resource conditions */\n'
-          if 'noContainerIngredientType = INGREDIENT_TYPES.register' not in text:
-              if marker not in text:
-                  raise SystemExit('Missing resource condition marker')
-              lines = [
-                  '  /* Custom ingredients */',
-                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<NoContainerIngredient>> noContainerIngredientType = INGREDIENT_TYPES.register(NoContainerIngredient.ID.getPath(), () -> new IngredientType<>(NoContainerIngredient.CODEC));',
-                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<BlockTagIngredient>> blockTagIngredientType = INGREDIENT_TYPES.register(BlockTagIngredient.ID.getPath(), () -> new IngredientType<>(BlockTagIngredient.CODEC));',
-                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<InstrumentIngredient>> instrumentIngredientType = INGREDIENT_TYPES.register(InstrumentIngredient.ID.getPath(), () -> new IngredientType<>(InstrumentIngredient.CODEC));',
-                  '',
-              ]
-              text = text.replace(marker, '\n'.join(lines) + '\n' + marker, 1)
-          stale = [
-              '      CraftingHelper.register(NoContainerIngredient.ID, NoContainerIngredient.Serializer.INSTANCE);\n',
-              '      CraftingHelper.register(BlockTagIngredient.Serializer.ID, BlockTagIngredient.Serializer.INSTANCE);\n',
-              '      CraftingHelper.register(InstrumentIngredient.ID, InstrumentIngredient.SERIALIZER);\n',
-          ]
-          for line in stale:
-              if line not in text:
-                  raise SystemExit('Missing stale ingredient registration: ' + line.strip())
-              text = text.replace(line, '', 1)
-          path.write_text(text, encoding='utf-8')
+
+          tools = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          text = tools.read_text(encoding='utf-8')
+          old_import = 'import net.neoforged.neoforge.common.crafting.CraftingHelper;\n'
+          if old_import not in text:
+              raise SystemExit('Missing legacy CraftingHelper import in TinkerTools')
+          text = text.replace(old_import, 'import net.neoforged.neoforge.common.crafting.IngredientType;\n', 1)
+          loot_line = '  public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType(AddToolDataFunction.SERIALIZER));\n'
+          if loot_line not in text:
+              raise SystemExit('Missing lootAddToolData registration')
+          if 'toolHookIngredientType = INGREDIENT_TYPES.register' not in text:
+              text = text.replace(loot_line, loot_line + '\n  /** Custom ingredient matching tools that expose a given tool hook. */\n  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =\n    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));\n', 1)
+          stale = '      CraftingHelper.register(ToolHookIngredient.Serializer.ID, ToolHookIngredient.Serializer.INSTANCE);\n'
+          if stale not in text:
+              raise SystemExit('Missing legacy ToolHookIngredient registration')
+          text = text.replace(stale, '', 1)
+          tools.write_text(text, encoding='utf-8')
+
+          shaped = Path('src/main/java/slimeknights/tconstruct/library/recipe/material/ShapedMaterialRecipe.java')
+          text = shaped.read_text(encoding='utf-8')
+          old = '        if (ingredient instanceof MaterialValueIngredient materialValue) {'
+          new = '        if (ingredient.getCustomIngredient() instanceof MaterialValueIngredient materialValue) {'
+          if old not in text:
+              raise SystemExit('Missing MaterialValueIngredient detection in ShapedMaterialRecipe')
+          shaped.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          jei = Path('src/main/java/slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
+          text = jei.read_text(encoding='utf-8')
+          old = '    this.materialSlots = IntStream.range(0, inputs.size()).filter(i -> inputs.get(i) instanceof MaterialValueIngredient).toArray();'
+          new = '    this.materialSlots = IntStream.range(0, inputs.size()).filter(i -> inputs.get(i).getCustomIngredient() instanceof MaterialValueIngredient).toArray();'
+          if old not in text:
+              raise SystemExit('Missing MaterialValueIngredient detection in ShapedMaterialExtension')
+          jei.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Verify shared ingredient types
+      - name: Verify custom ingredient wiring
         run: |
-          grep -q 'noContainerIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -q 'blockTagIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -q 'instrumentIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          test -z "$(grep -R 'net.minecraftforge.common.crafting' src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NestedIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NoContainerIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/BlockTagIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/InstrumentIngredient.java || true)"
+          grep -q 'toolHookIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          test -z "$(grep 'CraftingHelper.register(ToolHookIngredient' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
+          grep -q 'ingredient.getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/library/recipe/material/ShapedMaterialRecipe.java
+          grep -q 'getCustomIngredient() instanceof MaterialValueIngredient' src/main/java/slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No shared ingredient registry changes needed.'
+            echo 'No remaining custom ingredient wiring changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Register shared custom ingredients for 1.21'
+          git commit -m 'Finish 1.21 custom ingredient migration'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
