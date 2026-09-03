@@ -8,8 +8,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
-import net.neoforged.neoforge.common.crafting.CraftingHelper;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.common.crafting.IngredientType;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import slimeknights.mantle.registration.object.FenceBuildingBlockObject;
 import slimeknights.mantle.registration.object.ItemObject;
@@ -70,14 +71,18 @@ public final class TinkerMaterials extends TinkerModule {
   public static final FenceBuildingBlockObject nahuatl = BLOCKS.registerFenceBuilding("nahuatl", builder(MapColor.COLOR_PURPLE, SoundType.WOOD).instrument(NoteBlockInstrument.BASS).requiresCorrectToolForDrops().strength(25f, 300f), BLOCK_ITEM);
   public static final FenceBuildingBlockObject blazewood = BLOCKS.registerFenceBuilding("blazewood", woodBuilder(MapColor.TERRACOTTA_RED).requiresCorrectToolForDrops().strength(25f, 300f).lightLevel(s -> 7), BLOCK_ITEM);
 
+  /* Custom ingredients */
+  public static final DeferredHolder<IngredientType<?>, IngredientType<MaterialIngredient>> materialIngredientType =
+    INGREDIENT_TYPES.register(MaterialIngredient.ID.getPath(), () -> new IngredientType<>(MaterialIngredient.CODEC));
+  public static final DeferredHolder<IngredientType<?>, IngredientType<MaterialValueIngredient>> materialValueIngredientType =
+    INGREDIENT_TYPES.register(MaterialValueIngredient.ID.getPath(), () -> new IngredientType<>(MaterialValueIngredient.CODEC));
+
   /*
    * Serializers
    */
   @SubscribeEvent
   void registerSerializers(RegisterEvent event) {
     if (event.getRegistryKey() == Registries.RECIPE_SERIALIZER) {
-      CraftingHelper.register(MaterialIngredient.Serializer.ID, MaterialIngredient.Serializer.INSTANCE);
-      CraftingHelper.register(MaterialValueIngredient.Serializer.ID, MaterialValueIngredient.Serializer.INSTANCE);
 
       MaterialPredicate.LOADER.register(getResource("variant"), MaterialVariantPredicate.LOADER);
       MaterialPredicate.LOADER.register(getResource("id"), MaterialIdPredicate.LOADER);
