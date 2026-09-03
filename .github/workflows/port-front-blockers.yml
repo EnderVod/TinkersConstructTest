@@ -23,37 +23,105 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Replace removed stack copy helper
+      - name: Apply mechanical 1.21 compatibility fixes
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path("src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java")
-          source = path.read_text()
-          old = "ItemHandlerHelper.copyStackWithSize(held, 1)"
-          new = "held.copyWithCount(1)"
-          if source.count(old) != 1:
-              raise SystemExit(f"expected exactly one removed stack-copy helper, got {source.count(old)}")
-          source = source.replace(old, new)
-          path.write_text(source)
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              s = p.read_text()
+              found = s.count(old)
+              if found != count:
+                  raise SystemExit(f"{path}: expected {count} occurrences, got {found}: {old[:80]!r}")
+              p.write_text(s.replace(old, new))
+
+          # Direct BlockPos compound decoding was removed in 1.21; use the vanilla codec.
+          path = 'src/main/java/slimeknights/tconstruct/smeltery/block/entity/multiblock/MultiblockCuboid.java'
+          replace(path, 'import net.minecraft.nbt.NbtUtils;\n', 'import net.minecraft.nbt.NbtOps;\n')
+          replace(path,
+              '      BlockPos pos = NbtUtils.readBlockPos(list.getCompound(i));',
+              '      BlockPos pos = BlockPos.CODEC.parse(NbtOps.INSTANCE, list.get(i)).result().orElse(BlockPos.ZERO);')
+
+          # BlockEntity no longer owns render bounds; keep the helper and update 1.21 AABB/NBT APIs.
+          path = 'src/main/java/slimeknights/tconstruct/smeltery/block/entity/controller/HeatingStructureBlockEntity.java'
+          replace(path,
+              '  @Override\n  public AABB getRenderBoundingBox() {',
+              '  public AABB getRenderBoundingBox() {')
+          replace(path,
+              '      defaultBounds = new AABB(worldPosition, worldPosition.offset(1, 1, 1));',
+              '      defaultBounds = new AABB(worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), worldPosition.getX() + 1, worldPosition.getY() + 1, worldPosition.getZ() + 1);')
+          replace(path,
+              '      this.errorPos = NbtUtils.readBlockPos(nbt.getCompound(TAG_ERROR_POS)).offset(this.worldPosition);',
+              '      this.errorPos = NbtUtils.readBlockPos(nbt, TAG_ERROR_POS).map(pos -> pos.offset(this.worldPosition)).orElse(null);')
+
+          # Public 1.21 debug-shape helper replaces the now-private renderShape method.
+          path = 'src/main/java/slimeknights/tconstruct/smeltery/client/render/HeatingStructureBlockEntityRenderer.java'
+          replace(path,
+              'LevelRenderer.renderShape(matrices, vertexBuilder, Shapes.block(), errorPos.getX() - pos.getX(), errorPos.getY() - pos.getY(), errorPos.getZ() - pos.getZ(), 1f, structureValid ? 1f : 0f, 0f, 0.5f);',
+              'LevelRenderer.renderVoxelShape(matrices, vertexBuilder, Shapes.block(), errorPos.getX() - pos.getX(), errorPos.getY() - pos.getY(), errorPos.getZ() - pos.getZ(), 1f, structureValid ? 1f : 0f, 0f, 0.5f, false);')
+
+          # Mantle's parent screen already filters hidden slots; the old Slot overload no longer exists.
+          path = 'src/main/java/slimeknights/tconstruct/tables/client/inventory/module/SideInventoryScreen.java'
+          replace(path,
+              '  @Override\n  public boolean isHovering(Slot slotIn, double mouseX, double mouseY) {\n    return super.isHovering(slotIn, mouseX, mouseY) && this.shouldDrawSlot(slotIn);\n  }\n\n',
+              '')
+
+          # NeoForge 1.21 uses registered block capabilities instead of Forge LazyOptional hooks.
+          path = 'src/main/java/slimeknights/tconstruct/smeltery/block/entity/ProxyTankBlockEntity.java'
+          for old in [
+              'import net.minecraft.core.Direction;\n',
+              'import net.minecraftforge.common.capabilities.Capability;\n',
+              'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+              'import net.minecraftforge.common.util.LazyOptional;\n',
+              'import org.jetbrains.annotations.Nullable;\n']:
+              replace(path, old, '')
+          replace(path,
+              '  /** Capability instance for both items and fluids */\n  private final LazyOptional<ProxyItemTank<?>> capability = LazyOptional.of(() -> itemTank);\n',
+              '')
+          replace(path,
+              '  /* Capability */\n\n  @Override\n  public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {\n    if (cap == ForgeCapabilities.ITEM_HANDLER || cap == ForgeCapabilities.FLUID_HANDLER) {\n      return capability.cast();\n    }\n    return super.getCapability(cap, side);\n  }\n\n  @Override\n  public void invalidateCaps() {\n    super.invalidateCaps();\n    capability.invalidate();\n  }\n\n\n',
+              '')
+
+          path = 'src/main/java/slimeknights/tconstruct/TConstruct.java'
+          anchor = '    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.channel.get(), (channel, side) -> channel.getFluidHandler(side));\n'
+          replace(path, anchor, anchor +
+              '    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.proxyTank.get(), (proxy, side) -> proxy.getItemTank());\n'
+              '    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.proxyTank.get(), (proxy, side) -> proxy.getItemTank());\n')
+
+          # Tinkers' side inventory dynamically repositions slots; retain that legacy contract for the port.
+          path = 'src/main/resources/META-INF/port-accesstransformer.cfg'
+          p = Path(path)
+          s = p.read_text()
+          marker = 'public net.minecraft.client.gui.screens.Screen font\n'
+          if s.count(marker) != 1 or 'public-f net.minecraft.world.inventory.Slot x' in s:
+              raise SystemExit('unexpected Slot access-transformer state')
+          p.write_text(s.replace(marker, marker +
+              '\n# Mantle/Tinkers module screens dynamically reposition shared container slots.\n'
+              'public-f net.minecraft.world.inventory.Slot x\n'
+              'public-f net.minecraft.world.inventory.Slot y\n'))
           PY
 
       - name: Verify migration
         shell: bash
         run: |
-          file=src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
-          ! grep -Fq 'ItemHandlerHelper.copyStackWithSize(held, 1)' "$file"
-          grep -Fq 'held.copyWithCount(1)' "$file"
+          ! grep -Rq 'net.minecraftforge.common.capabilities\|net.minecraftforge.common.util.LazyOptional' src/main/java/slimeknights/tconstruct/smeltery/block/entity/ProxyTankBlockEntity.java
+          grep -Fq 'TinkerSmeltery.proxyTank.get()' src/main/java/slimeknights/tconstruct/TConstruct.java
+          grep -Fq 'BlockPos.CODEC.parse(NbtOps.INSTANCE' src/main/java/slimeknights/tconstruct/smeltery/block/entity/multiblock/MultiblockCuboid.java
+          grep -Fq 'renderVoxelShape' src/main/java/slimeknights/tconstruct/smeltery/client/render/HeatingStructureBlockEntityRenderer.java
+          grep -Fq 'public-f net.minecraft.world.inventory.Slot x' src/main/resources/META-INF/port-accesstransformer.cfg
+          ! grep -Fq 'public boolean isHovering(Slot slotIn' src/main/java/slimeknights/tconstruct/tables/client/inventory/module/SideInventoryScreen.java
           git diff --check
 
-      - name: Commit migration
+      - name: Commit compatibility batch
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/smeltery/block/entity/CastingBlockEntity.java
+          git add src/main/java src/main/resources/META-INF/port-accesstransformer.cfg
           git diff --cached --quiet || {
-            git commit -m 'Replace removed casting stack copy helper'
+            git commit -m 'Migrate smeltery compatibility hooks to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
