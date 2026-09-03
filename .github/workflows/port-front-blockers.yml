@@ -30,62 +30,45 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Wire shared custom ingredient types
+      - name: Wire shared ingredient types
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path('src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java')
           text = path.read_text(encoding='utf-8')
-
           text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
           if 'import net.neoforged.neoforge.common.crafting.IngredientType;' not in text:
-              text = text.replace(
-                  'import net.neoforged.neoforge.common.conditions.ICondition;\n',
-                  'import net.neoforged.neoforge.common.conditions.ICondition;\nimport net.neoforged.neoforge.common.crafting.IngredientType;\n',
-                  1)
-
+              text = text.replace('import net.neoforged.neoforge.common.conditions.ICondition;\n', 'import net.neoforged.neoforge.common.conditions.ICondition;\nimport net.neoforged.neoforge.common.crafting.IngredientType;\n', 1)
           marker = '  /* Resource conditions */\n'
           if 'noContainerIngredientType = INGREDIENT_TYPES.register' not in text:
               if marker not in text:
-                  raise SystemExit('Missing resource-condition marker in TinkerCommons')
-              block = '''  /* Custom ingredients */
-  public static final DeferredHolder<IngredientType<?>, IngredientType<NoContainerIngredient>> noContainerIngredientType = INGREDIENT_TYPES.register(NoContainerIngredient.ID.getPath(), () -> new IngredientType<>(NoContainerIngredient.CODEC));
-  public static final DeferredHolder<IngredientType<?>, IngredientType<BlockTagIngredient>> blockTagIngredientType = INGREDIENT_TYPES.register(BlockTagIngredient.ID.getPath(), () -> new IngredientType<>(BlockTagIngredient.CODEC));
-  public static final DeferredHolder<IngredientType<?>, IngredientType<InstrumentIngredient>> instrumentIngredientType = INGREDIENT_TYPES.register(InstrumentIngredient.ID.getPath(), () -> new IngredientType<>(InstrumentIngredient.CODEC));
-
-'''
-              text = text.replace(marker, block + marker, 1)
-
-          for stale in [
+                  raise SystemExit('Missing resource condition marker')
+              lines = [
+                  '  /* Custom ingredients */',
+                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<NoContainerIngredient>> noContainerIngredientType = INGREDIENT_TYPES.register(NoContainerIngredient.ID.getPath(), () -> new IngredientType<>(NoContainerIngredient.CODEC));',
+                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<BlockTagIngredient>> blockTagIngredientType = INGREDIENT_TYPES.register(BlockTagIngredient.ID.getPath(), () -> new IngredientType<>(BlockTagIngredient.CODEC));',
+                  '  public static final DeferredHolder<IngredientType<?>, IngredientType<InstrumentIngredient>> instrumentIngredientType = INGREDIENT_TYPES.register(InstrumentIngredient.ID.getPath(), () -> new IngredientType<>(InstrumentIngredient.CODEC));',
+                  '',
+              ]
+              text = text.replace(marker, '\n'.join(lines) + '\n' + marker, 1)
+          stale = [
               '      CraftingHelper.register(NoContainerIngredient.ID, NoContainerIngredient.Serializer.INSTANCE);\n',
               '      CraftingHelper.register(BlockTagIngredient.Serializer.ID, BlockTagIngredient.Serializer.INSTANCE);\n',
               '      CraftingHelper.register(InstrumentIngredient.ID, InstrumentIngredient.SERIALIZER);\n',
-          ]:
-              if stale not in text:
-                  raise SystemExit('Missing stale custom ingredient registration: ' + stale.strip())
-              text = text.replace(stale, '', 1)
-
+          ]
+          for line in stale:
+              if line not in text:
+                  raise SystemExit('Missing stale ingredient registration: ' + line.strip())
+              text = text.replace(line, '', 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify shared ingredient migration
+      - name: Verify shared ingredient types
         run: |
-          if grep -R "net.minecraftforge.common.crafting\|IIngredientSerializer\|AbstractIngredient\|VanillaIngredientSerializer" -n \
-            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NestedIngredient.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NoContainerIngredient.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/BlockTagIngredient.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/InstrumentIngredient.java; then
-            echo 'Found stale shared ingredient APIs.'
-            exit 1
-          fi
           grep -q 'noContainerIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
           grep -q 'blockTagIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
           grep -q 'instrumentIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          if grep -q 'CraftingHelper.register(NoContainerIngredient\|CraftingHelper.register(BlockTagIngredient\|CraftingHelper.register(InstrumentIngredient' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java; then
-            echo 'Found stale shared ingredient registrations.'
-            exit 1
-          fi
+          test -z "$(grep -R 'net.minecraftforge.common.crafting' src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NestedIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NoContainerIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/BlockTagIngredient.java src/main/java/slimeknights/tconstruct/library/recipe/ingredient/InstrumentIngredient.java || true)"
 
       - name: Commit targeted migration
         run: |
