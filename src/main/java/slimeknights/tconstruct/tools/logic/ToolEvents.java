@@ -34,9 +34,9 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.entity.ProjectileImpactEvent;
-import net.neoforged.neoforge.event.entity.living.LivingAttackEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
-import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingVisibilityEvent;
 import net.neoforged.neoforge.event.entity.living.LivingHurtEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -197,7 +197,7 @@ public class ToolEvents {
   }
 
   @SubscribeEvent(priority = EventPriority.LOW)
-  static void livingAttack(LivingAttackEvent event) {
+  static void livingAttack(LivingIncomingDamageEvent event) {
     LivingEntity entity = event.getEntity();
     // client side always returns false, so this should be fine?
     if (entity.level().isClientSide() || entity.isDeadOrDying()) {
@@ -214,7 +214,7 @@ public class ToolEvents {
 
     // determine if there is any modifiable armor, handles the target wearing modifiable armor
     EquipmentContext context = new EquipmentContext(entity);
-    float amount = event.getAmount();
+    float amount = event.getNewDamage();
     if (context.hasModifiableArmor()) {
       // first we need to determine if any of the four slots want to cancel the event
       for (EquipmentSlot slotType : EquipmentSlot.values()) {
@@ -222,7 +222,7 @@ public class ToolEvents {
         if (toolStack != null && !toolStack.isBroken()) {
           for (ModifierEntry entry : toolStack.getModifierList()) {
             if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {
-              event.setCanceled(true);
+              event.setNewDamage(0);
               return;
             }
           }
@@ -346,7 +346,7 @@ public class ToolEvents {
       originalDamage = ModifyDamageModifierHook.modifyDamageTaken(ModifierHooks.MODIFY_HURT, context, source, originalDamage, OnAttackedModifierHook.isDirectDamage(source));
       event.setAmount(originalDamage);
       if (originalDamage <= 0) {
-        event.setCanceled(true);
+        event.setNewDamage(0);
         return;
       }
 
@@ -417,18 +417,18 @@ public class ToolEvents {
   }
 
   @SubscribeEvent
-  static void livingDamage(LivingDamageEvent event) {
+  static void livingDamage(LivingDamageEvent.Pre event) {
     LivingEntity entity = event.getEntity();
     DamageSource source = event.getSource();
 
     // give modifiers a chance to respond to damage happening
-    float amount = event.getAmount();
+    float amount = event.getNewDamage();
     EquipmentContext context = new EquipmentContext(entity);
     if (context.hasModifiableArmor()) {
       amount = ModifyDamageModifierHook.modifyDamageTaken(ModifierHooks.MODIFY_DAMAGE, context, source, amount, OnAttackedModifierHook.isDirectDamage(source));
-      event.setAmount(amount);
+      event.setNewDamage(amount);
       if (amount <= 0) {
-        event.setCanceled(true);
+        event.setNewDamage(0);
       }
     }
 
@@ -465,7 +465,7 @@ public class ToolEvents {
     }
 
     // when damaging ender dragons, may drop scales - must be player caused explosion, end crystals and TNT are examples
-    if (amount > 0 && Config.COMMON.dropDragonScales.get() && entity.getType() == EntityType.ENDER_DRAGON && event.getAmount() > 0
+    if (amount > 0 && Config.COMMON.dropDragonScales.get() && entity.getType() == EntityType.ENDER_DRAGON && event.getNewDamage() > 0
         && source.is(DamageTypeTags.IS_EXPLOSION) && source.getEntity() != null && source.getEntity().getType() == EntityType.PLAYER) {
       // drops 1 - 8 scales
       ModifierUtil.dropItem(entity, new ItemStack(TinkerModifiers.dragonScale, 1 + entity.level().random.nextInt(8)));
@@ -474,8 +474,10 @@ public class ToolEvents {
 
   /** Called the modifier hook when an entity's position changes */
   @SubscribeEvent
-  static void livingWalk(LivingTickEvent event) {
-    LivingEntity living = event.getEntity();
+  static void livingWalk(EntityTickEvent.Pre event) {
+    if (!(event.getEntity() instanceof LivingEntity living)) {
+      return;
+    }
     // this event runs before vanilla updates prevBlockPos
     BlockPos pos = living.blockPosition();
     if (!living.isSpectator() && !living.level().isClientSide() && living.isAlive() && !Objects.equals(living.lastPos, pos)) {
@@ -570,7 +572,7 @@ public class ToolEvents {
               if (entry.getHook(hook).onProjectileHitEntity(modifiers, nbt, entry, projectile, entityHit, attacker, target, notBlocked)) {
                 // on forge, this means the cancelled entity won't be hit again if its a piercing arrow
                 // on neo, they will get processed again next frame. Is this something we need to work around?
-                event.setCanceled(true);
+                event.setNewDamage(0);
                 break;
               }
             }
@@ -580,7 +582,7 @@ public class ToolEvents {
           BlockHitResult blockHit = (BlockHitResult)hit;
           for (ModifierEntry entry : modifiers.getModifiers()) {
             if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {
-              event.setCanceled(true);
+              event.setNewDamage(0);
               break;
             }
           }

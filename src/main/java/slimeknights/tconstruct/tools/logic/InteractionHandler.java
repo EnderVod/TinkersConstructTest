@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.state.pattern.BlockInWorld;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.EventHooks;
-import net.neoforged.neoforge.event.entity.living.ShieldBlockEvent;
+import net.neoforged.neoforge.event.entity.living.LivingShieldBlockEvent;
 import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.EntityInteract;
@@ -479,7 +479,7 @@ public class InteractionHandler {
 
   /** Implements shield stats */
   @SubscribeEvent
-  static void onBlock(ShieldBlockEvent event) {
+  static void onBlock(LivingShieldBlockEvent event) {
     LivingEntity entity = event.getEntity();
     ItemStack activeStack = entity.getUseItem();
     if (!activeStack.isEmpty() && activeStack.is(TinkerTags.Items.MODIFIABLE)) {
@@ -492,7 +492,7 @@ public class InteractionHandler {
 
         // handle damaging the shield ourselves to fix a couple of shield related bugs
         if (entity instanceof Player player) {
-          event.setShieldTakesDamage(false);
+          event.setShieldDamage(0);
           // this code is based on code from Player#hurtCurrentlyUsedShield
           if (!entity.level().isClientSide) {
             player.awardStat(Stats.ITEM_USED.get(tool.getItem()));
