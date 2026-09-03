@@ -31,95 +31,50 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Remove runtime references to temporarily excluded datagen providers
+      - name: Migrate JEI NeoForge API names
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def remove_imports(text, imports):
-              for imp in imports:
-                  text = text.replace(f"import {imp};\n", "")
-              return text
+          jei_root = Path('src/main/java/slimeknights/tconstruct/plugin/jei')
+          changed = 0
+          for path in jei_root.rglob('*.java'):
+              text = path.read_text(encoding='utf-8')
+              old = text
+              text = text.replace('import mezz.jei.api.forge.ForgeTypes;\n', 'import mezz.jei.api.neoforge.NeoForgeTypes;\n')
+              text = text.replace('ForgeTypes.', 'NeoForgeTypes.')
+              if text != old:
+                  changed += 1
+                  path.write_text(text, encoding='utf-8')
 
-          def remove_method(text, needle="gatherData("):
-              idx = text.find(needle)
-              if idx < 0:
-                  return text
-              start = text.rfind("@SubscribeEvent", 0, idx)
-              if start < 0:
-                  start = text.rfind("\n", 0, idx) + 1
-              brace = text.find("{", idx)
-              if brace < 0:
-                  raise RuntimeError(f"Could not find method body for {needle}")
-              depth = 0
-              end = None
-              for i in range(brace, len(text)):
-                  if text[i] == "{":
-                      depth += 1
-                  elif text[i] == "}":
-                      depth -= 1
-                      if depth == 0:
-                          end = i + 1
-                          break
-              if end is None:
-                  raise RuntimeError(f"Could not match braces for {needle}")
-              while end < len(text) and text[end] in "\r\n":
-                  end += 1
-              return text[:start] + text[end:]
+          path = Path('src/main/java/slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.crafting.IShapedRecipe;\n', 'import net.minecraft.world.item.crafting.ShapedRecipe;\n')
+          text = text.replace('recipe instanceof IShapedRecipe<?> shaped', 'recipe instanceof ShapedRecipe shaped')
+          text = text.replace('shaped.getRecipeWidth()', 'shaped.getWidth()')
+          text = text.replace('shaped.getRecipeHeight()', 'shaped.getHeight()')
+          path.write_text(text, encoding='utf-8')
 
-          targets = {
-              Path("src/main/java/slimeknights/tconstruct/tools/TinkerTools.java"): [
-                  "slimeknights.tconstruct.common.data.tags.MaterialTagProvider",
-                  "slimeknights.tconstruct.tools.data.ArmorModelProvider",
-                  "slimeknights.tconstruct.tools.data.StationSlotLayoutProvider",
-                  "slimeknights.tconstruct.tools.data.ToolDefinitionDataProvider",
-                  "slimeknights.tconstruct.tools.data.ToolItemModelProvider",
-                  "slimeknights.tconstruct.tools.data.ToolsRecipeProvider",
-                  "slimeknights.tconstruct.tools.data.client.ModifierModelMapProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialDataProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialRecipeProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialRenderInfoProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialStatsDataProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialTraitsDataProvider",
-              ],
-              Path("src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java"): [
-                  "slimeknights.tconstruct.common.data.tags.ModifierTagProvider",
-                  "slimeknights.tconstruct.tools.data.EnchantmentToModifierProvider",
-                  "slimeknights.tconstruct.tools.data.FluidEffectProvider",
-                  "slimeknights.tconstruct.tools.data.ModifierProvider",
-                  "slimeknights.tconstruct.tools.data.ModifierRecipeProvider",
-              ],
-              Path("src/main/java/slimeknights/tconstruct/tables/TinkerTables.java"): [
-                  "slimeknights.tconstruct.tables.data.TableRecipeProvider",
-              ],
-          }
-
-          for path, imports in targets.items():
-              text = path.read_text(encoding="utf-8")
-              text = remove_imports(text, imports)
-              text = remove_method(text)
-              path.write_text(text, encoding="utf-8")
+          print(f'Migrated JEI type imports in {changed} files')
           PY
 
-      - name: Verify excluded datagen references are gone from runtime entrypoints
+      - name: Verify JEI migration
         run: |
-          test -z "$(grep -E 'MaterialTagProvider|ArmorModelProvider|StationSlotLayoutProvider|ToolDefinitionDataProvider|ToolItemModelProvider|ToolsRecipeProvider|ModifierModelMapProvider|MaterialDataProvider|MaterialRecipeProvider|MaterialRenderInfoProvider|MaterialStatsDataProvider|MaterialTraitsDataProvider' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
-          test -z "$(grep -E 'ModifierTagProvider|EnchantmentToModifierProvider|FluidEffectProvider|ModifierProvider|ModifierRecipeProvider' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java || true)"
-          test -z "$(grep -E 'TableRecipeProvider' src/main/java/slimeknights/tconstruct/tables/TinkerTables.java || true)"
-          test -z "$(grep -E 'gatherData\(' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java src/main/java/slimeknights/tconstruct/tables/TinkerTables.java || true)"
+          test -z "$(grep -R 'mezz\.jei\.api\.forge\.ForgeTypes\|ForgeTypes\.' src/main/java/slimeknights/tconstruct/plugin/jei || true)"
+          test -z "$(grep -R 'net\.minecraftforge\.common\.crafting\.IShapedRecipe\|IShapedRecipe' src/main/java/slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java || true)"
+          grep -Fq 'mezz.jei.api.neoforge.NeoForgeTypes' src/main/java/slimeknights/tconstruct/plugin/jei/JEIPlugin.java
+          grep -Fq 'recipe instanceof ShapedRecipe shaped' src/main/java/slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Excluded datagen runtime references are already clean.'
+            echo 'JEI NeoForge API names are already migrated.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
-                    src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java \
-                    src/main/java/slimeknights/tconstruct/tables/TinkerTables.java
-            git commit -m 'Remove excluded datagen hooks from runtime compile'
+            git add src/main/java/slimeknights/tconstruct/plugin/jei
+            git commit -m 'Migrate JEI integration to NeoForge API names'
             git push origin HEAD:1.21.1-neoforge
           fi
 
