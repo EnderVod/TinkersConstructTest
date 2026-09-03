@@ -55,7 +55,6 @@ import slimeknights.tconstruct.tables.block.entity.table.CraftingStationBlockEnt
 import slimeknights.tconstruct.tables.block.entity.table.ModifierWorktableBlockEntity;
 import slimeknights.tconstruct.tables.block.entity.table.PartBuilderBlockEntity;
 import slimeknights.tconstruct.tables.block.entity.table.TinkerStationBlockEntity;
-import slimeknights.tconstruct.tables.data.TableRecipeProvider;
 import slimeknights.tconstruct.tables.item.AnvilBlockItem;
 import slimeknights.tconstruct.tables.item.TinkersChestBlockItem;
 import slimeknights.tconstruct.tables.menu.CraftingStationContainerMenu;
@@ -175,13 +174,7 @@ public final class TinkerTables extends TinkerModule {
     });
   }
 
-  @SubscribeEvent
-  void gatherData(final GatherDataEvent event) {
-    DataGenerator generator = event.getGenerator();
-    generator.addProvider(event.includeServer(), new TableRecipeProvider(generator.getPackOutput()));
-  }
-
-  /** Adds all relevant items to the creative tab, called in the general tab */
+    /** Adds all relevant items to the creative tab, called in the general tab */
   public static void addTabItems(ItemDisplayParameters itemDisplayParameters, CreativeModeTab.Output output) {
     // add one of each standard table
     output.accept(craftingStation);

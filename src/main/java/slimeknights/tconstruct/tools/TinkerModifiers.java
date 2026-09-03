@@ -30,7 +30,6 @@ import slimeknights.mantle.registration.object.ItemObject;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerEffect;
 import slimeknights.tconstruct.common.TinkerModule;
-import slimeknights.tconstruct.common.data.tags.ModifierTagProvider;
 import slimeknights.tconstruct.library.json.predicate.modifier.ModifierPredicate;
 import slimeknights.tconstruct.library.json.predicate.modifier.SingleModifierPredicate;
 import slimeknights.tconstruct.library.json.predicate.modifier.SlotTypeModifierPredicate;
@@ -203,10 +202,6 @@ import slimeknights.tconstruct.library.tools.capability.inventory.InventoryModul
 import slimeknights.tconstruct.library.tools.capability.inventory.InventorySlotMenuModule;
 import slimeknights.tconstruct.shared.TinkerEffects;
 import slimeknights.tconstruct.tables.TinkerTables;
-import slimeknights.tconstruct.tools.data.EnchantmentToModifierProvider;
-import slimeknights.tconstruct.tools.data.FluidEffectProvider;
-import slimeknights.tconstruct.tools.data.ModifierProvider;
-import slimeknights.tconstruct.tools.data.ModifierRecipeProvider;
 import slimeknights.tconstruct.tools.entity.CustomFireball;
 import slimeknights.tconstruct.tools.entity.FluidEffectProjectile;
 import slimeknights.tconstruct.tools.item.CreativeSlotItem;
@@ -1109,19 +1104,7 @@ public final class TinkerModifiers extends TinkerModule {
     TinkerDataCapability.register();
   }
 
-  @SubscribeEvent
-  void gatherData(final GatherDataEvent event) {
-    DataGenerator generator = event.getGenerator();
-    PackOutput packOutput = generator.getPackOutput();
-    boolean server = event.includeServer();
-    generator.addProvider(server, new ModifierProvider(packOutput));
-    generator.addProvider(server, new ModifierRecipeProvider(packOutput));
-    generator.addProvider(server, new FluidEffectProvider(packOutput));
-    generator.addProvider(server, new ModifierTagProvider(packOutput, event.getExistingFileHelper()));
-    generator.addProvider(server, new EnchantmentToModifierProvider(packOutput));
-  }
-
-  /** Adds all relevant items to the creative tab, called by general */
+    /** Adds all relevant items to the creative tab, called by general */
   public static void addTabItems(ItemDisplayParameters itemDisplayParameters, CreativeModeTab.Output output) {
     output.accept(silkyCloth);
     // dragon scale is handled by world
