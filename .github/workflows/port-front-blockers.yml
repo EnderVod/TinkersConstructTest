@@ -30,7 +30,7 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate potion capability and runtime APIs
+      - name: Migrate world growth and tool events
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -38,11 +38,11 @@ jobs:
           root = Path('src/main/java')
           changed = []
 
-          def edit(rel, replacements):
+          def replace(rel, pairs):
               path = root / rel
               original = path.read_text(encoding='utf-8')
               text = original
-              for old, new in replacements:
+              for old, new in pairs:
                   if old not in text:
                       raise SystemExit(f'Missing expected source in {rel}: {old!r}')
                   text = text.replace(old, new)
@@ -50,121 +50,184 @@ jobs:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          edit('slimeknights/tconstruct/smeltery/item/CopperCanItem.java', [
-              ('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', ''),
-              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
-              ('  @Override\n  public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {\n    return new CopperCanFluidHandler(stack);\n  }\n\n', ''),
-              ('if (location != null && ForgeRegistries.FLUIDS.containsKey(location)) {\n        Fluid fluid = ForgeRegistries.FLUIDS.getValue(location);',
-               'if (location != null && BuiltInRegistries.FLUID.containsKey(location)) {\n        Fluid fluid = BuiltInRegistries.FLUID.get(location);')
+          slime_tree = root / 'slimeknights/tconstruct/world/worldgen/trees/SlimeTree.java'
+          slime_tree.write_text('''package slimeknights.tconstruct.world.worldgen.trees;
+
+import net.minecraft.world.level.block.grower.TreeGrower;
+import slimeknights.tconstruct.world.TinkerStructures;
+import slimeknights.tconstruct.world.block.FoliageType;
+
+import java.util.Optional;
+
+/** 1.21 tree grower definitions for the slime island foliage variants. */
+public final class SlimeTree {
+  private SlimeTree() {}
+
+  private static final TreeGrower EARTH = new TreeGrower(
+    "tconstruct_earth_slime", Optional.empty(), Optional.of(TinkerStructures.earthSlimeTree), Optional.empty());
+  private static final TreeGrower SKY = new TreeGrower(
+    "tconstruct_sky_slime", Optional.empty(), Optional.of(TinkerStructures.skySlimeTree), Optional.empty());
+  private static final TreeGrower ENDER = new TreeGrower(
+    "tconstruct_ender_slime", 0.85f,
+    Optional.empty(), Optional.empty(),
+    Optional.of(TinkerStructures.enderSlimeTree), Optional.of(TinkerStructures.enderSlimeTreeTall),
+    Optional.empty(), Optional.empty());
+  private static final TreeGrower BLOOD = new TreeGrower(
+    "tconstruct_blood_slime", Optional.empty(), Optional.of(TinkerStructures.bloodSlimeFungus), Optional.empty());
+  private static final TreeGrower ICHOR = new TreeGrower(
+    "tconstruct_ichor_slime", Optional.empty(), Optional.of(TinkerStructures.ichorSlimeFungus), Optional.empty());
+
+  public static TreeGrower get(FoliageType foliageType) {
+    return switch (foliageType) {
+      case EARTH -> EARTH;
+      case SKY -> SKY;
+      case ENDER -> ENDER;
+      case BLOOD -> BLOOD;
+      case ICHOR -> ICHOR;
+    };
+  }
+}
+''', encoding='utf-8')
+          changed.append(str(slime_tree))
+
+          replace('slimeknights/tconstruct/world/block/SlimeSaplingBlock.java', [
+              ('import net.minecraft.world.level.block.grower.AbstractTreeGrower;', 'import net.minecraft.world.level.block.grower.TreeGrower;'),
+              ('import net.minecraftforge.common.PlantType;\n', ''),
+              ('  public SlimeSaplingBlock(AbstractTreeGrower treeIn, FoliageType foliageType, Properties properties) {',
+               '  public SlimeSaplingBlock(TreeGrower treeIn, FoliageType foliageType, Properties properties) {'),
+              ('\n  @Nonnull\n  @Override\n  public PlantType getPlantType(BlockGetter world, BlockPos pos) {\n    return TinkerWorld.SLIME_PLANT_TYPE;\n  }\n', '')
           ])
 
-          edit('slimeknights/tconstruct/smeltery/item/CopperCanFluidHandler.java', [
-              ('import net.minecraft.core.Direction;\n', ''),
-              ('import net.minecraftforge.common.capabilities.Capability;\n', ''),
-              ('import net.minecraftforge.common.capabilities.ForgeCapabilities;\n', ''),
-              ('import net.minecraftforge.common.capabilities.ICapabilityProvider;\n', ''),
-              ('import net.minecraftforge.common.util.LazyOptional;\n', ''),
-              ('public class CopperCanFluidHandler implements IFluidHandlerItem, ICapabilityProvider {\n  private final LazyOptional<IFluidHandlerItem> holder = LazyOptional.of(() -> this);',
-               'public class CopperCanFluidHandler implements IFluidHandlerItem {'),
-              ('\n  @Nonnull\n  @Override\n  public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {\n    return ForgeCapabilities.FLUID_HANDLER_ITEM.orEmpty(cap, holder);\n  }\n\n', '\n')
+          propagule = root / 'slimeknights/tconstruct/world/block/SlimePropaguleBlock.java'
+          propagule.write_text('''package slimeknights.tconstruct.world.block;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.MangrovePropaguleBlock;
+import net.minecraft.world.level.block.grower.TreeGrower;
+import net.minecraft.world.level.block.state.BlockState;
+import slimeknights.tconstruct.common.TinkerTags;
+import slimeknights.tconstruct.world.TinkerWorld;
+
+/** Slime propagule using vanilla 1.21 mangrove behavior with Tinkers growth and soil rules. */
+public class SlimePropaguleBlock extends MangrovePropaguleBlock {
+  public SlimePropaguleBlock(TreeGrower treeIn, FoliageType foliageType, Properties properties) {
+    super(treeIn, properties);
+  }
+
+  @Override
+  protected boolean mayPlaceOn(BlockState state, BlockGetter level, BlockPos pos) {
+    Block block = state.getBlock();
+    return TinkerWorld.slimeDirt.contains(block)
+      || TinkerWorld.vanillaSlimeGrass.contains(block)
+      || TinkerWorld.earthSlimeGrass.contains(block)
+      || TinkerWorld.skySlimeGrass.contains(block)
+      || TinkerWorld.enderSlimeGrass.contains(block)
+      || TinkerWorld.ichorSlimeGrass.contains(block);
+  }
+
+  @Override
+  protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+    return state.getValue(HANGING)
+      ? level.getBlockState(pos.above()).is(TinkerTags.Blocks.SLIMY_LEAVES)
+      : super.canSurvive(state, level, pos);
+  }
+
+  @SuppressWarnings("deprecation")
+  @Override
+  @Deprecated
+  public boolean canBeReplaced(BlockState state, BlockPlaceContext context) {
+    return false;
+  }
+}
+''', encoding='utf-8')
+          changed.append(str(propagule))
+
+          replace('slimeknights/tconstruct/world/block/SlimeTallGrassBlock.java', [
+              ('import com.google.common.collect.Lists;\n', ''),
+              ('import net.minecraftforge.common.IForgeShearable;\nimport net.minecraftforge.common.PlantType;',
+               'import net.neoforged.neoforge.common.IShearable;'),
+              ('public class SlimeTallGrassBlock extends BushBlock implements IForgeShearable {',
+               'public class SlimeTallGrassBlock extends BushBlock implements IShearable {'),
+              ('\n  /* Forge/MC callbacks */\n  @Nonnull\n  @Override\n  public PlantType getPlantType(BlockGetter world, BlockPos pos) {\n    return TinkerWorld.SLIME_PLANT_TYPE;\n  }\n', '\n  /* NeoForge shearing callback */\n'),
+              ('  public List<ItemStack> onSheared(@Nullable Player player, ItemStack item, Level world, BlockPos pos, int fortune) {\n    return Lists.newArrayList(new ItemStack(this, 1));\n  }',
+               '  public List<ItemStack> onSheared(@Nullable Player player, ItemStack item, Level world, BlockPos pos) {\n    return List.of(new ItemStack(this, 1));\n  }')
           ])
 
-          edit('slimeknights/tconstruct/TConstruct.java', [
-              ('import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;',
-               'import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;\nimport slimeknights.tconstruct.smeltery.item.CopperCanFluidHandler;'),
-              ('    for (Item item : BuiltInRegistries.ITEM) {\n      if (item instanceof TankItem tankItem) {\n        event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);\n      }\n    }',
-               '    for (Item item : BuiltInRegistries.ITEM) {\n      if (item instanceof TankItem tankItem) {\n        event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new TankItemFluidHandler(tankItem, stack), item);\n      }\n    }\n    event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> new CopperCanFluidHandler(stack), TinkerSmeltery.copperCan.get());')
+          replace('slimeknights/tconstruct/world/block/SlimeDirtBlock.java', [
+              ('import net.minecraft.world.level.block.state.BlockState;\nimport net.minecraft.core.Direction;\nimport net.minecraft.core.BlockPos;\nimport net.minecraft.world.level.BlockGetter;\nimport net.minecraftforge.common.PlantType;\nimport slimeknights.tconstruct.world.TinkerWorld;\n\n', ''),
+              ('\n  @Override\n  public boolean canSustainPlant(BlockState state, BlockGetter world, BlockPos pos, Direction facing, net.minecraftforge.common.IPlantable plantable) {\n    // can sustain both slimeplants and normal plants\n    return plantable.getPlantType(world, pos) == TinkerWorld.SLIME_PLANT_TYPE || plantable.getPlantType(world, pos) == PlantType.PLAINS;\n  }\n', '\n')
           ])
 
-          edit('slimeknights/tconstruct/world/block/CongealedSlimeBlock.java', [
-              ('import net.minecraft.world.level.pathfinder.BlockPathTypes;', 'import net.minecraft.world.level.pathfinder.PathType;'),
-              ('public BlockPathTypes getBlockPathType(', 'public PathType getBlockPathType('),
-              ('return BlockPathTypes.STICKY_HONEY;', 'return PathType.STICKY_HONEY;')
+          replace('slimeknights/tconstruct/world/TinkerWorld.java', [
+              ('import net.minecraftforge.common.PlantType;\n', ''),
+              ('  public static final PlantType SLIME_PLANT_TYPE = PlantType.get("slime");\n\n', ''),
+              ('new SlimeSaplingBlock(new SlimeTree(type), type, props.apply(type).randomTicks())',
+               'new SlimeSaplingBlock(SlimeTree.get(type), type, props.apply(type).randomTicks())'),
+              ('new SlimePropaguleBlock(new SlimeTree(FoliageType.ENDER), FoliageType.ENDER, props.apply(FoliageType.ENDER).randomTicks())',
+               'new SlimePropaguleBlock(SlimeTree.get(FoliageType.ENDER), FoliageType.ENDER, props.apply(FoliageType.ENDER).randomTicks())')
           ])
 
-          for path in (root / 'slimeknights/tconstruct/library/events/teleport').glob('*.java'):
-              original = path.read_text(encoding='utf-8')
-              text = original.replace('import net.neoforged.bus.api.Cancelable;\n', '').replace('@Cancelable\n', '')
-              if text != original:
-                  path.write_text(text, encoding='utf-8')
-                  changed.append(str(path))
-
-          edit('slimeknights/tconstruct/library/client/model/FluidContainerModel.java', [
-              ('import net.minecraftforge.client.RenderTypeGroup;', 'import net.neoforged.neoforge.client.RenderTypeGroup;')
-          ])
-          edit('slimeknights/tconstruct/world/client/BlockModelSkullRenderer.java', [
-              ('import net.minecraftforge.client.ForgeHooksClient;', 'import net.neoforged.neoforge.client.ClientHooks;'),
-              ('ForgeHooksClient.handleCameraTransforms(', 'ClientHooks.handleCameraTransforms(')
-          ])
-
-          edit('slimeknights/tconstruct/common/Sounds.java', [
-              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
-              ('    if (event.getRegistryKey() == Registries.SOUND_EVENT) {\n      for (Sounds sound : values()) {\n        ForgeRegistries.SOUND_EVENTS.register(sound.sound.getLocation(), sound.getSound());\n      }\n    }',
-               '    event.register(Registries.SOUND_EVENT, helper -> {\n      for (Sounds sound : values()) {\n        helper.register(sound.sound.getLocation(), sound.getSound());\n      }\n    });')
+          replace('slimeknights/tconstruct/library/events/TinkerToolEvent.java', [
+              ('import lombok.Getter;', 'import lombok.Getter;\nimport lombok.Setter;'),
+              ('  private final IToolStackView tool;\n',
+               '  private final IToolStackView tool;\n\n  /** Replacement for the removed Forge event result API. */\n  public enum Result { DEFAULT, ALLOW, DENY }\n'),
+              ('  @HasResult\n  @Getter\n  public static class ToolHarvestEvent',
+               '  @Getter\n  public static class ToolHarvestEvent'),
+              ('    private final InteractionSource source;\n',
+               '    private final InteractionSource source;\n    @Getter @Setter\n    private Result result = Result.DEFAULT;\n'),
+              ('  @HasResult\n  @Getter\n  public static class ToolShearEvent',
+               '  @Getter\n  public static class ToolShearEvent'),
+              ('    private final int fortune;\n',
+               '    private final int fortune;\n    @Getter @Setter\n    private Result result = Result.DEFAULT;\n')
           ])
 
-          edit('slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java', [
-              ('import net.minecraft.core.NonNullList;', 'import net.minecraft.core.NonNullList;\nimport net.minecraft.core.registries.BuiltInRegistries;'),
-              ('import net.minecraft.resources.ResourceLocation;', 'import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.resources.ResourceLocation;'),
-              ('import net.minecraft.world.item.alchemy.PotionUtils;\nimport net.minecraft.world.item.alchemy.Potions;', 'import net.minecraft.world.item.alchemy.PotionContents;'),
-              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
-              ('      displayRecipes = ForgeRegistries.POTIONS.getValues().stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .map(potion -> {\n          ItemStack result = PotionUtils.setPotion(new ItemStack(this.result), potion);\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), result.getTag()))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();',
-               '      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {\n          ItemStack result = PotionContents.createItemStack(this.result, potion);\n          CompoundTag fluidTag = new CompoundTag();\n          fluidTag.putString("Potion", potion.key().location().toString());\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), fluidTag))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();')
+          for rel in [
+              'slimeknights/tconstruct/tools/logic/ToolEvents.java',
+              'slimeknights/tconstruct/tools/modules/interaction/HarvestModule.java',
+              'slimeknights/tconstruct/tools/modules/interaction/ShearsModule.java']:
+              replace(rel, [
+                  ('import net.neoforged.bus.api.Event.Result;', 'import slimeknights.tconstruct.library.events.TinkerToolEvent.Result;')
+              ])
+
+          replace('slimeknights/tconstruct/tools/modules/interaction/ShearsModule.java', [
+              ('import net.minecraftforge.common.IForgeShearable;', 'import net.neoforged.neoforge.common.IShearable;'),
+              ('if (entity instanceof IForgeShearable target && target.isShearable(itemStack, world, entity.blockPosition())) {',
+               'if (entity instanceof IShearable target && target.isShearable(player, itemStack, world, entity.blockPosition())) {'),
+              ('target.onSheared(player, itemStack, world, entity.blockPosition(), fortune)',
+               'target.onSheared(player, itemStack, world, entity.blockPosition())')
           ])
 
-          edit('slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java', [
-              ('import net.minecraft.core.RegistryAccess;', 'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.registries.BuiltInRegistries;'),
-              ('import net.minecraft.world.item.alchemy.PotionUtils;\nimport net.minecraft.world.item.alchemy.Potions;\n', ''),
-              ('import net.neoforged.neoforge.registries.ForgeRegistries;\n', ''),
-              ('PotionUtils.TAG_POTION', '"Potion"'),
-              ('      displayRecipes = ForgeRegistries.POTIONS.getValues().stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .map(potion -> {',
-               '      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {'),
-              ('String id = Loadables.POTION.getString(potion);', 'String id = potion.key().location().toString();')
-          ])
-
-          print(f'Updated {len(changed)} runtime Java files')
+          print(f'Updated {len(changed)} Java files')
           for path in changed:
               print(path)
-
-          build = Path('build.gradle')
-          text = build.read_text(encoding='utf-8')
-          marker = "            exclude 'slimeknights/tconstruct/tools/data/material/TrimMaterialProvider.java'\n"
-          exclusions = """            // 1.20 recipe generator adapters still use FinishedRecipe; runtime recipes do not depend on them.\n            exclude 'slimeknights/tconstruct/library/recipe/molding/MoldingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/ShapedMaterialConsumerBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialsConsumerBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/material/MaterialRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/entitymelting/EntityMeltingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/fuel/MeltingFuelBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/MaterialSwappingRecipeBuilder.java'\n            exclude 'slimeknights/tconstruct/library/recipe/tinkerstation/building/ToolBuildingRecipeBuilder.java'\n"""
-          if exclusions not in text:
-              if marker not in text:
-                  raise SystemExit('Could not locate build.gradle exclusion insertion point')
-              build.write_text(text.replace(marker, marker + exclusions), encoding='utf-8')
-              print('Updated build.gradle runtime/datagen boundary')
           PY
 
-      - name: Verify targeted migration
+      - name: Verify world and event migration
         run: |
-          if grep -R "net.minecraftforge.common.capabilities.ICapabilityProvider\|net.minecraftforge.common.util.LazyOptional" -n \
-            src/main/java/slimeknights/tconstruct/smeltery/item/CopperCan*.java; then
-            echo 'Copper Can still contains legacy capability APIs.'
-            exit 1
-          fi
-          if grep -R "net.neoforged.bus.api.Cancelable" -n src/main/java/slimeknights/tconstruct/library/events/teleport; then
-            echo 'Teleport events still contain removed Cancelable annotations.'
-            exit 1
-          fi
-          if grep -R "PotionUtils\|ForgeRegistries.POTIONS" -n \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java; then
-            echo 'Potion casting still contains legacy potion APIs.'
+          if grep -R "AbstractTreeGrower\|net.minecraftforge.common.PlantType\|net.minecraftforge.common.IPlantable\|IForgeShearable\|@HasResult\|bus.api.Event.Result" -n \
+            src/main/java/slimeknights/tconstruct/world \
+            src/main/java/slimeknights/tconstruct/library/events/TinkerToolEvent.java \
+            src/main/java/slimeknights/tconstruct/tools/modules/interaction/HarvestModule.java \
+            src/main/java/slimeknights/tconstruct/tools/modules/interaction/ShearsModule.java \
+            src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java; then
+            echo 'Found stale world/event APIs.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No runtime migration changes needed.'
+            echo 'No world/event migration changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java build.gradle
-          git commit -m 'Migrate potion casting and Copper Can capabilities'
+          git add src/main/java
+          git commit -m 'Migrate slime growth and tool event results'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
