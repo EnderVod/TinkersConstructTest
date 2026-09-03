@@ -1,7 +1,6 @@
 package slimeknights.tconstruct.shared;
 
 import com.mojang.serialization.MapCodec;
-import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.CreativeModeTab;
@@ -106,7 +105,7 @@ public final class TinkerCommons extends TinkerModule {
   public static final DeferredHolder<? super GlowBlock, GlowBlock> glow = DeferredHolder.create(Registries.BLOCK, glowBlock.getId());
   // glass
   public static final ItemObject<TransparentBlock> clearGlass = BLOCKS.register("clear_glass", () -> new TransparentBlock(glassBuilder(MapColor.NONE)), BLOCK_ITEM);
-  public static final ItemObject<TintedGlassBlock> clearTintedGlass = BLOCKS.register("clear_tinted_glass", () -> new TintedGlassBlock(glassBuilder(MapColor.COLOR_GRAY).noOcclusion().isValidSpawn(Blocks::never).isRedstoneConductor(Blocks::never).isSuffocating(Blocks::never).isViewBlocking(Blocks::never)), BLOCK_ITEM);
+  public static final ItemObject<TintedGlassBlock> clearTintedGlass = BLOCKS.register("clear_tinted_glass", () -> new TintedGlassBlock(glassBuilder(MapColor.COLOR_GRAY).noOcclusion().isValidSpawn((state, level, pos, entityType) -> false).isRedstoneConductor((state, level, pos) -> false).isSuffocating((state, level, pos) -> false).isViewBlocking((state, level, pos) -> false)), BLOCK_ITEM);
   public static final ItemObject<ClearGlassPaneBlock> clearGlassPane = BLOCKS.register("clear_glass_pane", () -> new ClearGlassPaneBlock(glassBuilder(MapColor.NONE)), BLOCK_ITEM);
   public static final EnumObject<GlassColor,ClearStainedGlassBlock> clearStainedGlass = BLOCKS.registerEnum(GlassColor.values(), "clear_stained_glass", (color) -> new ClearStainedGlassBlock(glassBuilder(color.getDye().getMapColor()), color), BLOCK_ITEM);
   public static final EnumObject<GlassColor,ClearStainedGlassPaneBlock> clearStainedGlassPane = BLOCKS.registerEnum(GlassColor.values(), "clear_stained_glass_pane", (color) -> new ClearStainedGlassPaneBlock(glassBuilder(color.getDye().getMapColor()), color), BLOCK_ITEM);
@@ -198,8 +197,10 @@ public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<TagN
   @SuppressWarnings("removal")
   @SubscribeEvent
   void registerRecipeSerializers(RegisterEvent event) {
+    if (event.getRegistryKey() == Registries.TRIGGER_TYPE) {
+      event.register(Registries.TRIGGER_TYPE, getResource("block_container_opened"), () -> CONTAINER_OPENED_TRIGGER);
+    }
     if (event.getRegistryKey() == Registries.RECIPE_SERIALIZER) {
-      CriteriaTriggers.register(CONTAINER_OPENED_TRIGGER);
 
       //noinspection removal
       //noinspection removal

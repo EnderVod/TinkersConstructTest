@@ -1,6 +1,5 @@
 package slimeknights.tconstruct.fluids.item;
 
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -27,7 +26,7 @@ public class ContainerFoodItem extends Item {
   }
 
   @Override
-  public int getUseDuration(ItemStack pStack) {
+  public int getUseDuration(ItemStack pStack, LivingEntity entity) {
     return 32;
   }
 
@@ -37,28 +36,28 @@ public class ContainerFoodItem extends Item {
   }
 
   /** Adds effects to the tooltip */
-  public static void addEffectTooltip(FoodProperties food, List<Component> tooltip) {
+  public static void addEffectTooltip(FoodProperties food, List<Component> tooltip, float tickRate) {
     // add effects to the tooltip, code based on potion items
-    for (Pair<MobEffectInstance, Float> pair : food.getEffects()) {
-      MobEffectInstance effect = pair.getFirst();
+    for (FoodProperties.PossibleEffect possible : food.effects()) {
+      MobEffectInstance effect = possible.effect();
       if (effect != null) {
         MutableComponent mutable = Component.translatable(effect.getDescriptionId());
         if (effect.getAmplifier() > 0) {
           mutable = Component.translatable("potion.withAmplifier", mutable, Component.translatable("potion.potency." + effect.getAmplifier()));
         }
         if (effect.getDuration() > 20) {
-          mutable = Component.translatable("potion.withDuration", mutable, MobEffectUtil.formatDuration(effect, 1.0f));
+          mutable = Component.translatable("potion.withDuration", mutable, MobEffectUtil.formatDuration(effect, 1.0f, tickRate));
         }
-        tooltip.add(mutable.withStyle(effect.getEffect().getCategory().getTooltipFormatting()));
+        tooltip.add(mutable.withStyle(effect.getEffect().value().getCategory().getTooltipFormatting()));
       }
     }
   }
 
   @Override
-  public void appendHoverText(ItemStack stack, @Nullable Level worldIn, List<Component> tooltip, TooltipFlag flagIn) {
+  public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flagIn) {
     FoodProperties food = stack.getFoodProperties(null);
     if (food != null) {
-      addEffectTooltip(food, tooltip);
+      addEffectTooltip(food, tooltip, context.tickRate());
     }
   }
 

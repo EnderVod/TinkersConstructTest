@@ -39,7 +39,7 @@ public class CheeseBlockItem extends BlockItem {
   }
 
   @Override
-  public void appendHoverText(ItemStack stack, @Nullable Level pLevel, List<Component> tooltip, TooltipFlag pIsAdvanced) {
+  public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag pIsAdvanced) {
     tooltip.add(CheeseItem.TOOLTIP);
   }
 }

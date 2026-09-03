@@ -23,8 +23,8 @@ public class PlaceBlockDispenserBehavior extends OptionalDispenseItemBehavior {
 
   @Override
   protected ItemStack execute(BlockSource source, ItemStack stack) {
-    Level level = source.getLevel();
-    BlockPos target = source.getPos().relative(source.getBlockState().getValue(DispenserBlock.FACING));
+    Level level = source.level();
+    BlockPos target = source.pos().relative(source.state().getValue(DispenserBlock.FACING));
     if (level.isEmptyBlock(target) && stack.getItem() instanceof BlockItem blockItem) {
       if (!level.isClientSide) {
         Block block = blockItem.getBlock();
