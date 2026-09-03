@@ -105,11 +105,6 @@ public class SideInventoryScreen<P extends MultiModuleScreen<?>, C extends Abstr
     return this.firstSlotId <= slot.getSlotIndex() && this.lastSlotId > slot.getSlotIndex();
   }
 
-  @Override
-  public boolean isHovering(Slot slotIn, double mouseX, double mouseY) {
-    return super.isHovering(slotIn, mouseX, mouseY) && this.shouldDrawSlot(slotIn);
-  }
-
   public void updateSlotCount(int newSlotCount) {
     // don't do extra stuff if it's not needed
     if (this.slotCount == newSlotCount) {
