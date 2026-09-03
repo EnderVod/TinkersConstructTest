@@ -11,7 +11,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.util.FakePlayer;
-import net.neoforged.neoforge.event.entity.living.LivingHurtEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -52,7 +52,7 @@ public final class AchievementEvents {
   }
 
   @SubscribeEvent
-  public static void onDamageEntity(LivingHurtEvent event) {
+  public static void onDamageEntity(LivingDamageEvent.Pre event) {
     DamageSource source = event.getSource();
     if (source.is(DamageTypeTags.IS_PROJECTILE) && source.getEntity() instanceof ServerPlayer player && !(source.getEntity() instanceof FakePlayer)) {// && source.getImmediateSource() instanceof EntityArrow) {
       grantAdvancement(player, ADVANCEMENT_SHOOT_ARROW);
@@ -62,7 +62,7 @@ public final class AchievementEvents {
   private static void grantAdvancement(ServerPlayer playerMP, String advancementResource) {
     MinecraftServer server = playerMP.getServer();
     if (server != null) {
-      Advancement advancement = server.getAdvancements().getAdvancement(new ResourceLocation(advancementResource));
+      Advancement advancement = server.getAdvancements().getAdvancement(ResourceLocation.parse(advancementResource));
       if (advancement != null) {
         AdvancementProgress advancementProgress = playerMP.getAdvancements().getOrStartProgress(advancement);
         if (!advancementProgress.isDone()) {
