@@ -276,38 +276,39 @@ jobs:
               text = text.replace(old, new, 1)
             path.write_text(text, encoding='utf-8')
 
-          # Attachment/capability registration listeners must be installed during module construction, before lifecycle events fire.
+          # Registration must be installed from the existing module constructor, before lifecycle events fire.
           path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'public final class TinkerModifiers extends TinkerModule {\n'
-          constructor = '''public final class TinkerModifiers extends TinkerModule {\n  public TinkerModifiers() {\n    PersistentDataCapability.register();\n    EntityModifierCapability.register();\n    BlockItemProviderCapability.register();\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n  }\n'''
-          if 'public TinkerModifiers() {' not in text:
-            if anchor not in text:
-              raise SystemExit('Missing TinkerModifiers class declaration')
-            text = text.replace(anchor, constructor, 1)
+          constructor_anchor = '  public TinkerModifiers() {\n'
+          if constructor_anchor not in text:
+            raise SystemExit('Missing TinkerModifiers constructor')
+          registrations = '''    PersistentDataCapability.register();\n    EntityModifierCapability.register();\n    BlockItemProviderCapability.register();\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n'''
+          if '    PersistentDataCapability.register();\n' not in text[:text.find('  void commonSetup(final FMLCommonSetupEvent event)')]:
+            text = text.replace(constructor_anchor, constructor_anchor + registrations, 1)
+
+          # Remove the old commonSetup registrations, leaving the constructor copies intact.
+          common_idx = text.find('  void commonSetup(final FMLCommonSetupEvent event)')
+          if common_idx < 0:
+            raise SystemExit('Missing TinkerModifiers commonSetup')
+          before, after = text[:common_idx], text[common_idx:]
           for stale in [
             '    PersistentDataCapability.register();\n',
             '    EntityModifierCapability.register();\n',
             '    BlockItemProviderCapability.register();\n',
             '    // by default, we support modifying projectiles (arrows or fireworks mainly, but maybe other stuff). other entities may come in the future\n    EntityModifierCapability.registerEntityPredicate(entity -> entity instanceof Projectile);\n',
           ]:
-            # Remove only the commonSetup copy, leaving constructor calls intact. Search from the commonSetup method onward.
-            idx = text.find('  void commonSetup(final FMLCommonSetupEvent event)')
-            if idx >= 0:
-              before, after = text[:idx], text[idx:]
-              after = after.replace(stale, '', 1)
-              text = before + after
-          path.write_text(text, encoding='utf-8')
+            after = after.replace(stale, '', 1)
+          path.write_text(before + after, encoding='utf-8')
           PY
 
       - name: Verify entity attachment migration
         run: |
-          grep -q 'DeferredRegister<AttachmentType' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
-          grep -q '.copyOnDeath()' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
-          grep -q 'getExistingDataOrNull(ATTACHMENT)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
-          grep -q 'entity.setData(ATTACHMENT, nbt)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
-          grep -q 'public TinkerModifiers()' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
-          grep -q 'BlockItemProviderCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          grep -Fq 'DeferredRegister<AttachmentType' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
+          grep -Fq '.copyOnDeath()' src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java
+          grep -Fq 'getExistingDataOrNull(ATTACHMENT)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
+          grep -Fq 'entity.setData(ATTACHMENT, nbt)' src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java
+          grep -Fq 'PersistentDataCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          grep -Fq 'BlockItemProviderCapability.register();' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
           test -z "$(grep -R 'CapabilityManager\|CapabilityToken\|ICapabilitySerializable\|AttachCapabilitiesEvent\|LazyOptional' \
             src/main/java/slimeknights/tconstruct/library/tools/capability/PersistentDataCapability.java \
             src/main/java/slimeknights/tconstruct/library/tools/capability/EntityModifierCapability.java || true)"
