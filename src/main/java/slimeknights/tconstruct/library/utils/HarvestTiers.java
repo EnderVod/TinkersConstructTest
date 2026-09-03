@@ -4,21 +4,69 @@ import com.google.common.collect.Maps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Tier;
 import net.minecraft.world.item.Tiers;
-import net.minecraftforge.common.TierSortingRegistry;
+import net.minecraft.world.level.block.state.BlockState;
 import slimeknights.mantle.client.ResourceColorManager;
 import slimeknights.mantle.data.listener.ISafeManagerReloadListener;
 import slimeknights.tconstruct.TConstruct;
 
+import javax.annotation.Nullable;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Harvest level display names
- */
+/** Harvest tier names and ordering for the vanilla tiers used by Tinkers. */
 public class HarvestTiers {
   private HarvestTiers() {}
+
+  /**
+   * NeoForge 1.21 removed TierSortingRegistry in favor of each tier declaring its incorrect-for-drops block tag.
+   * Tinkers only persists vanilla harvest tiers, so retain their stable legacy IDs and ordering locally.
+   */
+  private static final Map<ResourceLocation,Tier> TIERS_BY_NAME = new LinkedHashMap<>();
+  private static final Map<Tier,ResourceLocation> NAMES_BY_TIER = new IdentityHashMap<>();
+  private static final List<Tier> SORTED_TIERS;
+
+  static {
+    register("wood", Tiers.WOOD);
+    register("gold", Tiers.GOLD);
+    register("stone", Tiers.STONE);
+    register("iron", Tiers.IRON);
+    register("diamond", Tiers.DIAMOND);
+    register("netherite", Tiers.NETHERITE);
+    SORTED_TIERS = List.copyOf(TIERS_BY_NAME.values());
+  }
+
+  private static void register(String name, Tier tier) {
+    ResourceLocation id = ResourceLocation.fromNamespaceAndPath("minecraft", name);
+    TIERS_BY_NAME.put(id, tier);
+    NAMES_BY_TIER.put(tier, id);
+  }
+
+  /** Gets a persisted tier by its legacy ID. */
+  @Nullable
+  public static Tier byName(ResourceLocation id) {
+    return TIERS_BY_NAME.get(id);
+  }
+
+  /** Gets the stable persisted ID for a vanilla tier. */
+  @Nullable
+  public static ResourceLocation getName(Tier tier) {
+    return NAMES_BY_TIER.get(tier);
+  }
+
+  /** Returns the supported harvest tiers ordered from weakest to strongest. */
+  public static List<Tier> getSortedTiers() {
+    return SORTED_TIERS;
+  }
+
+  /** Tests whether the passed tier is strong enough for the block using the 1.21 tier contract. */
+  public static boolean isCorrectTierForDrops(Tier tier, BlockState state) {
+    return !state.is(tier.getIncorrectBlocksForDrops());
+  }
 
   /** Cache of name for each tier */
   private static final Map<Tier, Component> harvestLevelNames = Maps.newHashMap();
@@ -27,47 +75,38 @@ public class HarvestTiers {
 
   /** Makes a translation key for the given name */
   private static MutableComponent makeLevelKey(Tier tier) {
-    String key = Util.makeTranslationKey("harvest_tier", TierSortingRegistry.getName(tier));
+    ResourceLocation id = getName(tier);
+    if (id == null) {
+      id = ResourceLocation.fromNamespaceAndPath(TConstruct.MOD_ID, "unknown");
+    }
+    String key = Util.makeTranslationKey("harvest_tier", id);
     TextColor color = ResourceColorManager.getTextColor(key);
     return TConstruct.makeTranslation("stat", key).withStyle(style -> style.withColor(color));
   }
 
-  /**
-   * Gets the harvest level name for the given level number
-   * @param tier  Tier
-   * @return  Level name
-   */
+  /** Gets the harvest level name for the given tier. */
   public static Component getName(Tier tier) {
-    return harvestLevelNames.computeIfAbsent(tier, n ->  makeLevelKey(tier));
+    return harvestLevelNames.computeIfAbsent(tier, HarvestTiers::makeLevelKey);
   }
 
-  /** Gets the larger of two tiers */
+  /** Gets the larger of two tiers. */
   public static Tier max(Tier a, Tier b) {
-    List<Tier> sorted = TierSortingRegistry.getSortedTiers();
-    // note indexOf returns -1 if the tier is missing, so the larger of an unsorted tier and a sorted one is the sorted one
-    if (sorted.indexOf(b) > sorted.indexOf(a)) {
+    if (SORTED_TIERS.indexOf(b) > SORTED_TIERS.indexOf(a)) {
       return b;
     }
     return a;
   }
 
-  /** Gets the smaller of two tiers */
+  /** Gets the smaller of two tiers. */
   public static Tier min(Tier a, Tier b) {
-    List<Tier> sorted = TierSortingRegistry.getSortedTiers();
-    // note indexOf returns -1 if the tier is missing, so the smaller of an unsorted tier and a sorted one is the unsorted one
-    if (sorted.indexOf(b) < sorted.indexOf(a)) {
+    if (SORTED_TIERS.indexOf(b) < SORTED_TIERS.indexOf(a)) {
       return b;
     }
     return a;
   }
 
-  /** Gets the smallest tier in the sorting registry */
+  /** Gets the smallest supported tier. */
   public static Tier minTier() {
-    List<Tier> sortedTiers = TierSortingRegistry.getSortedTiers();
-    if (sortedTiers.isEmpty()) {
-      TConstruct.LOG.error("No sorted tiers exist, this should not happen");
-      return Tiers.WOOD;
-    }
-    return sortedTiers.get(0);
+    return SORTED_TIERS.get(0);
   }
 }
