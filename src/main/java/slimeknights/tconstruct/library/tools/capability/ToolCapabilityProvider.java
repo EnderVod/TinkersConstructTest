@@ -1,68 +1,57 @@
 package slimeknights.tconstruct.library.tools.capability;
 
-import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.neoforged.neoforge.common.util.Lazy;
-import net.minecraftforge.common.util.LazyOptional;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import slimeknights.tconstruct.TConstruct;
+import slimeknights.tconstruct.library.tools.capability.fluid.ToolFluidCapability;
+import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;
+import slimeknights.tconstruct.library.tools.item.IModifiable;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 import slimeknights.tconstruct.library.tools.nbt.ToolStack;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.BiFunction;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
+/** Registers the standard NeoForge 1.21 item capabilities exposed by modifiable tools. */
+public final class ToolCapabilityProvider {
+  private ToolCapabilityProvider() {}
 
-/** Capability provider for tool stacks, returns the proper cap for  */
-public class ToolCapabilityProvider implements ICapabilityProvider {
-  private static final List<BiFunction<ItemStack,Supplier<? extends IToolStackView>,IToolCapabilityProvider>> PROVIDER_CONSTRUCTORS = new ArrayList<>();
-
-  private final ItemStack stack;
-  private final Lazy<ToolStack> tool;
-  private final List<IToolCapabilityProvider> providers;
-
-  public ToolCapabilityProvider(ItemStack stack) {
-    // NBT is not yet initialized when capabilities are created, so delay tool stack creation
-    this.stack = stack;
-    this.tool = Lazy.of(() -> ToolStack.from(stack));
-    this.providers = PROVIDER_CONSTRUCTORS.stream().map(con -> con.apply(stack, tool)).filter(Objects::nonNull).collect(Collectors.toList());
+  /** Registers the capability registration listener early in mod construction. */
+  public static void init() {
+    TConstruct.getModBus().addListener(ToolCapabilityProvider::registerCapabilities);
   }
 
-  @Nonnull
-  @Override
-  public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {
-    // clear the tool cache, as it may have changed since the last time a cap was fetched
-    ToolStack toolStack = tool.get();
-    toolStack.refreshTag(stack);
-    // return the first successful provider
-    for (IToolCapabilityProvider provider : providers) {
-      provider.clearCache();
-      LazyOptional<T> optional = provider.getCapability(toolStack, cap);
-      if (optional.isPresent()) {
-        return optional;
-      }
+  private static void registerCapabilities(RegisterCapabilitiesEvent event) {
+    Item[] tools = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof IModifiable).toArray(Item[]::new);
+    if (tools.length == 0) {
+      return;
     }
-    return LazyOptional.empty();
-  }
 
-  /** Registers a tool capability provider constructor. Every new tool will call this constructor to create your provider.
-   * Is it valid for this constructor to return null, just note that it will not be called a second time if the tools state changes. Thus you should avoid conditioning on anything other than item type */
-  public static void register(BiFunction<ItemStack,Supplier<? extends IToolStackView>,IToolCapabilityProvider> constructor) {
-    PROVIDER_CONSTRUCTORS.add(constructor);
-  }
+    event.registerItem(Capabilities.ItemHandler.ITEM, (stack, context) -> {
+      IToolStackView tool = ToolStack.from(stack);
+      if (tool.getVolatileData().getInt(ToolInventoryCapability.TOTAL_SLOTS) <= 0) {
+        return null;
+      }
+      return new ToolInventoryCapability(() -> ToolStack.from(stack));
+    }, tools);
 
-  /** Interface to get a capability on a tool */
-  @FunctionalInterface
-  public interface IToolCapabilityProvider {
-    /** Gets a capability on the given tool */
-    <T> LazyOptional<T> getCapability(IToolStackView tool, Capability<T> cap);
+    event.registerItem(Capabilities.FluidHandler.ITEM, (stack, context) -> {
+      IToolStackView tool = ToolStack.from(stack);
+      if (tool.getVolatileData().getInt(ToolFluidCapability.TOTAL_TANKS) <= 0) {
+        return null;
+      }
+      return new ToolFluidCapability(stack, () -> ToolStack.from(stack));
+    }, tools);
 
-    /** Called to clear the cache of the provider */
-    default void clearCache() {}
+    event.registerItem(Capabilities.EnergyStorage.ITEM, (stack, context) -> {
+      IToolStackView tool = ToolStack.from(stack);
+      if (ToolEnergyCapability.getMaxEnergy(tool) <= 0) {
+        return null;
+      }
+      return new ToolEnergyCapability(() -> ToolStack.from(stack));
+    }, tools);
+
+    event.registerItem(BlockItemProviderCapability.CAPABILITY, (stack, context) ->
+      BlockItemProviderModifierHook.CapabilityImpl.INSTANCE, tools);
   }
 }
