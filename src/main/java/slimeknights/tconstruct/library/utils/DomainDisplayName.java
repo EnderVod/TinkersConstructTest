@@ -1,7 +1,7 @@
 package slimeknights.tconstruct.library.utils;
 
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
-import net.minecraftforge.common.ForgeI18n;
+import net.minecraft.locale.Language;
 import net.neoforged.fml.ModList;
 import org.apache.commons.lang3.text.WordUtils;
 import slimeknights.mantle.data.listener.ISafeManagerReloadListener;
@@ -36,9 +36,9 @@ public class DomainDisplayName {
   private static String nameForUncached(String domain) {
     // first, check if the resource pack translated the thing
     String langKey = "domain." + domain + ".display_name";
-    String translated = ForgeI18n.getPattern(langKey);
-    if (!translated.equals(langKey)) {
-      return translated;
+    Language language = Language.getInstance();
+    if (language.has(langKey)) {
+      return language.getOrDefault(langKey);
     }
 
     // that failed? try a mod container lookup
