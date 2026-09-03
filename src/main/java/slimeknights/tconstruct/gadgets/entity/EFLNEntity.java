@@ -5,6 +5,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Explosion.BlockInteraction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
@@ -42,11 +43,11 @@ public class EFLNEntity extends ThrowableItemProjectile implements IEntityWithCo
 
   @Override
   public void writeSpawnData(RegistryFriendlyByteBuf buffer) {
-    buffer.writeItem(this.getItemRaw());
+    ItemStack.STREAM_CODEC.encode(buffer, this.getItem());
   }
 
   @Override
   public void readSpawnData(RegistryFriendlyByteBuf additionalData) {
-    this.setItem(additionalData.readItem());
+    this.setItem(ItemStack.STREAM_CODEC.decode(additionalData));
   }
 }

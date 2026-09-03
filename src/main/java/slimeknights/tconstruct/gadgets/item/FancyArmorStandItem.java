@@ -40,7 +40,7 @@ public class FancyArmorStandItem extends Item {
   }
 
   @Override
-  public void appendHoverText(ItemStack pStack, @Nullable Level pLevel, List<Component> tooltip, TooltipFlag pIsAdvanced) {
+  public void appendHoverText(ItemStack pStack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag pIsAdvanced) {
     tooltip.add(Component.translatable(getDescriptionId() + ".tooltip").withStyle(ChatFormatting.GRAY));
   }
 
@@ -64,7 +64,7 @@ public class FancyArmorStandItem extends Item {
     if (level instanceof ServerLevel server) {
       Player player = context.getPlayer();
       Consumer<FancyArmorStandEntity> consumer = EntityType.createDefaultStackConfig(server, stack, player);
-      FancyArmorStandEntity stand = TinkerGadgets.armorStandEntity.get().create(server, stack.getTag(), consumer, pos, MobSpawnType.SPAWN_EGG, true, true);
+      FancyArmorStandEntity stand = TinkerGadgets.armorStandEntity.get().create(server, consumer, pos, MobSpawnType.SPAWN_EGG, true, true);
       if (stand == null) {
         return InteractionResult.FAIL;
       }
