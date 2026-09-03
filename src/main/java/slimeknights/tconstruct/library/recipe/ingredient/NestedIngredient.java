@@ -1,21 +1,41 @@
 package slimeknights.tconstruct.library.recipe.ingredient;
 
-import it.unimi.dsi.fastutil.ints.IntList;
+import com.mojang.datafixers.util.Either;
+import com.mojang.serialization.MapCodec;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraftforge.common.crafting.AbstractIngredient;
+import net.neoforged.neoforge.common.crafting.ICustomIngredient;
+import net.neoforged.neoforge.common.util.NeoForgeExtraCodecs;
 
 import javax.annotation.Nullable;
+import java.util.Arrays;
+import java.util.stream.Stream;
 
-/** Ingredient that contains another ingredient nested inside */
+/** Custom ingredient that contains another ingredient nested inside. */
 @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
-public abstract class NestedIngredient extends AbstractIngredient {
+public abstract class NestedIngredient implements ICustomIngredient {
+  /**
+   * Supports both the legacy flattened vanilla ingredient form and the explicit {@code match} form used when nesting
+   * arrays or custom ingredients.
+   */
+  protected static final MapCodec<Ingredient> NESTED_CODEC = NeoForgeExtraCodecs.xor(
+      Ingredient.Value.MAP_CODEC,
+      Ingredient.CODEC_NONEMPTY.fieldOf("match"))
+    .xmap(
+      either -> either.map(value -> Ingredient.fromValues(Stream.of(value)), ingredient -> ingredient),
+      ingredient -> {
+        if (!ingredient.isCustom()) {
+          Ingredient.Value[] values = ingredient.getValues();
+          if (values.length == 1) {
+            return Either.left(values[0]);
+          }
+        }
+        return Either.right(ingredient);
+      });
+
   protected final Ingredient nested;
-
-
-  /* Defer to nested */
 
   @Override
   public boolean test(@Nullable ItemStack stack) {
@@ -23,24 +43,8 @@ public abstract class NestedIngredient extends AbstractIngredient {
   }
 
   @Override
-  public ItemStack[] getItems() {
-    return nested.getItems();
-  }
-
-  @Override
-  public IntList getStackingIds() {
-    return nested.getStackingIds();
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return nested.isEmpty();
-  }
-
-  @Override
-  protected void invalidate() {
-    super.invalidate();
-    nested.checkInvalidation();
+  public Stream<ItemStack> getItems() {
+    return Arrays.stream(nested.getItems());
   }
 
   @Override
