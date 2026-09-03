@@ -17,7 +17,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClick
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.minecraftforge.network.NetworkHooks;
 import slimeknights.mantle.inventory.BaseContainerMenu;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.Sounds;
@@ -66,7 +65,7 @@ public class CommonsEvents {
         event.setCanceled(true);
         if (provider != null) {
           if (player instanceof ServerPlayer serverPlayer) {
-            NetworkHooks.openScreen(serverPlayer, provider, pos);
+            serverPlayer.openMenu(provider, pos);
             if (player.containerMenu instanceof BaseContainerMenu<?> menu) {
               menu.syncOnOpen(serverPlayer);
             }
