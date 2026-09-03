@@ -30,12 +30,12 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate book client APIs
+      - name: Migrate legacy network hooks
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path('src/main/java/slimeknights/tconstruct/library/client/book/content')
+          root = Path('src/main/java/slimeknights/tconstruct')
           changed = []
 
           def edit(rel, replacements):
@@ -50,46 +50,50 @@ jobs:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
 
-          for rel in ['ContentModifier.java', 'AbstractMaterialContent.java', 'FluidEffectContent.java']:
-              edit(rel, [
-                  ('import net.minecraftforge.common.ForgeI18n;', 'import net.minecraft.client.resources.language.I18n;'),
-                  ('ForgeI18n.getPattern(', 'I18n.get('),
-              ])
-
-          edit('ContentTool.java', [
-              ('import net.minecraftforge.common.ForgeI18n;\n', ''),
-              ('import net.minecraftforge.common.crafting.IShapedRecipe;', 'import net.minecraft.world.item.crafting.ShapedRecipe;'),
-              ('import net.neoforged.neoforge.registries.ForgeRegistries;', 'import net.minecraft.core.registries.BuiltInRegistries;'),
-              ('ForgeI18n.getPattern(', 'I18n.get('),
-              ('ForgeRegistries.ITEMS.getValue(new ResourceLocation(this.toolName))', 'BuiltInRegistries.ITEM.get(ResourceLocation.parse(this.toolName))'),
-              ('recipe instanceof IShapedRecipe<?> shaped', 'recipe instanceof ShapedRecipe shaped'),
-              ('shaped.getRecipeWidth()', 'shaped.getWidth()'),
-              ('shaped.getRecipeHeight()', 'shaped.getHeight()'),
+          edit('library/materials/MaterialRegistry.java', [
+              ('import net.minecraftforge.network.PacketDistributor;\n', ''),
+              ('import net.minecraftforge.network.PacketDistributor.PacketTarget;\n', ''),
+              ('      PacketTarget target = PacketDistributor.PLAYER.with(() -> player);\n', ''),
+              ('        network.send(target, packet);', '        network.sendTo(packet, player);'),
           ])
 
-          print(f'Updated {len(changed)} book files')
+          edit('library/tools/IndestructibleItemEntity.java', [
+              ('import net.minecraft.network.protocol.Packet;\n', ''),
+              ('import net.minecraft.network.protocol.game.ClientGamePacketListener;\n', ''),
+              ('import net.minecraftforge.network.NetworkHooks;\n', ''),
+              ('\n  @Override\n  public Packet<ClientGamePacketListener> getAddEntityPacket() {\n    return NetworkHooks.getEntitySpawningPacket(this);\n  }\n', '\n'),
+          ])
+
+          edit('library/tools/capability/inventory/ToolInventoryCapability.java', [
+              ('import net.minecraftforge.network.NetworkHooks;\n', ''),
+              ('        NetworkHooks.openScreen(serverPlayer, new SimpleMenuProvider(', '        serverPlayer.openMenu(new SimpleMenuProvider('),
+          ])
+
+          print(f'Updated {len(changed)} network files')
           for path in changed:
               print(path)
           PY
 
-      - name: Verify book client API migration
+      - name: Verify network hook migration
         run: |
-          if grep -R "ForgeI18n\|IShapedRecipe\|ForgeRegistries\|new ResourceLocation(this.toolName)" -n \
-            src/main/java/slimeknights/tconstruct/library/client/book/content; then
-            echo 'Found stale book client APIs.'
+          if grep -R "net.minecraftforge.network\|PacketDistributor.PLAYER\|NetworkHooks.openScreen\|NetworkHooks.getEntitySpawningPacket" -n \
+            src/main/java/slimeknights/tconstruct/library/materials/MaterialRegistry.java \
+            src/main/java/slimeknights/tconstruct/library/tools/IndestructibleItemEntity.java \
+            src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java; then
+            echo 'Found stale legacy network APIs.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No book client migration changes needed.'
+            echo 'No network migration changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate book client APIs to 1.21'
+          git commit -m 'Migrate legacy network hooks to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
