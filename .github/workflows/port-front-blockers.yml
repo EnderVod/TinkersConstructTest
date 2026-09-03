@@ -30,98 +30,73 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Wire condition codec registries
+      - name: Wire shared custom ingredient types
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          root = Path('src/main/java/slimeknights/tconstruct')
-          commons = root / 'shared/TinkerCommons.java'
-          text = commons.read_text(encoding='utf-8')
+          path = Path('src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java')
+          text = path.read_text(encoding='utf-8')
 
-          if 'import com.mojang.serialization.MapCodec;' not in text:
-              text = text.replace('package slimeknights.tconstruct.shared;\n\n', 'package slimeknights.tconstruct.shared;\n\nimport com.mojang.serialization.MapCodec;\n', 1)
-          if 'import net.neoforged.neoforge.common.conditions.ICondition;' not in text:
-              text = text.replace('import net.neoforged.neoforge.common.NeoForge;\n', 'import net.neoforged.neoforge.common.NeoForge;\nimport net.neoforged.neoforge.common.conditions.ICondition;\n', 1)
+          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
+          if 'import net.neoforged.neoforge.common.crafting.IngredientType;' not in text:
+              text = text.replace(
+                  'import net.neoforged.neoforge.common.conditions.ICondition;\n',
+                  'import net.neoforged.neoforge.common.conditions.ICondition;\nimport net.neoforged.neoforge.common.crafting.IngredientType;\n',
+                  1)
 
-          marker = '  /* Loot conditions */\n'
-          if 'CONDITION_CODECS.register' not in text:
+          marker = '  /* Resource conditions */\n'
+          if 'noContainerIngredientType = INGREDIENT_TYPES.register' not in text:
               if marker not in text:
-                  raise SystemExit('Missing loot condition marker')
-              resource_conditions = '''  /* Resource conditions */
-          public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<ConfigEnabledCondition>> configCondition = CONDITION_CODECS.register(ConfigEnabledCondition.ID.getPath(), () -> ConfigEnabledCondition.CODEC);
-          @SuppressWarnings("removal")
-          public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<TagIntersectionPresentCondition<?>>> tagIntersectionCondition = CONDITION_CODECS.register(TagIntersectionPresentCondition.ID.getPath(), () -> TagIntersectionPresentCondition.CODEC);
-          @SuppressWarnings("removal")
-          public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<TagDifferencePresentCondition<?>>> tagDifferenceCondition = CONDITION_CODECS.register(TagDifferencePresentCondition.ID.getPath(), () -> TagDifferencePresentCondition.CODEC);
-          @SuppressWarnings("removal")
-          public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<TagNotEmptyCondition<?>>> tagNotEmptyCondition = CONDITION_CODECS.register(TagNotEmptyCondition.ID.getPath(), () -> TagNotEmptyCondition.CODEC);
+                  raise SystemExit('Missing resource-condition marker in TinkerCommons')
+              block = '''  /* Custom ingredients */
+  public static final DeferredHolder<IngredientType<?>, IngredientType<NoContainerIngredient>> noContainerIngredientType = INGREDIENT_TYPES.register(NoContainerIngredient.ID.getPath(), () -> new IngredientType<>(NoContainerIngredient.CODEC));
+  public static final DeferredHolder<IngredientType<?>, IngredientType<BlockTagIngredient>> blockTagIngredientType = INGREDIENT_TYPES.register(BlockTagIngredient.ID.getPath(), () -> new IngredientType<>(BlockTagIngredient.CODEC));
+  public static final DeferredHolder<IngredientType<?>, IngredientType<InstrumentIngredient>> instrumentIngredientType = INGREDIENT_TYPES.register(InstrumentIngredient.ID.getPath(), () -> new IngredientType<>(InstrumentIngredient.CODEC));
 
-          '''
-              resource_conditions = '\n'.join(line[10:] if line.startswith('          ') else line for line in resource_conditions.splitlines()) + '\n'
-              text = text.replace(marker, resource_conditions + marker, 1)
-
-          replacements = [
-              ('new LootItemConditionType(ConfigEnabledCondition.SERIALIZER)', 'new LootItemConditionType(ConfigEnabledCondition.CODEC)'),
-              ('new LootItemConditionType(new BlockOrEntityCondition.ConditionSerializer())', 'new LootItemConditionType(BlockOrEntityCondition.CODEC)'),
-              ('new LootItemConditionType(new HasLootContextSetCondition.Serializer())', 'new LootItemConditionType(HasLootContextSetCondition.CODEC)'),
-              ('new LootItemConditionType(new TagNotEmptyCondition.ConditionSerializer())', 'new LootItemConditionType(TagNotEmptyCondition.CODEC)'),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit('Missing expected TinkerCommons registration: ' + old)
-              text = text.replace(old, new, 1)
+'''
+              text = text.replace(marker, block + marker, 1)
 
           for stale in [
-              '      CraftingHelper.register(ConfigEnabledCondition.SERIALIZER);\n',
-              '      CraftingHelper.register(TagIntersectionPresentCondition.SERIALIZER);\n',
-              '      CraftingHelper.register(TagDifferencePresentCondition.SERIALIZER);\n',
-              '      CraftingHelper.register(new TagNotEmptyCondition.ConditionSerializer());\n',
+              '      CraftingHelper.register(NoContainerIngredient.ID, NoContainerIngredient.Serializer.INSTANCE);\n',
+              '      CraftingHelper.register(BlockTagIngredient.Serializer.ID, BlockTagIngredient.Serializer.INSTANCE);\n',
+              '      CraftingHelper.register(InstrumentIngredient.ID, InstrumentIngredient.SERIALIZER);\n',
           ]:
               if stale not in text:
-                  raise SystemExit('Missing expected stale registration: ' + stale.strip())
+                  raise SystemExit('Missing stale custom ingredient registration: ' + stale.strip())
               text = text.replace(stale, '', 1)
-          commons.write_text(text, encoding='utf-8')
 
-          modifiers = root / 'tools/TinkerModifiers.java'
-          text = modifiers.read_text(encoding='utf-8')
-          replacements = [
-              ('new LootItemConditionType(new HasModifierLootCondition.ConditionSerializer())', 'new LootItemConditionType(HasModifierLootCondition.CODEC)'),
-              ('new LootItemConditionType(ChrysophiliteLootCondition.SERIALIZER)', 'new LootItemConditionType(ChrysophiliteLootCondition.CODEC)'),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit('Missing expected TinkerModifiers registration: ' + old)
-              text = text.replace(old, new, 1)
-          modifiers.write_text(text, encoding='utf-8')
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify condition registry wiring
+      - name: Verify shared ingredient migration
         run: |
-          if grep -R "IConditionSerializer\|world.level.storage.loot.Serializer\|ConfigEnabledCondition.SERIALIZER\|TagIntersectionPresentCondition.SERIALIZER\|TagDifferencePresentCondition.SERIALIZER\|ConditionSerializer()\|ChrysophiliteLootCondition.SERIALIZER" -n \
-            src/main/java/slimeknights/tconstruct/common/json \
-            src/main/java/slimeknights/tconstruct/library/json/condition \
-            src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java \
-            src/main/java/slimeknights/tconstruct/tools/modifiers/loot \
-            src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java \
-            src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java; then
-            echo 'Found stale condition serializer APIs.'
+          if grep -R "net.minecraftforge.common.crafting\|IIngredientSerializer\|AbstractIngredient\|VanillaIngredientSerializer" -n \
+            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NestedIngredient.java \
+            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/NoContainerIngredient.java \
+            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/BlockTagIngredient.java \
+            src/main/java/slimeknights/tconstruct/library/recipe/ingredient/InstrumentIngredient.java; then
+            echo 'Found stale shared ingredient APIs.'
             exit 1
           fi
-          grep -q 'CONDITION_CODECS.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -q 'LootItemConditionType(ConfigEnabledCondition.CODEC)' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -q 'LootItemConditionType(HasModifierLootCondition.CODEC)' src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java
+          grep -q 'noContainerIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          grep -q 'blockTagIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          grep -q 'instrumentIngredientType = INGREDIENT_TYPES.register' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
+          if grep -q 'CraftingHelper.register(NoContainerIngredient\|CraftingHelper.register(BlockTagIngredient\|CraftingHelper.register(InstrumentIngredient' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java; then
+            echo 'Found stale shared ingredient registrations.'
+            exit 1
+          fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No condition registry changes needed.'
+            echo 'No shared ingredient registry changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Wire 1.21 condition and loot codecs'
+          git commit -m 'Register shared custom ingredients for 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
