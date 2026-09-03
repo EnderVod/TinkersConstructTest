@@ -1,5 +1,9 @@
 package slimeknights.tconstruct.library.json;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.Dynamic;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -38,6 +42,17 @@ import java.util.Set;
 
 @SuppressWarnings("deprecation")
 public class TinkerLoadables {
+
+  /** Generic codec for arbitrary JSON, used to bridge Mantle loadables into Mojang codecs. */
+  public static final Codec<JsonElement> JSON = Codec.PASSTHROUGH.xmap(
+    dynamic -> dynamic.convert(JsonOps.INSTANCE).getValue(),
+    json -> new Dynamic<>(JsonOps.INSTANCE, json));
+
+  /** Wraps an existing Mantle loadable as a Mojang codec without changing its JSON representation. */
+  public static <T> Codec<T> codec(Loadable<T> loadable, String key) {
+    return JSON.xmap(json -> loadable.convert(json, key), loadable::serialize);
+  }
+
   /* Enums */
   public static final StringLoadable<Operation> OPERATION = new EnumLoadable<>(Operation.class);
   public static final StringLoadable<EquipmentSlot> EQUIPMENT_SLOT = new EnumLoadable<>(EquipmentSlot.class);
