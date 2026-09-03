@@ -23,6 +23,7 @@ import slimeknights.tconstruct.library.client.model.ModelProperties;
 import slimeknights.tconstruct.library.fluid.FluidTankAnimated;
 import slimeknights.tconstruct.library.recipe.FluidValues;
 import slimeknights.tconstruct.library.utils.NBTTags;
+import slimeknights.tconstruct.library.utils.TagUtil;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 import slimeknights.tconstruct.smeltery.block.controller.ControllerBlock;
 import slimeknights.tconstruct.smeltery.block.controller.MelterBlock;
@@ -86,10 +87,6 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
     return meltingInventory;
   }
 
-  /*
-   * Tank methods
-   */
-
   @Override
   public @NotNull ModelData getModelData() {
     return ModelData.builder()
@@ -97,41 +94,29 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
                     .with(ModelProperties.TANK_CAPACITY, tank.getCapacity()).build();
   }
 
-  /*
-   * Melting
-   */
-
-  /** Checks if the tile entity is active */
   private boolean isFormed() {
     BlockState state = this.getBlockState();
     return state.hasProperty(MelterBlock.IN_STRUCTURE) && state.getValue(MelterBlock.IN_STRUCTURE);
   }
 
-  /** Ticks the TE on the server */
   private void tick(Level level, BlockPos pos, BlockState state) {
-    // are we fully formed?
     if (isFormed()) {
       switch (tick) {
-        // tick 0: find fuel
         case 0 -> {
           if (!fuelModule.hasFuel() && meltingInventory.canHeat(fuelModule.findFuel(false))) {
             fuelModule.findFuel(true);
           }
         }
-        // tick 2: heat items and consume fuel
         case 2 -> {
           boolean hasFuel = fuelModule.hasFuel();
-          // update the active state
           if (state.getValue(ControllerBlock.ACTIVE) != hasFuel) {
             level.setBlockAndUpdate(pos, state.setValue(ControllerBlock.ACTIVE, hasFuel));
-            // update the heater below
             BlockPos down = pos.below();
             BlockState downState = level.getBlockState(down);
             if (downState.is(TinkerTags.Blocks.FUEL_TANKS) && downState.hasProperty(ControllerBlock.ACTIVE) && downState.getValue(ControllerBlock.ACTIVE) != hasFuel) {
               level.setBlockAndUpdate(down, downState.setValue(ControllerBlock.ACTIVE, hasFuel));
             }
           }
-          // heat items
           if (hasFuel) {
             meltingInventory.heatItems(fuelModule.getTemperature(), fuelModule.getRate());
             fuelModule.decreaseFuel(1);
@@ -141,21 +126,14 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
         }
       }
     } else if (tick == 2) {
-      // if we have fuel, lose fuel
       if (fuelModule.hasFuel()) {
         fuelModule.decreaseFuel(1);
       } else {
-        // if we lack fuel, cool items
         meltingInventory.coolItems();
       }
     }
     tick = (tick + 1) % 4;
   }
-
-
-  /*
-   * NBT
-   */
 
   @Override
   protected boolean shouldSyncOnUpdate() {
@@ -165,7 +143,7 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
   @Override
   public void load(CompoundTag tag) {
     super.load(tag);
-    tank.readFromNBT(tag.getCompound(NBTTags.TANK));
+    tank.readFromNBT(TagUtil.BUILTIN_LOOKUP, tag.getCompound(NBTTags.TANK));
     fuelModule.readFromTag(tag);
     if (tag.contains(TAG_INVENTORY, Tag.TAG_COMPOUND)) {
       meltingInventory.readFromTag(tag.getCompound(TAG_INVENTORY));
@@ -175,7 +153,7 @@ public class MelterBlockEntity extends NameableBlockEntity implements ITankInven
   @Override
   public void saveSynced(CompoundTag tag) {
     super.saveSynced(tag);
-    tag.put(NBTTags.TANK, tank.writeToNBT(new CompoundTag()));
+    tag.put(NBTTags.TANK, tank.writeToNBT(TagUtil.BUILTIN_LOOKUP, new CompoundTag()));
     tag.put(TAG_INVENTORY, meltingInventory.writeToTag());
   }
 
