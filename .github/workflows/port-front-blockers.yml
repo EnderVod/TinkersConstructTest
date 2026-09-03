@@ -30,115 +30,128 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate item display contexts to NeoForge enum extensions
+      - name: Migrate 1.21 event APIs
         run: |
-          cat > src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java <<'JAVA'
-          package slimeknights.tconstruct.library;
-
-          import net.minecraft.world.item.ItemDisplayContext;
-
-          /** Custom transform types used for Tinkers item rendering. */
-          public class TinkerItemDisplays {
-            private TinkerItemDisplays() {}
-
-            /**
-             * Kept as the existing bootstrap hook. NeoForge 1.21 loads the actual enum values from
-             * META-INF/enumextensions.json before normal mod construction, so no runtime registry call is needed.
-             */
-            public static void init() {}
-
-            /** Used by the melter and smeltery for display of items being melted. */
-            public static final ItemDisplayContext MELTER = ItemDisplayContext.valueOf("TCONSTRUCT_MELTER");
-            /** Used by the part builder, crafting station, tinkers station, and tinker anvil. */
-            public static final ItemDisplayContext TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_TABLE");
-            /** Used by the casting table for item rendering. */
-            public static final ItemDisplayContext CASTING_TABLE = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_TABLE");
-            /** Used by the casting basin for item rendering. */
-            public static final ItemDisplayContext CASTING_BASIN = ItemDisplayContext.valueOf("TCONSTRUCT_CASTING_BASIN");
-            /** Used by the fluid cannon for display of the item in front. */
-            public static final ItemDisplayContext FLUID_CANNON = ItemDisplayContext.valueOf("TCONSTRUCT_FLUID_CANNON");
-            /** Used by throwing to allow adjusting the tool position. */
-            public static final ItemDisplayContext THROWN = ItemDisplayContext.valueOf("TCONSTRUCT_THROWN");
-          }
-          JAVA
-
-          cat > src/main/resources/META-INF/enumextensions.json <<'JSON'
-          {
-            "entries": [
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_MELTER",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:melter", null ]
-              },
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_TABLE",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:table", null ]
-              },
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_CASTING_TABLE",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:casting_table", "FIXED" ]
-              },
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_CASTING_BASIN",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:casting_basin", null ]
-              },
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_FLUID_CANNON",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:fluid_cannon", "FIXED" ]
-              },
-              {
-                "enum": "net/minecraft/world/item/ItemDisplayContext",
-                "name": "TCONSTRUCT_THROWN",
-                "constructor": "(ILjava/lang/String;Ljava/lang/String;)V",
-                "parameters": [ -1, "tconstruct:thrown", "FIXED" ]
-              }
-            ]
-          }
-          JSON
-
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('src/main/resources/META-INF/neoforge.mods.toml')
+
+          root = Path('src/main/java')
+
+          # EventBusSubscriber renamed the gameplay bus from FORGE to GAME in FML 4.
+          changed_bus = 0
+          for path in root.rglob('*.java'):
+              text = path.read_text(encoding='utf-8')
+              if 'Bus.FORGE' in text:
+                  changed_bus += text.count('Bus.FORGE')
+                  path.write_text(text.replace('Bus.FORGE', 'Bus.GAME'), encoding='utf-8')
+          if changed_bus == 0:
+              raise SystemExit('No Bus.FORGE subscribers found to migrate')
+
+          # Client key handling: exact NeoForge 1.21 key package + PlayerTickEvent.Pre.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java')
           text = path.read_text(encoding='utf-8')
-          if 'enumExtensions="META-INF/enumextensions.json"' not in text:
-            anchor = '    displayURL="https://www.curseforge.com/minecraft/mc-mods/tinkers-construct"\n'
-            if anchor not in text:
-              raise SystemExit('Missing Tinkers mod displayURL anchor')
-            text = text.replace(anchor, anchor + '    enumExtensions="META-INF/enumextensions.json"\n', 1)
+          text = text.replace('import net.minecraftforge.client.settings.KeyConflictContext;\n',
+                              'import net.neoforged.neoforge.client.settings.KeyConflictContext;\n', 1)
+          text = text.replace('import net.neoforged.neoforge.event.TickEvent.Phase;\n', '', 1)
+          text = text.replace('import net.neoforged.neoforge.event.TickEvent.PlayerTickEvent;\n',
+                              'import net.neoforged.neoforge.event.tick.PlayerTickEvent;\n', 1)
+          text = text.replace('import net.minecraftforge.fml.LogicalSide;\n', '', 1)
+          old = '''  private static void handleKeyBindings(PlayerTickEvent event) {\n    Minecraft minecraft = Minecraft.getInstance();\n    if (minecraft.player != null && minecraft.player == event.player && event.phase == Phase.START && event.side == LogicalSide.CLIENT && !minecraft.player.isSpectator()) {'''
+          new = '''  private static void handleKeyBindings(PlayerTickEvent.Pre event) {\n    Minecraft minecraft = Minecraft.getInstance();\n    Player player = event.getEntity();\n    if (minecraft.player != null && minecraft.player == player && player.level().isClientSide() && !player.isSpectator()) {'''
+          if old not in text:
+              raise SystemExit('Missing legacy ToolClientEvents player tick handler')
+          text = text.replace(old, new, 1).replace('event.player', 'player')
+          path.write_text(text, encoding='utf-8')
+
+          # Player block-interaction event result values are TriState in 1.21.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.neoforged.bus.api.Event.Result;\n',
+                              'import net.neoforged.neoforge.common.util.TriState;\n', 1)
+          text = text.replace('Result.DENY', 'TriState.FALSE')
+          text = text.replace('Result.ALLOW', 'TriState.TRUE')
+          text = text.replace('Result useBlock', 'TriState useBlock')
+          text = text.replace('Result useItem', 'TriState useItem')
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.neoforged.bus.api.Event.Result;\n',
+                              'import net.neoforged.neoforge.common.util.TriState;\n', 1)
+          text = text.replace('Result useItem = Result.DEFAULT;', 'TriState useItem = TriState.DEFAULT;')
+          text = text.replace('Result useBlock = Result.DEFAULT;', 'TriState useBlock = TriState.DEFAULT;')
+          text = text.replace('Result.DENY', 'TriState.FALSE')
+          text = text.replace('Result.ALLOW', 'TriState.TRUE')
+          text = text.replace('Result.DEFAULT', 'TriState.DEFAULT')
+          path.write_text(text, encoding='utf-8')
+
+          # ModifierEvents combines several event API migrations that changed semantics in 1.21.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.ForgeMod;\n', '', 1)
+          text = text.replace('import net.minecraft.world.entity.ai.attributes.Attribute;\n',
+                              'import net.minecraft.world.entity.ai.attributes.Attribute;\nimport net.minecraft.world.entity.ai.attributes.Attributes;\n', 1)
+          text = text.replace('import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;\n',
+                              'import net.neoforged.neoforge.event.tick.EntityTickEvent;\n', 1)
+          text = text.replace('import net.neoforged.bus.api.Event.Result;\n', '', 1)
+          text = text.replace('import java.util.Optional;\n', '', 1)
+
+          old = '''    Optional<TinkerDataCapability.Holder> dataCap = entity.getCapability(TinkerDataCapability.CAPABILITY).resolve();\n    double knockback = entity.getAttributeValue(TinkerAttributes.KNOCKBACK_MULTIPLIER.get())\n                     + dataCap.map(data -> data.get(TinkerDataKeys.KNOCKBACK)).orElse(0f);\n    if (knockback != 1) {\n      event.setStrength((float) (event.getStrength() * knockback));\n    }\n    // handle crystalstrike\n    dataCap.ifPresent(data -> {\n      // apply crystalbound bonus\n      int crystalbound = data.get(TinkerDataKeys.CRYSTALSTRIKE, 0);\n      if (crystalbound > 0) {\n        RestrictAngleModule.onKnockback(event, crystalbound);\n      }\n    });'''
+          new = '''    TinkerDataCapability.Holder data = TinkerDataCapability.getData(entity);\n    double knockback = entity.getAttributeValue(TinkerAttributes.KNOCKBACK_MULTIPLIER.get())\n                     + data.get(TinkerDataKeys.KNOCKBACK, 0f);\n    if (knockback != 1) {\n      event.setStrength((float) (event.getStrength() * knockback));\n    }\n    // handle crystalstrike\n    int crystalbound = data.get(TinkerDataKeys.CRYSTALSTRIKE, 0);\n    if (crystalbound > 0) {\n      RestrictAngleModule.onKnockback(event, crystalbound);\n    }'''
+          if old not in text:
+              raise SystemExit('Missing legacy ModifierEvents TinkerData capability block')
+          text = text.replace(old, new, 1)
+
+          text = text.replace('multiset.count(effectInstance.getEffect())', 'multiset.count(effectInstance.getEffect().value())')
+          text = text.replace('event.setResult(Result.DENY);', 'event.setResult(MobEffectEvent.Applicable.Result.DO_NOT_APPLY);')
+          text = text.replace('newEffect.getEffect().isBeneficial()', 'newEffect.getEffect().value().isBeneficial()')
+
+          critical_start = text.find('  static void onCritical(CriticalHitEvent event) {')
+          critical_end = text.find('\n  @SuppressWarnings("removal")\n  @SubscribeEvent\n  static void onPotionStart', critical_start)
+          if critical_start < 0 or critical_end < 0:
+              raise SystemExit('Missing ModifierEvents critical-hit method')
+          critical_method = '''  static void onCritical(CriticalHitEvent event) {\n    LivingEntity living = event.getEntity();\n\n    // critical boost is defined where the base value is 150%; the 1.21 event directly exposes critical state and multiplier.\n    Attribute attribute = TinkerAttributes.CRITICAL_DAMAGE.get();\n    double criticalBoost = living.getAttributeValue(attribute) - attribute.getDefaultValue() + ArmorStatModule.getStat(living, TinkerDataKeys.CRITICAL_DAMAGE);\n    if (criticalBoost > 0) {\n      boolean isCritical = event.isCriticalHit();\n      if (!isCritical && TinkerPredicate.AIRBORNE.matches(living)) {\n        isCritical = true;\n        event.setCriticalHit(true);\n      }\n      if (isCritical) {\n        event.setDamageMultiplier((float) (event.getDamageMultiplier() + criticalBoost));\n      }\n    }\n  }\n'''
+          text = text[:critical_start] + critical_method + text[critical_end:]
+
+          text = text.replace('living.getAttributeValue(ForgeMod.STEP_HEIGHT_ADDITION.get())',
+                              '(living.getAttributeValue(Attributes.STEP_HEIGHT) - Attributes.STEP_HEIGHT.value().getDefaultValue())')
+          text = text.replace('living.getAttributeValue(ForgeMod.ENTITY_GRAVITY.get())', 'living.getAttributeValue(Attributes.GRAVITY)')
+
+          old_tick = '''  static void onLivingTick(LivingTickEvent event) {\n    LivingEntity entity = event.getEntity();'''
+          new_tick = '''  static void onLivingTick(EntityTickEvent.Post event) {\n    if (!(event.getEntity() instanceof LivingEntity entity)) {\n      return;\n    }'''
+          if old_tick not in text:
+              raise SystemExit('Missing ModifierEvents legacy living tick handler')
+          text = text.replace(old_tick, new_tick, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify item display enum extension migration
+      - name: Verify event API migration
         run: |
-          grep -Fq 'ItemDisplayContext.valueOf("TCONSTRUCT_MELTER")' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java
-          grep -Fq 'ItemDisplayContext.valueOf("TCONSTRUCT_THROWN")' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java
-          grep -Fq '"name": "TCONSTRUCT_CASTING_TABLE"' src/main/resources/META-INF/enumextensions.json
-          grep -Fq '"parameters": [ -1, "tconstruct:casting_table", "FIXED" ]' src/main/resources/META-INF/enumextensions.json
-          grep -Fq 'enumExtensions="META-INF/enumextensions.json"' src/main/resources/META-INF/neoforge.mods.toml
-          test -z "$(grep -E 'ForgeRegistries|IForgeRegistry|RegisterEvent|ItemDisplayContext.create' src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java || true)"
+          test -z "$(grep -R 'Bus.FORGE' src/main/java || true)"
+          grep -Fq 'PlayerTickEvent.Pre event' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
+          grep -Fq 'net.neoforged.neoforge.client.settings.KeyConflictContext' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
+          grep -Fq 'TriState useBlock' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
+          grep -Fq 'TriState useItem = TriState.DEFAULT' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'MobEffectEvent.Applicable.Result.DO_NOT_APPLY' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
+          grep -Fq 'event.setCriticalHit(true)' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
+          grep -Fq 'event.setDamageMultiplier' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
+          grep -Fq 'EntityTickEvent.Post event' src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
+          test -z "$(grep -E 'net\.minecraftforge\.client\.settings|neoforge\.event\.TickEvent|net\.minecraftforge\.fml\.LogicalSide|net\.neoforged\.bus\.api\.Event\.Result|ForgeMod\.' \
+            src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java \
+            src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Item display enum extensions are already migrated.'
+            echo 'Event APIs are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/library/TinkerItemDisplays.java \
-            src/main/resources/META-INF/enumextensions.json \
-            src/main/resources/META-INF/neoforge.mods.toml
-          git commit -m 'Migrate item display contexts to NeoForge enum extensions'
+          git add src/main/java
+          git commit -m 'Migrate event APIs to NeoForge 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
