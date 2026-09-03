@@ -5,7 +5,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonSerializationContext;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
@@ -28,10 +29,15 @@ public class EmptyPotionTransfer extends EmptyFluidWithNBTTransfer {
 
   @Override
   protected FluidStack getFluid(ItemStack stack) {
-    if (PotionUtils.getPotion(stack) == Potions.WATER) {
+    PotionContents contents = stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY);
+    if (contents.is(Potions.WATER)) {
       return new FluidStack(Fluids.WATER, fluid.getAmount());
     }
-    return new FluidStack(fluid.get().getFluid(), fluid.getAmount(), stack.getTag());
+    FluidStack output = new FluidStack(fluid.get().getFluid(), fluid.getAmount());
+    if (contents != PotionContents.EMPTY) {
+      output.set(DataComponents.POTION_CONTENTS, contents);
+    }
+    return output;
   }
 
   @Override

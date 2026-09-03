@@ -549,7 +549,7 @@ public class JEIPlugin implements IModPlugin {
                                       BuiltInRegistries.POTION.holders().filter(holder -> {
                                         Potion potion = holder.get();
                                         return potion != Potions.EMPTY && potion != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID);
-                                      }).map(holder -> PotionFluidType.potionFluid(holder.key(), FluidType.BUCKET_VOLUME)).toList());
+                                      }).map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());
     }
     // remove variantless potion fluid
     removeFluid(removeFluids, TinkerFluids.potion.get());

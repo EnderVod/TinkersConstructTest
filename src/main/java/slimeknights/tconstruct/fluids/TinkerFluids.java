@@ -495,7 +495,7 @@ public final class TinkerFluids extends TinkerModule {
       Potion potion = holder.get();
       return potion != Potions.EMPTY && potion != Potions.WATER;
     }).forEachOrdered(holder ->
-      output.accept(PotionFluidType.potionBucket(holder.key())));
+      output.accept(PotionFluidType.potionBucket(holder)));
   }
 
   /** Adds all filled containers to the fluids tab. */

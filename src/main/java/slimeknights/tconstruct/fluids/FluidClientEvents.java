@@ -2,7 +2,8 @@ package slimeknights.tconstruct.fluids;
 
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ModelEvent.RegisterGeometryLoaders;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
@@ -36,7 +37,7 @@ public class FluidClientEvents extends ClientEventBase {
 
   @SubscribeEvent
   static void itemColors(final RegisterColorHandlersEvent.Item event) {
-    event.register((stack, index) -> index > 0 ? -1 : PotionUtils.getColor(stack), TinkerFluids.potion.asItem());
+    event.register((stack, index) -> index > 0 ? -1 : stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY).getColor(), TinkerFluids.potion.asItem());
   }
 
   @SubscribeEvent
