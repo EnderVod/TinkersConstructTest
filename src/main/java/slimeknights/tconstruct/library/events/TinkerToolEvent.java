@@ -2,6 +2,7 @@ package slimeknights.tconstruct.library.events;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.Setter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -24,6 +25,9 @@ import javax.annotation.Nullable;
 public abstract class TinkerToolEvent extends Event {
   private final ItemStack stack;
   private final IToolStackView tool;
+
+  /** Replacement for the removed Forge event result API. */
+  public enum Result { DEFAULT, ALLOW, DENY }
   public TinkerToolEvent(ItemStack stack) {
     this.stack = stack;
     this.tool = ToolStack.from(stack);
@@ -32,7 +36,6 @@ public abstract class TinkerToolEvent extends Event {
   /**
    * Event fired when a kama tries to harvest a crop. Set result to {@link Result#ALLOW} if you handled the harvest yourself. Set the result to {@link Result#DENY} if the block cannot be harvested.
    */
-  @HasResult
   @Getter
   public static class ToolHarvestEvent extends TinkerToolEvent {
     /** Item context, note this is the original context, so some information (such as position) may not be accurate */
@@ -41,6 +44,8 @@ public abstract class TinkerToolEvent extends Event {
     private final BlockState state;
     private final BlockPos pos;
     private final InteractionSource source;
+    @Getter @Setter
+    private Result result = Result.DEFAULT;
 
     public ToolHarvestEvent(IToolStackView tool, UseOnContext context, ServerLevel world, BlockState state, BlockPos pos, InteractionSource source) {
       super(getItem(context, source), tool);
@@ -84,13 +89,14 @@ public abstract class TinkerToolEvent extends Event {
   /**
    * Event fired when a kama or scythe tries to shear an entity
    */
-  @HasResult
   @Getter
   public static class ToolShearEvent extends TinkerToolEvent {
     private final Level world;
     private final Player player;
     private final Entity target;
     private final int fortune;
+    @Getter @Setter
+    private Result result = Result.DEFAULT;
     public ToolShearEvent(ItemStack stack, IToolStackView tool, Level world, Player player, Entity target, int fortune) {
       super(stack, tool);
       this.world = world;

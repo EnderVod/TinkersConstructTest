@@ -10,10 +10,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.common.IForgeShearable;
+import net.neoforged.neoforge.common.IShearable;
 import net.neoforged.neoforge.common.ItemAbility;
 import net.neoforged.neoforge.common.ItemAbilities;
-import net.neoforged.bus.api.Event.Result;
+import slimeknights.tconstruct.library.events.TinkerToolEvent.Result;
 import slimeknights.mantle.data.loadable.primitive.FloatLoadable;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.tconstruct.library.events.TinkerToolEvent.ToolShearEvent;
@@ -96,9 +96,9 @@ public record ShearsModule(float flatBonus, float perLevelBonus, float expandedB
       return result == Result.ALLOW;
     }
     // fallback to forge shearable
-    if (entity instanceof IForgeShearable target && target.isShearable(itemStack, world, entity.blockPosition())) {
+    if (entity instanceof IShearable target && target.isShearable(player, itemStack, world, entity.blockPosition())) {
       if (!world.isClientSide) {
-        target.onSheared(player, itemStack, world, entity.blockPosition(), fortune)
+        target.onSheared(player, itemStack, world, entity.blockPosition())
           .forEach(stack -> ModifierUtil.dropItem(entity, stack));
       }
       return true;
