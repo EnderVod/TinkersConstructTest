@@ -18,6 +18,7 @@ import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.fluid.FluidTankAnimated;
 import slimeknights.tconstruct.library.utils.NBTTags;
+import slimeknights.tconstruct.library.utils.TagUtil;
 import slimeknights.tconstruct.smeltery.TinkerSmeltery;
 import slimeknights.tconstruct.smeltery.block.component.SearedTankBlock.TankType;
 import slimeknights.tconstruct.smeltery.block.controller.ControllerBlock;
@@ -118,7 +119,7 @@ public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBloc
   @Override
   public void saveSynced(CompoundTag tag) {
     super.saveSynced(tag);
-    tag.put(NBTTags.TANK, tank.writeToNBT(new CompoundTag()));
+    tag.put(NBTTags.TANK, tank.writeToNBT(TagUtil.BUILTIN_LOOKUP, new CompoundTag()));
   }
 
   @Override
@@ -130,7 +131,7 @@ public class AlloyerBlockEntity extends NameableBlockEntity implements ITankBloc
   @Override
   public void load(CompoundTag nbt) {
     super.load(nbt);
-    tank.readFromNBT(nbt.getCompound(NBTTags.TANK));
+    tank.readFromNBT(TagUtil.BUILTIN_LOOKUP, nbt.getCompound(NBTTags.TANK));
     fuelModule.readFromTag(nbt);
   }
 }
