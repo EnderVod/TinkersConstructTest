@@ -47,7 +47,7 @@ jobs:
 
           anchor = '  public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =\n    INGREDIENT_TYPES.register(ToolHookIngredient.ID.getPath(), () -> new IngredientType<>(ToolHookIngredient.CODEC));\n'
           registration = '\n  /** Item sub-predicate matching Tinkers tool data in advancements and commands. */\n  public static final DeferredHolder<ItemSubPredicate.Type<?>, ItemSubPredicate.Type<ToolStackItemPredicate>> toolStackItemPredicateType =\n    ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath(), () -> new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC));\n'
-          if 'toolStackItemPredicateType = ITEM_SUB_PREDICATES.register' not in text:
+          if 'toolStackItemPredicateType' not in text:
               if anchor not in text:
                   raise SystemExit('Could not locate ingredient registration anchor')
               text = text.replace(anchor, anchor + registration, 1)
@@ -61,7 +61,8 @@ jobs:
       - name: Verify item sub-predicate migration
         run: |
           grep -q 'import net.minecraft.advancements.critereon.ItemSubPredicate;' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -q 'toolStackItemPredicateType = ITEM_SUB_PREDICATES.register' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'toolStackItemPredicateType' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -q 'ITEM_SUB_PREDICATES.register(ToolStackItemPredicate.ID.getPath()' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
           grep -q 'new ItemSubPredicate.Type<>(ToolStackItemPredicate.CODEC)' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
           test -z "$(grep 'ItemPredicate.register(ToolStackItemPredicate' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
 
