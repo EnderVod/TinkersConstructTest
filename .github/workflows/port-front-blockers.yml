@@ -30,31 +30,47 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate world growth and tool events
-        run: python3 .github/scripts/port-world-event.py
-
-      - name: Verify world and event migration
+      - name: Migrate recipe builder FinishedRecipe imports
         run: |
-          if grep -R "AbstractTreeGrower\|net.minecraftforge.common.PlantType\|net.minecraftforge.common.IPlantable\|IForgeShearable\|@HasResult\|bus.api.Event.Result" -n \
-            src/main/java/slimeknights/tconstruct/world \
-            src/main/java/slimeknights/tconstruct/library/events/TinkerToolEvent.java \
-            src/main/java/slimeknights/tconstruct/tools/modules/interaction/HarvestModule.java \
-            src/main/java/slimeknights/tconstruct/tools/modules/interaction/ShearsModule.java \
-            src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java; then
-            echo 'Found stale world/event APIs.'
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('src/main/java')
+          old = 'import net.minecraft.data.recipes.FinishedRecipe;'
+          new = 'import slimeknights.mantle.recipe.data.FinishedRecipe;'
+          changed = []
+
+          for path in root.rglob('*.java'):
+              text = path.read_text(encoding='utf-8')
+              if old in text:
+                  path.write_text(text.replace(old, new), encoding='utf-8')
+                  changed.append(str(path))
+
+          if not changed:
+              raise SystemExit('No legacy FinishedRecipe imports found; refusing empty migration')
+
+          print(f'Updated {len(changed)} Java files')
+          for path in changed:
+              print(path)
+          PY
+
+      - name: Verify FinishedRecipe bridge migration
+        run: |
+          if grep -R "import net.minecraft.data.recipes.FinishedRecipe;" -n src/main/java; then
+            echo 'Found stale vanilla FinishedRecipe imports.'
             exit 1
           fi
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'No world/event migration changes needed.'
+            echo 'No FinishedRecipe migration changes needed.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
-          git commit -m 'Migrate slime growth and tool event results'
+          git commit -m 'Use Mantle FinishedRecipe bridge'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
