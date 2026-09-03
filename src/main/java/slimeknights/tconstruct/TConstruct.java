@@ -138,6 +138,7 @@ public class TConstruct {
     // Drains, ducts, and chutes forward the capability exposed by their validated controller.
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.drain.get(), (io, side) -> io.getHandler(side));
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.duct.get(), (io, side) -> io.getHandler(side));
+    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.duct.get(), (duct, side) -> duct.getItemHandler());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.chute.get(), (io, side) -> io.getHandler(side));
 
     for (Item item : BuiltInRegistries.ITEM) {
