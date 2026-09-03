@@ -69,7 +69,7 @@ jobs:
       - name: Verify targeted migration
         shell: bash
         run: |
-          test -z "$(grep -E 'net\.minecraftforge\.common\.capabilities|AttachCapabilitiesEvent|TickEvent\.|net\.minecraftforge\.fml\.LogicalSide|ICapabilityProvider|LazyOptional' src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java || true)"
+          test -z "$(grep -E 'net\.minecraftforge\.common\.capabilities|AttachCapabilitiesEvent|net\.minecraftforge\.fml\.LogicalSide|ICapabilityProvider|LazyOptional' src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java || true)"
           grep -Fq 'PlayerTickEvent.Post' src/main/java/slimeknights/tconstruct/tools/logic/EquipmentChangeWatcher.java
           grep -Fq 'RenderGuiLayerEvent.Post' src/main/java/slimeknights/tconstruct/tools/client/ModifierClientEvents.java
           grep -Fq 'VanillaGuiLayers.HOTBAR' src/main/java/slimeknights/tconstruct/tools/client/ModifierClientEvents.java
