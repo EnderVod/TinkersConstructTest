@@ -9,7 +9,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -93,7 +95,19 @@ public class FaucetBlock extends Block implements EntityBlock {
 
   @SuppressWarnings("deprecation")
   @Override
-  public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {
+  protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {
+    if (player.isShiftKeyDown()) {
+      return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
+    }
+    if (world.getBlockEntity(pos) instanceof FaucetBlockEntity faucet) {
+      faucet.activate();
+    }
+    return ItemInteractionResult.SUCCESS;
+  }
+
+  @SuppressWarnings("deprecation")
+  @Override
+  protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
     if (player.isShiftKeyDown()) {
       return InteractionResult.PASS;
     }
