@@ -30,38 +30,100 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Migrate potion modifier color lookup
+      - name: Migrate 1.21 event and translation APIs
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java')
+          # Mob finalize-spawn event moved from a nested MobSpawnEvent type to a top-level event in NeoForge 1.21.1.
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.PotionUtils;\n', 'import net.minecraft.world.item.alchemy.PotionContents;\n', 1)
-          old = '''          Potion potion = BuiltInRegistries.POTION.get(id);\n          if (potion != Potions.EMPTY) {\n            quadConsumer.accept(MantleItemLayerModel.getQuadsForSprite(0xFF000000 | PotionUtils.getColor(potion), -1, spriteGetter.apply(texture), transforms, 0, pixels));\n          }'''
-          new = '''          Potion potion = BuiltInRegistries.POTION.get(id);\n          if (potion != null) {\n            PotionContents contents = new PotionContents(BuiltInRegistries.POTION.wrapAsHolder(potion));\n            if (!contents.is(Potions.EMPTY)) {\n              quadConsumer.accept(MantleItemLayerModel.getQuadsForSprite(0xFF000000 | contents.getColor(), -1, spriteGetter.apply(texture), transforms, 0, pixels));\n            }\n          }'''
+          text = text.replace(
+              'import net.neoforged.neoforge.event.entity.living.MobSpawnEvent.FinalizeSpawn;\n',
+              'import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;\n', 1)
+          text = text.replace(
+              'public static boolean apply(List<MobEquipment> replace, Mob mob, FinalizeSpawn event)',
+              'public static boolean apply(List<MobEquipment> replace, Mob mob, FinalizeSpawnEvent event)', 1)
+          old_finalize = '      mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), event.getSpawnType(), event.getSpawnData(), event.getSpawnTag());'
+          new_finalize = '      mob.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), event.getSpawnData());'
+          if old_finalize not in text:
+              raise SystemExit('Missing legacy MobEquipment finalizeSpawn call')
+          text = text.replace(old_finalize, new_finalize, 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'import net.neoforged.neoforge.event.entity.living.MobSpawnEvent.FinalizeSpawn;\n',
+              'import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;\n', 1)
+          text = text.replace('FinalizeSpawn.class, INSTANCE::finalizeSpawn', 'FinalizeSpawnEvent.class, INSTANCE::finalizeSpawn', 1)
+          text = text.replace('private void finalizeSpawn(FinalizeSpawn event)', 'private void finalizeSpawn(FinalizeSpawnEvent event)', 1)
+          path.write_text(text, encoding='utf-8')
+
+          # LivingTickEvent was removed; use the exact 1.21.1 post-entity-tick event and filter to living entities.
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;\n',
+              'import net.neoforged.neoforge.event.tick.EntityTickEvent;\n', 1)
+          old_handler = '''  private static void onLivingTick(LivingTickEvent event) {\n    LivingEntity entity = event.getEntity();'''
+          new_handler = '''  private static void onLivingTick(EntityTickEvent.Post event) {\n    if (!(event.getEntity() instanceof LivingEntity entity)) {\n      return;\n    }'''
+          if old_handler not in text:
+              raise SystemExit('Missing legacy SlimeBounceHandler tick handler')
+          text = text.replace(old_handler, new_handler, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # ForgeI18n no longer exists. Language is common-side and exposes the same translated-key presence semantics we need.
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/Util.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.ForgeI18n;\n', 'import net.minecraft.locale.Language;\n', 1)
+          old = '    return !ForgeI18n.getPattern(key).equals(key);'
+          new = '    return Language.getInstance().has(key);'
           if old not in text:
-              raise SystemExit('Missing legacy PotionUtils color block')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              raise SystemExit('Missing legacy Util ForgeI18n translation check')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraftforge.common.ForgeI18n;\n', 'import net.minecraft.locale.Language;\n', 1)
+          old = '''    String langKey = "domain." + domain + ".display_name";\n    String translated = ForgeI18n.getPattern(langKey);\n    if (!translated.equals(langKey)) {\n      return translated;\n    }'''
+          new = '''    String langKey = "domain." + domain + ".display_name";\n    Language language = Language.getInstance();\n    if (language.has(langKey)) {\n      return language.getOrDefault(langKey);\n    }'''
+          if old not in text:
+              raise SystemExit('Missing legacy DomainDisplayName ForgeI18n block')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify potion modifier migration
+      - name: Verify 1.21 event and translation migration
         run: |
-          grep -q 'import net.minecraft.world.item.alchemy.PotionContents;' src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java
-          grep -q 'new PotionContents(BuiltInRegistries.POTION.wrapAsHolder(potion))' src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java
-          grep -q 'contents.getColor()' src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java
-          test -z "$(grep 'PotionUtils' src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java || true)"
+          grep -q 'FinalizeSpawnEvent' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
+          grep -q 'mob.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), event.getSpawnData())' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
+          grep -q 'FinalizeSpawnEvent.class' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
+          grep -q 'EntityTickEvent.Post event' src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java
+          grep -q 'Language.getInstance().has(key)' src/main/java/slimeknights/tconstruct/library/utils/Util.java
+          grep -q 'language.getOrDefault(langKey)' src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java
+          test -z "$(grep -R 'MobSpawnEvent.FinalizeSpawn\|LivingTickEvent\|ForgeI18n' \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment \
+            src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java \
+            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
+            src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java || true)"
 
       - name: Commit targeted migration
         run: |
           if git diff --quiet; then
-            echo 'Potion modifier color lookup is already migrated.'
+            echo 'Event and translation APIs are already migrated.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java
-          git commit -m 'Migrate potion modifier color to 1.21 contents'
+          git add \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java \
+            src/main/java/slimeknights/tconstruct/library/utils/SlimeBounceHandler.java \
+            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
+            src/main/java/slimeknights/tconstruct/library/utils/DomainDisplayName.java
+          git commit -m 'Migrate 1.21 spawn tick and translation APIs'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
