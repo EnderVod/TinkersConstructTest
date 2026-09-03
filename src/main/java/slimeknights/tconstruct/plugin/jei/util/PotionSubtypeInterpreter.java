@@ -5,7 +5,6 @@ import mezz.jei.api.ingredients.subtypes.UidContext;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.item.alchemy.Potion;
-import net.minecraft.world.item.alchemy.PotionUtils;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -21,13 +20,6 @@ public interface PotionSubtypeInterpreter<T> extends IIngredientSubtypeInterpret
     if (tag == null) {
       return IIngredientSubtypeInterpreter.NONE;
     }
-    Potion potionType = PotionUtils.getPotion(tag);
-    String potionTypeString = potionType.getName("");
-    StringBuilder stringBuilder = new StringBuilder(potionTypeString);
-    List<MobEffectInstance> effects = PotionUtils.getAllEffects(tag);
-    for (MobEffectInstance effect : effects) {
-      stringBuilder.append(";").append(effect);
-    }
-    return stringBuilder.toString();
+    return tag.toString();
   }
 }

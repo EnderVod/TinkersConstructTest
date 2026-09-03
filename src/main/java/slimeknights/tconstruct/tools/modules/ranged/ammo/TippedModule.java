@@ -15,7 +15,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.alchemy.Potion;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.phys.EntityHitResult;
 import slimeknights.mantle.client.TooltipKey;
@@ -124,8 +124,7 @@ public enum TippedModule implements ModifierModule, ProjectileLaunchModifierHook
       if (id != null) {
         Potion potion = BuiltInRegistries.POTION.get(id);
         if (potion != Potions.EMPTY) {
-          PotionUtils.getColor(potion);
-          PotionUtils.addPotionTooltip(potion.getEffects(), tooltip, 1f / getDivisor(modifier));
+          PotionContents.addPotionTooltip(potion.getEffects(), tooltip::add, 1f / getDivisor(modifier), 20.0f);
         }
       }
     }
@@ -144,7 +143,7 @@ public enum TippedModule implements ModifierModule, ProjectileLaunchModifierHook
           return Component.translatable(FORMAT,
             RomanNumeralHelper.getNumeral(entry.getLevel()),
             Component.translatable(potion.getName("item.minecraft.potion.effect."))
-          ).withStyle(style -> style.withColor(PotionUtils.getColor(potion)));
+          ).withStyle(style -> style.withColor(PotionContents.getColor(potion.getEffects())));
         }
       }
     }

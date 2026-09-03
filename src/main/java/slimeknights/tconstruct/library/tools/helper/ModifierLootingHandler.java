@@ -8,7 +8,6 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.living.LootingLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent;
 import net.neoforged.bus.api.EventPriority;
 import slimeknights.tconstruct.common.TinkerDamageTypes;
@@ -46,7 +45,6 @@ public class ModifierLootingHandler {
     }
     init = true;
     // we overwrite looting values from vanilla in a couple cases, but mod effects that globally boost looting should still boost us
-    NeoForge.EVENT_BUS.addListener(EventPriority.HIGH, ModifierLootingHandler::onLooting);
     NeoForge.EVENT_BUS.addListener(ModifierLootingHandler::onLeaveServer);
   }
 
@@ -68,61 +66,7 @@ public class ModifierLootingHandler {
     return entity != null ? LOOTING_OFFHAND.getOrDefault(entity.getUUID(), EquipmentSlot.MAINHAND) : EquipmentSlot.MAINHAND;
   }
 
-  /** Applies the looting bonus for modifiers */
-  private static void onLooting(LootingLevelEvent event) {
-    // must be an attacker with our tool
-    DamageSource damageSource = event.getDamageSource();
-    if (damageSource == null) {
-      return;
-    }
-    LivingEntity target = event.getEntity();
-
-    // bleeding kills use the level of the effect for looting
-    if (damageSource.is(TinkerDamageTypes.BLEEDING)) {
-      event.setLootingLevel(Math.max(0, TinkerEffect.getAmplifier(target, TinkerEffects.bleeding.get())));
-      return;
-    }
-
-    // otherwise, use the proper tool
-    Entity source = damageSource.getEntity();
-    if (source instanceof LivingEntity holder) {
-      Entity direct = damageSource.getDirectEntity();
-      int level = event.getLootingLevel();
-
-      // determine who is in charge of the looting
-      LootingContext context;
-      IToolStackView tool = null;
-      if (direct instanceof Projectile) {
-        // need to build a context from the relevant capabilities to use the modifier
-        ModifierNBT modifiers = EntityModifierCapability.getOrEmpty(direct);
-        context = new LootingContext(holder, target, damageSource, null);
-        // no modifiers means its not a projectile we fired, so just defer to dumb vanilla behavior of whatever looting
-        // since we don't set the enchantment on our tools, our looting modifiers won't set anything here anyways
-        if (!modifiers.isEmpty()) {
-          ModDataNBT persistentData = PersistentDataCapability.getOrEmpty(direct);
-          level = LootingModifierHook.getLooting(new DummyToolStack(Items.AIR, modifiers, persistentData), context, 0);
-        }
-      } else {
-        // not an arrow? means the held tool is to blame
-        EquipmentSlot slotType = getLootingSlot(holder);
-        context = new LootingContext(holder, target, damageSource, slotType);
-        ItemStack held = holder.getItemBySlot(slotType);
-
-        // if its modifiable, let it increase the level
-        if (held.is(TinkerTags.Items.MODIFIABLE)) {
-          tool = ToolStack.from(held);
-          level = LootingModifierHook.getLooting(tool, context, level);
-        } else if (slotType != EquipmentSlot.MAINHAND) {
-          // if it's not modifiable, yet we have a lot marked to blame for looting, ignore the event value
-          level = 0;
-        }
-      }
-      // boost looting with armor regardless, hopefully you did not switch your pants mid arrow firing
-      level = ArmorLootingModifierHook.getLooting(tool, context, level);
-      // we allow the hook to return negatives to cancel out looting, so ensure its at least 0
-      event.setLootingLevel(Math.max(level, 0));
-    }
-  }
+  // TODO 1.21 alpha: port Tinkers-specific looting to the new loot-context/enchantment pipeline.
 
   /** Called when a player leaves the server to clear the face */
   private static void onLeaveServer(PlayerLoggedOutEvent event) {

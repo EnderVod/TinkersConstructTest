@@ -1,10 +1,12 @@
 package slimeknights.tconstruct.library.modifiers.fluid.entity;
 
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import slimeknights.mantle.data.loadable.primitive.FloatLoadable;
@@ -14,6 +16,7 @@ import slimeknights.tconstruct.library.modifiers.fluid.FluidEffect;
 import slimeknights.tconstruct.library.modifiers.fluid.FluidEffectContext;
 import slimeknights.tconstruct.library.recipe.TagPredicate;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Spilling effect that pulls the potion from a NBT potion fluid and applies it */
@@ -31,9 +34,15 @@ public record PotionFluidEffect(float scale, TagPredicate predicate) implements 
   @Override
   public float apply(FluidStack fluid, EffectLevel level, FluidEffectContext.Entity context, FluidAction action) {
     LivingEntity target = context.getLivingTarget();
-    // must match the tag predicate
-    if (target != null && predicate.test(fluid.getTag())) {
-      List<MobEffectInstance> effects = PotionUtils.getPotion(fluid.getTag()).getEffects();
+    // 1.21 fluid stacks store potion data in components; synthesize the legacy base-potion tag for existing predicates.
+    PotionContents contents = fluid.get(DataComponents.POTION_CONTENTS);
+    CompoundTag potionTag = new CompoundTag();
+    if (contents != null) {
+      contents.potion().flatMap(holder -> holder.unwrapKey()).ifPresent(key -> potionTag.putString("Potion", key.location().toString()));
+    }
+    if (target != null && contents != null && predicate.test(potionTag)) {
+      List<MobEffectInstance> effects = new ArrayList<>();
+      contents.forEachEffect(effects::add);
       if (!effects.isEmpty()) {
         LivingEntity attacker = context.getEntity();
         Entity directSource = context.getDirectSource();
