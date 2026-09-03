@@ -74,7 +74,7 @@ public class SmelteryClientEvents extends ClientEventBase {
 
   @SubscribeEvent
   static void registerModelLoaders(RegisterGeometryLoaders event) {
-    event.register("tank", TankModel.LOADER);
-    event.register("fluid_texture", FluidTextureModel.LOADER);
+    event.register(TConstruct.getResource("tank"), TankModel.LOADER);
+    event.register(TConstruct.getResource("fluid_texture"), FluidTextureModel.LOADER);
   }
 }

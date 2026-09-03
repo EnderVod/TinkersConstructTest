@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -84,9 +85,19 @@ public class CastingTankBlock extends InventoryBlock implements ITankBlock, Enti
 
   @Deprecated
   @Override
-  public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+  protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
     if (world.getBlockEntity(pos) instanceof CastingTankBlockEntity tank) {
       tank.interact(player, hand, hit.getLocation().y - pos.getY() < 0.6875);
+      return ItemInteractionResult.SUCCESS;
+    }
+    return ItemInteractionResult.FAIL;
+  }
+
+  @Deprecated
+  @Override
+  protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+    if (world.getBlockEntity(pos) instanceof CastingTankBlockEntity tank) {
+      tank.interact(player, InteractionHand.MAIN_HAND, hit.getLocation().y - pos.getY() < 0.6875);
       return InteractionResult.SUCCESS;
     }
     return InteractionResult.FAIL;

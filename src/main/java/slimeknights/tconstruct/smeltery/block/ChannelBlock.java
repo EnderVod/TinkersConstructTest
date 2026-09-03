@@ -6,6 +6,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -292,18 +293,13 @@ public class ChannelBlock extends Block implements EntityBlock {
 
   @SuppressWarnings("deprecation")
   @Override
-  public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+  protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
     Direction hitFace = hit.getDirection();
     if (world.getBlockState(pos.relative(hitFace)).canBeReplaced()) {
-      // if the player is holding a channel, skip unless we clicked the top
-      // they can shift click to place one on the top
-      ItemStack stack = player.getItemInHand(hand);
       if (stack.getItem() == this.asItem()) {
-        return InteractionResult.PASS;
+        return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
       }
-      // if they are holding a gauge, set the side to in to make it easier to place a gauge on it
       if (hitFace != Direction.DOWN && stack.getItem() instanceof BlockItem blockItem && RegistryHelper.contains(MantleTags.Blocks.ATTACHED_GAUGES, blockItem.getBlock())) {
-        // for sides, need to toggle the property on
         if (hitFace != Direction.UP) {
           EnumProperty<ChannelConnection> prop = DIRECTION_MAP.get(hitFace);
           ChannelConnection connection = state.getValue(prop);
@@ -313,20 +309,29 @@ public class ChannelBlock extends Block implements EntityBlock {
             world.invalidateCapabilities(pos);
           }
         }
-        // pass to let them place it
-        return InteractionResult.PASS;
+        return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
       }
     }
 
-    // default to using the clicked side, though null (is that valid?) and up act as down
+    return interactWithChannel(state, world, pos, player, hit) == InteractionResult.SUCCESS
+      ? ItemInteractionResult.SUCCESS
+      : ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
+  }
+
+  @SuppressWarnings("deprecation")
+  @Override
+  protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+    return interactWithChannel(state, world, pos, player, hit);
+  }
+
+  private InteractionResult interactWithChannel(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+    Direction hitFace = hit.getDirection();
     Direction side = hitFace == Direction.UP ? Direction.DOWN : hitFace;
     if (player.isShiftKeyDown() && side != Direction.DOWN) {
       side = side.getOpposite();
     }
 
-    // try each of the sides, if clicked use that
     Vec3 hitVec = hit.getLocation().subtract(pos.getX(), pos.getY(), pos.getZ());
-    // map X and Z coords to a direction
     if (hitVec.z() < 0.25f) {
       side = Direction.NORTH;
     } else if (hitVec.z() > 0.75f) {
@@ -337,10 +342,7 @@ public class ChannelBlock extends Block implements EntityBlock {
       side = Direction.EAST;
     }
 
-    // toggle the side clicked
     BlockState newState = interactWithSide(state, world, pos, player, side);
-
-    // if we have changes, apply them and return success
     if (newState != null) {
       world.setBlockAndUpdate(pos, newState);
       if (!world.isClientSide && world.getBlockEntity(pos) instanceof ChannelBlockEntity te) {
@@ -348,7 +350,6 @@ public class ChannelBlock extends Block implements EntityBlock {
       }
       return InteractionResult.SUCCESS;
     }
-
     return InteractionResult.PASS;
   }
 
