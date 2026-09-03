@@ -1,23 +1,26 @@
 package slimeknights.tconstruct.library.json.predicate.tool;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import lombok.RequiredArgsConstructor;
-import net.minecraft.advancements.critereon.ItemPredicate;
+import net.minecraft.advancements.critereon.ItemSubPredicate;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import slimeknights.mantle.data.predicate.IJsonPredicate;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags.Items;
+import slimeknights.tconstruct.library.json.TinkerLoadables;
 import slimeknights.tconstruct.library.tools.nbt.IToolContext;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 import slimeknights.tconstruct.library.tools.nbt.ToolStack;
-import slimeknights.tconstruct.library.utils.JsonUtils;
 
-/** Variant of ItemPredicate for matching Tinker tools using {@link ToolStackItemPredicate} */
+/** 1.21 item sub-predicate for matching Tinkers tools using {@link ToolStackPredicate}. */
 @RequiredArgsConstructor(staticName = "ofTool")
-public class ToolStackItemPredicate extends ItemPredicate {
+public class ToolStackItemPredicate implements ItemSubPredicate {
   public static final ResourceLocation ID = TConstruct.getResource("tool_stack");
+  public static final Codec<ToolStackItemPredicate> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    TinkerLoadables.codec(ToolStackPredicate.LOADER, "predicate").fieldOf("predicate").forGetter(predicate -> predicate.predicate)
+  ).apply(instance, ToolStackItemPredicate::new));
 
   private final IJsonPredicate<IToolStackView> predicate;
 
@@ -27,19 +30,7 @@ public class ToolStackItemPredicate extends ItemPredicate {
 
   @Override
   public boolean matches(ItemStack stack) {
-    // tag check is important to prevent accidently modifying the NBT of non-tools
+    // tag check is important to prevent accidentally creating tool data on non-tools
     return stack.is(Items.MODIFIABLE) && predicate.matches(ToolStack.from(stack));
-  }
-
-  @Override
-  public JsonElement serializeToJson() {
-    JsonObject json = JsonUtils.withType(ID);
-    json.add("predicate", ToolStackPredicate.LOADER.serialize(predicate));
-    return json;
-  }
-
-  /** Deserializes the tool predicate from JSON */
-  public static ToolStackItemPredicate deserialize(JsonObject json) {
-    return new ToolStackItemPredicate(ToolStackPredicate.LOADER.getIfPresent(json, "predicate"));
   }
 }
