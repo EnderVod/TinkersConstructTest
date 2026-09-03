@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.common.CommonHooks;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
-import net.neoforged.bus.api.Event.Result;
+import net.neoforged.neoforge.common.util.TriState;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import slimeknights.mantle.data.loadable.record.SingletonLoader;
@@ -100,8 +100,8 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
       }
 
       // try the event
-      Result useItem = Result.DEFAULT;
-      Result useBlock = Result.DEFAULT;
+      TriState useItem = TriState.DEFAULT;
+      TriState useBlock = TriState.DEFAULT;
       if (player != null) {
         PlayerInteractEvent.RightClickBlock event = CommonHooks.onRightClickBlock(player, hand, pos, hitResult);
         if (event.isCanceled()) {
@@ -121,7 +121,7 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
 
       // use the item
       UseOnContext useContext = new UseOnContext(world, player, hand, heldItem, hitResult);
-      if (useItem != Result.DENY && !heldItem.isEmpty()) {
+      if (useItem != TriState.FALSE && !heldItem.isEmpty()) {
         InteractionResult result = heldItem.onItemUseFirst(useContext);
         if (result != InteractionResult.PASS) {
           if (result.consumesAction()) {
@@ -137,7 +137,7 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
 
       // click the block
       ItemStack original = heldItem.copy();
-      if (player != null && (useBlock == Result.ALLOW || (useItem == Result.DEFAULT && !skipBlock))) {
+      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
         InteractionResult result = state.use(world, player, hand, hitResult);
         if (result.consumesAction()) {
           if (player instanceof ServerPlayer serverPlayer) {
@@ -149,7 +149,7 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
       }
 
       // post block item usage
-      if (useItem == Result.ALLOW || (useItem == Result.DEFAULT && !heldItem.isEmpty() && (player == null || !player.getCooldowns().isOnCooldown(heldItem.getItem())))) {
+      if (useItem == TriState.TRUE || (useItem == TriState.DEFAULT && !heldItem.isEmpty() && (player == null || !player.getCooldowns().isOnCooldown(heldItem.getItem())))) {
         InteractionResult result;
         if (player != null && player.isCreative()) {
           int oldCount = heldItem.getCount();

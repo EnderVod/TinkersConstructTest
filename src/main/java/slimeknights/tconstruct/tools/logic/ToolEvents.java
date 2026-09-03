@@ -93,7 +93,7 @@ import java.util.Objects;
 /**
  * Event subscriber for tool events
  */
-@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.FORGE)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.GAME)
 public class ToolEvents {
   @SuppressWarnings("removal")
   @SubscribeEvent

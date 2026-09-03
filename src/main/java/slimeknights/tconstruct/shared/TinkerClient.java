@@ -66,7 +66,7 @@ import static slimeknights.tconstruct.TConstruct.getResource;
 /**
  * This class should only be referenced on the client side
  */
-@EventBusSubscriber(modid = TConstruct.MOD_ID, value = Dist.CLIENT, bus = Bus.FORGE)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, value = Dist.CLIENT, bus = Bus.GAME)
 public class TinkerClient {
   /**
    * Called by TConstruct to handle any client side logic that needs to run during the constructor

@@ -60,7 +60,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Modifier event hooks that run client side */
-@EventBusSubscriber(modid = TConstruct.MOD_ID, value = Dist.CLIENT, bus = Bus.FORGE)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, value = Dist.CLIENT, bus = Bus.GAME)
 public class ModifierClientEvents {
   @SubscribeEvent
   static void onTooltipEvent(ItemTooltipEvent event) {

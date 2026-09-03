@@ -24,12 +24,10 @@ import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
-import net.minecraftforge.client.settings.KeyConflictContext;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.TickEvent.Phase;
-import net.neoforged.neoforge.event.TickEvent.PlayerTickEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.EventBusSubscriber.Bus;
@@ -300,18 +298,19 @@ public class ToolClientEvents extends ClientEventBase {
   private static boolean wasLeggingsInteracting = false;
 
   /** Called on player tick to handle keybinding presses */
-  private static void handleKeyBindings(PlayerTickEvent event) {
+  private static void handleKeyBindings(PlayerTickEvent.Pre event) {
     Minecraft minecraft = Minecraft.getInstance();
-    if (minecraft.player != null && minecraft.player == event.player && event.phase == Phase.START && event.side == LogicalSide.CLIENT && !minecraft.player.isSpectator()) {
+    Player player = event.getEntity();
+    if (minecraft.player != null && minecraft.player == player && player.level().isClientSide() && !player.isSpectator()) {
 
       // jumping in mid air for double jump
       // ensure we pressed the key since the last tick, holding should not use all your jumps at once
       boolean isJumping = minecraft.options.keyJump.isDown();
       if (!wasJumping && isJumping) {
-        if (TinkerEffects.antigravity.get().antigravityJump(event.player)) {
+        if (TinkerEffects.antigravity.get().antigravityJump(player)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.ANTIGRAVITY_JUMP);
         }
-        else if (DoubleJumpHandler.extraJump(event.player)) {
+        else if (DoubleJumpHandler.extraJump(player)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.DOUBLE_JUMP);
         }
       }
@@ -321,12 +320,12 @@ public class ToolClientEvents extends ClientEventBase {
       boolean isHelmetInteracting = HELMET_INTERACT.isDown();
       if (!wasHelmetInteracting && isHelmetInteracting) {
         TooltipKey key = SafeClientAccess.getTooltipKey();
-        if (InteractionHandler.startArmorInteract(event.player, EquipmentSlot.HEAD, key)) {
+        if (InteractionHandler.startArmorInteract(player, EquipmentSlot.HEAD, key)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.getStartHelmetInteract(key));
         }
       }
       if (wasHelmetInteracting && !isHelmetInteracting) {
-        if (InteractionHandler.stopArmorInteract(event.player, EquipmentSlot.HEAD)) {
+        if (InteractionHandler.stopArmorInteract(player, EquipmentSlot.HEAD)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.STOP_HELMET_INTERACT);
         }
       }
@@ -335,12 +334,12 @@ public class ToolClientEvents extends ClientEventBase {
       boolean isLeggingsInteract = LEGGINGS_INTERACT.isDown();
       if (!wasLeggingsInteracting && isLeggingsInteract) {
         TooltipKey key = SafeClientAccess.getTooltipKey();
-        if (InteractionHandler.startArmorInteract(event.player, EquipmentSlot.LEGS, key)) {
+        if (InteractionHandler.startArmorInteract(player, EquipmentSlot.LEGS, key)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.getStartLeggingsInteract(key));
         }
       }
       if (wasLeggingsInteracting && !isLeggingsInteract) {
-        if (InteractionHandler.stopArmorInteract(event.player, EquipmentSlot.LEGS)) {
+        if (InteractionHandler.stopArmorInteract(player, EquipmentSlot.LEGS)) {
           TinkerNetwork.getInstance().sendToServer(TinkerControlPacket.STOP_LEGGINGS_INTERACT);
         }
       }

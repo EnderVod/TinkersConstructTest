@@ -8,7 +8,7 @@ import slimeknights.tconstruct.TConstruct;
 
 /** Common fluid gameplay events. Item fluid capabilities are registered on the mod bus in TinkerFluids. */
 @SuppressWarnings("unused")
-@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.FORGE)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.GAME)
 public class FluidEvents {
   @SubscribeEvent
   static void onFurnaceFuel(FurnaceFuelBurnTimeEvent event) {

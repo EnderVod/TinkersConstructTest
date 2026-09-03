@@ -20,6 +20,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -35,7 +36,6 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.HitResult.Type;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.ForgeMod;
 import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.event.entity.EntityTeleportEvent;
 import net.neoforged.neoforge.event.entity.ProjectileImpactEvent;
@@ -43,7 +43,7 @@ import net.neoforged.neoforge.event.entity.ProjectileImpactEvent.ImpactResult;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingJumpEvent;
-import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.event.entity.living.LivingExperienceDropEvent;
 import net.neoforged.neoforge.event.entity.living.LivingFallEvent;
 import net.neoforged.neoforge.event.entity.living.LivingGetProjectileEvent;
@@ -51,7 +51,6 @@ import net.neoforged.neoforge.event.entity.living.LivingKnockBackEvent;
 import net.neoforged.neoforge.event.entity.living.MobEffectEvent;
 import net.neoforged.neoforge.event.entity.player.CriticalHitEvent;
 import net.neoforged.neoforge.event.level.BlockEvent.BreakEvent;
-import net.neoforged.bus.api.Event.Result;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -95,10 +94,9 @@ import slimeknights.tconstruct.tools.modifiers.effect.MagneticEffect;
 import slimeknights.tconstruct.tools.modules.ranged.RestrictAngleModule;
 
 import java.util.List;
-import java.util.Optional;
 
 /** Events to implement modifier specific behaviors, such as those defined by {@link TinkerDataKeys}. General hooks will typically be in {@link ToolEvents} */
-@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.FORGE)
+@EventBusSubscriber(modid = TConstruct.MOD_ID, bus = Bus.GAME)
 public class ModifierEvents {
   /** Multiplier for experience drops from events */
   private static final TinkerDataKey<Float> PROJECTILE_EXPERIENCE = TConstruct.createKey("projectile_experience");
@@ -114,20 +112,17 @@ public class ModifierEvents {
   @SubscribeEvent
   static void onKnockback(LivingKnockBackEvent event) {
     LivingEntity entity = event.getEntity();
-    Optional<TinkerDataCapability.Holder> dataCap = entity.getCapability(TinkerDataCapability.CAPABILITY).resolve();
+    TinkerDataCapability.Holder data = TinkerDataCapability.getData(entity);
     double knockback = entity.getAttributeValue(TinkerAttributes.KNOCKBACK_MULTIPLIER.get())
-                     + dataCap.map(data -> data.get(TinkerDataKeys.KNOCKBACK)).orElse(0f);
+                     + data.get(TinkerDataKeys.KNOCKBACK, 0f);
     if (knockback != 1) {
       event.setStrength((float) (event.getStrength() * knockback));
     }
     // handle crystalstrike
-    dataCap.ifPresent(data -> {
-      // apply crystalbound bonus
-      int crystalbound = data.get(TinkerDataKeys.CRYSTALSTRIKE, 0);
-      if (crystalbound > 0) {
-        RestrictAngleModule.onKnockback(event, crystalbound);
-      }
-    });
+    int crystalbound = data.get(TinkerDataKeys.CRYSTALSTRIKE, 0);
+    if (crystalbound > 0) {
+      RestrictAngleModule.onKnockback(event, crystalbound);
+    }
   }
 
   /** Reduce fall distance for fall damage */
@@ -161,8 +156,8 @@ public class ModifierEvents {
       if (multiset != null) {
         // only grant immunity if the amount is high enough
         MobEffectInstance effectInstance = event.getEffectInstance();
-        if (multiset.count(effectInstance.getEffect()) > effectInstance.getAmplifier()) {
-          event.setResult(Result.DENY);
+        if (multiset.count(effectInstance.getEffect().value()) > effectInstance.getAmplifier()) {
+          event.setResult(MobEffectEvent.Applicable.Result.DO_NOT_APPLY);
         }
       }
     };
@@ -284,27 +279,19 @@ public class ModifierEvents {
   @SuppressWarnings("removal")
   @SubscribeEvent
   static void onCritical(CriticalHitEvent event) {
-    if (event.getResult() != Result.DENY) {
-      // force critical if not already critical and in the air
-      LivingEntity living = event.getEntity();
+    LivingEntity living = event.getEntity();
 
-      // critical boost is defined where the base value is 150%, setting smaller amounts can reduce the critical damage
-      // this event however is defined in terms of adding or subtracting critical, so just treat it as additive
-      Attribute attribute = TinkerAttributes.CRITICAL_DAMAGE.get();
-      double criticalBoost = living.getAttributeValue(attribute) - attribute.getDefaultValue() + ArmorStatModule.getStat(living, TinkerDataKeys.CRITICAL_DAMAGE);
-      if (criticalBoost > 0) {
-        // make it critical if we meet our simpler conditions, note this does not boost attack damage
-        boolean isCritical = event.isVanillaCritical() || event.getResult() == Result.ALLOW;
-        if (!isCritical && TinkerPredicate.AIRBORNE.matches(living)) {
-          isCritical = true;
-          event.setResult(Result.ALLOW);
-        }
-
-        // if we either were or became critical, time to boost
-        if (isCritical) {
-          // adds +5% critical hit per level
-          event.setDamageModifier((float) (event.getDamageModifier() + criticalBoost));
-        }
+    // critical boost is defined where the base value is 150%; the 1.21 event directly exposes critical state and multiplier.
+    Attribute attribute = TinkerAttributes.CRITICAL_DAMAGE.get();
+    double criticalBoost = living.getAttributeValue(attribute) - attribute.getDefaultValue() + ArmorStatModule.getStat(living, TinkerDataKeys.CRITICAL_DAMAGE);
+    if (criticalBoost > 0) {
+      boolean isCritical = event.isCriticalHit();
+      if (!isCritical && TinkerPredicate.AIRBORNE.matches(living)) {
+        isCritical = true;
+        event.setCriticalHit(true);
+      }
+      if (isCritical) {
+        event.setDamageMultiplier((float) (event.getDamageMultiplier() + criticalBoost));
       }
     }
   }
@@ -315,7 +302,7 @@ public class ModifierEvents {
     MobEffectInstance newEffect = event.getEffectInstance();
     if (!newEffect.isInfiniteDuration() && !newEffect.getCurativeItems().isEmpty()) {
       // use two different stats based on whether the effect is beneficial
-      boolean beneficial = newEffect.getEffect().isBeneficial();
+      boolean beneficial = newEffect.getEffect().value().isBeneficial();
       LivingEntity entity = event.getEntity();
       double multiplier = entity.getAttributeValue(beneficial ? TinkerAttributes.GOOD_EFFECT_DURATION.get() : TinkerAttributes.BAD_EFFECT_DURATION.get())
                         + ArmorStatModule.getStat(entity, beneficial ? TinkerDataKeys.GOOD_EFFECT_DURATION : TinkerDataKeys.BAD_EFFECT_DURATION);
@@ -331,7 +318,7 @@ public class ModifierEvents {
   static void bounceOnFall(LivingFallEvent event) {
     LivingEntity living = event.getEntity();
     // using fall distance as the event distance could be reduced by jump boost
-    if (living == null || (living.fallDistance < 3 && living.getDeltaMovement().y > -0.3) || living.fallDistance <= 0.5f + living.getAttributeValue(ForgeMod.STEP_HEIGHT_ADDITION.get())) {
+    if (living == null || (living.fallDistance < 3 && living.getDeltaMovement().y > -0.3) || living.fallDistance <= 0.5f + (living.getAttributeValue(Attributes.STEP_HEIGHT) - Attributes.STEP_HEIGHT.value().getDefaultValue())) {
       return;
     }
     // can the entity bounce?
@@ -351,7 +338,7 @@ public class ModifierEvents {
     Vec3 motion = living.getDeltaMovement();
     if (living instanceof ServerPlayer) {
       // velocity is lost on server players, but we dont have to defer the bounce
-      double gravity = living.getAttributeValue(ForgeMod.ENTITY_GRAVITY.get());
+      double gravity = living.getAttributeValue(Attributes.GRAVITY);
       double time = Math.sqrt(living.fallDistance / gravity);
       double velocity = gravity * time;
       living.setDeltaMovement(motion.x / 0.975f, velocity, motion.z / 0.975f);
@@ -582,8 +569,10 @@ public class ModifierEvents {
 
   /** Called to perform the magnet for armor */
   @SubscribeEvent
-  static void onLivingTick(LivingTickEvent event) {
-    LivingEntity entity = event.getEntity();
+  static void onLivingTick(EntityTickEvent.Post event) {
+    if (!(event.getEntity() instanceof LivingEntity entity)) {
+      return;
+    }
     if (!entity.isSpectator() && (entity.tickCount & 1) == 0) {
       int level = ArmorLevelModule.getLevel(entity, TinkerDataKeys.MAGNET);
       if (level > 0) {
