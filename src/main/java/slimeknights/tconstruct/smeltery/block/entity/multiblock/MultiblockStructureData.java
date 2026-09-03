@@ -74,7 +74,7 @@ public class MultiblockStructureData {
     innerX = maxInside.getX() - minInside.getX() + 1;
     innerY = maxInside.getY() - minInside.getY() + 1;
     innerZ = maxInside.getZ() - minInside.getZ() + 1;
-    bounds = new AABB(minInside, maxInside.offset(1, 1, 1));
+    bounds = AABB.encapsulatingFullBlocks(minInside, maxInside);
   }
 
   /**
@@ -207,7 +207,6 @@ public class MultiblockStructureData {
 
     Level world = master.getLevel();
     assert world != null;
-
 
     // assign master to each servant
     forEachContained(pos -> {
