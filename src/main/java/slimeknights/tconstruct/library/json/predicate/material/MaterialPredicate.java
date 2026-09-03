@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.library.json.predicate.material;
 
+import com.mojang.serialization.Codec;
 import net.minecraft.tags.TagKey;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.data.loadable.record.SingletonLoader;
@@ -22,6 +23,10 @@ public interface MaterialPredicate extends IJsonPredicate<MaterialVariantId> {
   MaterialPredicate NONE = simple(material -> false);
   /** Loader for material predicates */
   TagPredicateRegistry<IMaterial,MaterialVariantId> LOADER = new TagPredicateRegistry<>("Material Predicate", ANY, NONE, TinkerLoadables.MATERIAL_TAGS, (tag, source) -> MaterialRegistry.getInstance().isInTag(source.getId(), tag));
+  /** Mojang codec preserving the legacy compact material ID form while supporting registered predicate objects. */
+  Codec<IJsonPredicate<MaterialVariantId>> CODEC = TinkerLoadables.JSON.xmap(
+    json -> json.isJsonPrimitive() ? variant(MaterialVariantId.LOADABLE.convert(json, "material")) : LOADER.convert(json, "material"),
+    LOADER::serialize);
 
   /** Gets an inverted condition */
   @Override
