@@ -31,83 +31,57 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate combat and tick events
+      - name: Migrate modifiable arrows to ProjectileItem
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace(path, old, new):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
+          arrow = Path('src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java')
+          text = arrow.read_text(encoding='utf-8')
+          replacements = {
+              'package slimeknights.tconstruct.library.tools.item;\n\n': 'package slimeknights.tconstruct.library.tools.item;\n\nimport net.minecraft.core.Direction;\nimport net.minecraft.core.Position;\n',
+              'import net.minecraft.world.entity.projectile.AbstractArrow;\n': 'import net.minecraft.world.entity.projectile.AbstractArrow;\nimport net.minecraft.world.entity.projectile.Projectile;\n',
+              'import java.util.List;\n': 'import javax.annotation.Nullable;\nimport java.util.List;\n',
+              '  public AbstractArrow createArrow(Level level, ItemStack stack, LivingEntity shooter) {\n    ModifiableArrow arrow = new ModifiableArrow(level, shooter);\n    arrow.onCreate(stack, shooter);\n    return arrow;\n  }': '  public AbstractArrow createArrow(Level level, ItemStack stack, LivingEntity shooter, @Nullable ItemStack weapon) {\n    ModifiableArrow arrow = new ModifiableArrow(level, shooter);\n    arrow.onCreate(stack, shooter);\n    return arrow;\n  }\n\n  @Override\n  public Projectile asProjectile(Level level, Position position, ItemStack stack, Direction direction) {\n    ModifiableArrow arrow = new ModifiableArrow(level, position.x(), position.y(), position.z());\n    arrow.onCreate(stack, null);\n    arrow.pickup = AbstractArrow.Pickup.ALLOWED;\n    return arrow;\n  }'
+          }
+          for old, new in replacements.items():
               if old not in text:
-                  raise SystemExit(f'Missing expected token in {path}: {old!r}')
-              p.write_text(text.replace(old, new), encoding='utf-8')
+                  raise SystemExit(f'Missing expected arrow token: {old!r}')
+              text = text.replace(old, new)
+          arrow.write_text(text, encoding='utf-8')
 
-          tool_events = 'src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java'
-          replace(tool_events,
-                  'import net.neoforged.neoforge.event.entity.living.LivingAttackEvent;\n',
-                  'import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;\n')
-          replace(tool_events,
-                  'import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;\n',
-                  'import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;\nimport net.neoforged.neoforge.event.tick.EntityTickEvent;\n')
-          replace(tool_events,
-                  'import net.neoforged.neoforge.event.entity.living.LivingEvent.LivingTickEvent;\n',
-                  '')
-          replace(tool_events,
-                  '  static void livingAttack(LivingAttackEvent event) {',
-                  '  static void livingAttack(LivingIncomingDamageEvent event) {')
-          replace(tool_events,
-                  '  static void livingDamage(LivingDamageEvent event) {',
-                  '  static void livingDamage(LivingDamageEvent.Pre event) {')
-          replace(tool_events,
-                  '    float amount = event.getAmount();',
-                  '    float amount = event.getNewDamage();')
-          replace(tool_events,
-                  '      event.setAmount(amount);',
-                  '      event.setNewDamage(amount);')
-          replace(tool_events,
-                  '        event.setCanceled(true);',
-                  '        event.setNewDamage(0);')
-          replace(tool_events,
-                  '&& entity.getType() == EntityType.ENDER_DRAGON && event.getAmount() > 0',
-                  '&& entity.getType() == EntityType.ENDER_DRAGON && event.getNewDamage() > 0')
-          replace(tool_events,
-                  '  static void livingWalk(LivingTickEvent event) {\n    LivingEntity living = event.getEntity();',
-                  '  static void livingWalk(EntityTickEvent.Pre event) {\n    if (!(event.getEntity() instanceof LivingEntity living)) {\n      return;\n    }')
-
-          interaction = 'src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java'
-          replace(interaction,
-                  'import net.neoforged.neoforge.event.entity.living.ShieldBlockEvent;\n',
-                  'import net.neoforged.neoforge.event.entity.living.LivingShieldBlockEvent;\n')
-          replace(interaction,
-                  '  static void onBlock(ShieldBlockEvent event) {',
-                  '  static void onBlock(LivingShieldBlockEvent event) {')
-          replace(interaction,
-                  '          event.setShieldTakesDamage(false);',
-                  '          event.setShieldDamage(0);')
+          tools = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          text = tools.read_text(encoding='utf-8')
+          for old in [
+              'import slimeknights.tconstruct.tools.logic.ModifiableArrowDispenserBehavior;\n',
+              '      DispenserBlock.registerBehavior(TinkerTools.arrow.get(), ModifiableArrowDispenserBehavior.INSTANCE);\n'
+          ]:
+              if old not in text:
+                  raise SystemExit(f'Missing expected TinkerTools token: {old!r}')
+              text = text.replace(old, '')
+          tools.write_text(text, encoding='utf-8')
           PY
+          rm src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
 
       - name: Verify targeted migration
         shell: bash
         run: |
-          grep -Fq 'LivingIncomingDamageEvent event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
-          grep -Fq 'LivingDamageEvent.Pre event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
-          grep -Fq 'EntityTickEvent.Pre event' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
-          test -z "$(grep -E 'LivingAttackEvent|LivingTickEvent' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java || true)"
-          grep -Fq 'LivingShieldBlockEvent event' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
-          grep -Fq 'setShieldDamage(0)' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
-          test -z "$(grep -F 'ShieldBlockEvent' src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java | grep -v LivingShieldBlockEvent || true)"
+          grep -Fq 'public Projectile asProjectile' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java
+          grep -Fq '@Nullable ItemStack weapon' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java
+          test ! -e src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
+          test -z "$(grep -F 'ModifiableArrowDispenserBehavior' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java || true)"
 
       - name: Commit grouped migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
-                  src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java
+          git add -A src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
+                     src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
+                     src/main/java/slimeknights/tconstruct/tools/logic/ModifiableArrowDispenserBehavior.java
           git diff --cached --quiet && exit 0
-          git commit -m 'Migrate combat events to NeoForge 21.1'
+          git commit -m 'Migrate modifiable arrows to 1.21 ProjectileItem API'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
