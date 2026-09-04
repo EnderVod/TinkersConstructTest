@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -26,6 +27,7 @@ import slimeknights.tconstruct.library.tools.capability.TinkerDataCapability.Com
 import slimeknights.tconstruct.library.tools.capability.TinkerDataCapability.TinkerDataKey;
 import slimeknights.tconstruct.library.tools.definition.ToolDefinitionLoader;
 import slimeknights.tconstruct.library.tools.layout.StationSlotLayoutLoader;
+import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;
 import slimeknights.tconstruct.library.utils.Util;
 import slimeknights.tconstruct.shared.TinkerAttributes;
 import slimeknights.tconstruct.shared.TinkerClient;
@@ -67,13 +69,14 @@ public class TConstruct {
    * Keeping the bus here also lets older Tinkers modules migrate without relying on the removed
    * Forge {@code FMLJavaModLoadingContext#get()} pattern.
    */
-  public TConstruct(IEventBus bus) {
+  public TConstruct(IEventBus bus, ModContainer container) {
     instance = this;
     modBus = bus;
 
-    Config.init();
+    Config.init(container);
     TinkerItemDisplays.init();
     MaterialRegistry.init();
+    ToolDataComponents.init(bus);
 
     bus.register(new TinkerCommons());
     bus.register(new TinkerMaterials());

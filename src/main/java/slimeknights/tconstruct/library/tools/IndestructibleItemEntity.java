@@ -60,7 +60,7 @@ public class IndestructibleItemEntity extends ItemEntity {
   }
 
   /**
-   * Creates an indestructible item entity from the given item stack (if needed). Intended to be called in {@link net.minecraftforge.common.extensions.IForgeItem#createEntity(Level, Entity, ItemStack)}
+   * Creates an indestructible item entity from the given item stack (if needed). Intended to be called in {@link net.neoforged.neoforge.common.extensions.IForgeItem#createEntity(Level, Entity, ItemStack)}
    * @param world     World instance
    * @param original  Original entity
    * @param stack     Stack to drop

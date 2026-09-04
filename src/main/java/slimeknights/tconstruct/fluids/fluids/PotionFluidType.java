@@ -5,7 +5,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.PotionContents;
-import net.minecraft.world.item.alchemy.Potions;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.FluidType;
@@ -47,7 +46,7 @@ public class PotionFluidType extends FluidType {
       @Override
       public int getTintColor(FluidStack stack) {
         PotionContents contents = getPotion(stack);
-        if ((contents.potion().isEmpty() || contents.is(Potions.EMPTY)) && contents.customColor().isEmpty() && contents.customEffects().isEmpty()) {
+        if (contents.potion().isEmpty() && contents.customColor().isEmpty() && contents.customEffects().isEmpty()) {
           return getTintColor();
         }
         return contents.getColor() | 0xFF000000;
@@ -58,9 +57,7 @@ public class PotionFluidType extends FluidType {
   /** Creates a fluid stack for the given potion holder. */
   public static FluidStack potionFluid(Holder<Potion> potion, int size) {
     FluidStack stack = new FluidStack(TinkerFluids.potion.get(), size);
-    if (!potion.is(Potions.EMPTY)) {
-      stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
-    }
+    stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
     return stack;
   }
 
@@ -72,9 +69,7 @@ public class PotionFluidType extends FluidType {
   /** Creates a potion bucket for the given potion holder. */
   public static ItemStack potionBucket(Holder<Potion> potion) {
     ItemStack stack = new ItemStack(TinkerFluids.potion);
-    if (!potion.is(Potions.EMPTY)) {
-      stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
-    }
+    stack.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));
     return stack;
   }
 }

@@ -18,7 +18,7 @@ import net.minecraft.world.item.DispensibleContainerItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.Potion;
+import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.ItemLike;
@@ -30,11 +30,11 @@ import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.NeoForgeMod;
 import net.neoforged.neoforge.common.SoundActions;
-import net.neoforged.neoforge.common.brewing.BrewingRecipe;
-import net.neoforged.neoforge.common.brewing.BrewingRecipeRegistry;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.brewing.RegisterBrewingRecipesEvent;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.fluids.BaseFlowingFluid;
@@ -90,6 +90,7 @@ public final class TinkerFluids extends TinkerModule {
   public TinkerFluids() {
     NeoForgeMod.enableMilkFluid();
     TConstruct.getModBus().addListener(TinkerFluids::registerCapabilities);
+    NeoForge.EVENT_BUS.addListener(this::registerBrewingRecipes);
   }
 
   /** Registers item fluid handlers using the NeoForge 1.21 capability model. */
@@ -286,9 +287,6 @@ public final class TinkerFluids extends TinkerModule {
       CauldronInteraction.WATER.map().put(Items.LINGERING_POTION, new EmptyBottleIntoWater(lingeringBottle, CauldronInteraction.WATER.map().get(Items.LINGERING_POTION)));
       CauldronInteraction.EMPTY.map().put(Items.SPLASH_POTION,    new EmptyBottleIntoEmpty(splashBottle,    CauldronInteraction.EMPTY.map().get(Items.SPLASH_POTION)));
       CauldronInteraction.EMPTY.map().put(Items.LINGERING_POTION, new EmptyBottleIntoEmpty(lingeringBottle, CauldronInteraction.EMPTY.map().get(Items.LINGERING_POTION)));
-      // brew bottles into each other, bit weird but feels better than shapeless
-      BrewingRecipeRegistry.addRecipe(new BottleBrewingRecipe(Ingredient.of(Items.GLASS_BOTTLE), Items.POTION, Items.SPLASH_POTION, new ItemStack(splashBottle)));
-      BrewingRecipeRegistry.addRecipe(new BottleBrewingRecipe(Ingredient.of(MantleTags.Items.SPLASH_BOTTLE), Items.SPLASH_POTION, Items.LINGERING_POTION, new ItemStack(lingeringBottle)));
     });
 
     // dispense buckets
@@ -386,12 +384,18 @@ public final class TinkerFluids extends TinkerModule {
       DispenserBlock.registerBehavior(moltenSteeleaf, dispenseBucket);
       DispenserBlock.registerBehavior(fieryLiquid, dispenseBucket);
 
-      // brew congealed slime into bottles to get slime bottles, easy melting
-      for (SlimeType slime : SlimeType.values()) {
-        BrewingRecipeRegistry.addRecipe(new BrewingRecipe(Ingredient.of(Items.GLASS_BOTTLE), Ingredient.of(TinkerWorld.congealedSlime.get(slime)), new ItemStack(TinkerFluids.slimeBottle.get(slime))));
-      }
-      BrewingRecipeRegistry.addRecipe(new BrewingRecipe(Ingredient.of(Items.GLASS_BOTTLE), Ingredient.of(Blocks.MAGMA_BLOCK), new ItemStack(TinkerFluids.magmaBottle)));
     });
+  }
+
+  /** Registers custom brewing recipes through NeoForge's 1.21 brewing builder. */
+  private void registerBrewingRecipes(RegisterBrewingRecipesEvent event) {
+    PotionBrewing.Builder builder = event.getBuilder();
+    builder.addRecipe(new BottleBrewingRecipe(Ingredient.of(Items.GLASS_BOTTLE), Ingredient.of(Items.GUNPOWDER), new ItemStack(splashBottle)));
+    builder.addRecipe(new BottleBrewingRecipe(Ingredient.of(MantleTags.Items.SPLASH_BOTTLE), Ingredient.of(Items.DRAGON_BREATH), new ItemStack(lingeringBottle)));
+    for (SlimeType slime : SlimeType.values()) {
+      builder.addRecipe(Ingredient.of(Items.GLASS_BOTTLE), Ingredient.of(TinkerWorld.congealedSlime.get(slime)), new ItemStack(slimeBottle.get(slime)));
+    }
+    builder.addRecipe(Ingredient.of(Items.GLASS_BOTTLE), Ingredient.of(Blocks.MAGMA_BLOCK), new ItemStack(magmaBottle));
   }
 
   /** Adds all relevant items to the creative tab, called by smeltery */
@@ -491,11 +495,9 @@ public final class TinkerFluids extends TinkerModule {
     acceptCompat(output, moltenSteeleaf, MaterialIds.steeleaf);
     acceptCompat(output, fieryLiquid, "fiery", MaterialIds.fiery);
     // potion buckets
-    BuiltInRegistries.POTION.holders().filter(holder -> {
-      Potion potion = holder.get();
-      return potion != Potions.EMPTY && potion != Potions.WATER;
-    }).forEachOrdered(holder ->
-      output.accept(PotionFluidType.potionBucket(holder)));
+    BuiltInRegistries.POTION.holders()
+      .filter(holder -> !holder.is(Potions.WATER))
+      .forEachOrdered(holder -> output.accept(PotionFluidType.potionBucket(holder)));
   }
 
   /** Adds all filled containers to the fluids tab. */

@@ -60,7 +60,11 @@ public enum InteractionSource {
    * @return  Proper interaction source
    */
   public static InteractionSource fromEquipmentSlot(EquipmentSlot slot) {
-    return slot.getType() == EquipmentSlot.Type.ARMOR ? ARMOR : RIGHT_CLICK;
+    return switch (slot.getType()) {
+      // 1.21: EquipmentSlot.Type.ARMOR split into HUMANOID_ARMOR and ANIMAL_ARMOR
+      case HUMANOID_ARMOR, ANIMAL_ARMOR -> ARMOR;
+      case HAND -> RIGHT_CLICK;
+    };
   }
 
   /** Adds the format string to the modifier name */
