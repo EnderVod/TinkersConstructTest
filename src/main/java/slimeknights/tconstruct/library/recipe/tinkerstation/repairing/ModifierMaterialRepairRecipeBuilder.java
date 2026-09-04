@@ -32,7 +32,7 @@ public class ModifierMaterialRepairRecipeBuilder extends AbstractRecipeBuilder<M
   @SuppressWarnings("removal")
   public ModifierMaterialRepairRecipeBuilder saveCraftingTable(Consumer<FinishedRecipe> consumer, ResourceLocation id) {
     ResourceLocation advancementId = buildOptionalAdvancement(id, "tinker_station");
-    consumer.accept(new LoadableFinishedRecipe<>(new ModifierMaterialRepairKitRecipe(id, modifier, material, statType), ModifierMaterialRepairKitRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new ModifierMaterialRepairKitRecipe(id, modifier, material, statType), ModifierMaterialRepairKitRecipe.LOADER, advancementId));
     return this;
   }
 
@@ -40,6 +40,6 @@ public class ModifierMaterialRepairRecipeBuilder extends AbstractRecipeBuilder<M
   @Override
   public void save(Consumer<FinishedRecipe> consumer, ResourceLocation id) {
     ResourceLocation advancementId = buildOptionalAdvancement(id, "tinker_station");
-    consumer.accept(new LoadableFinishedRecipe<>(new ModifierMaterialRepairRecipe(id, modifier, material, statType), ModifierMaterialRepairRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new ModifierMaterialRepairRecipe(id, modifier, material, statType), ModifierMaterialRepairRecipe.LOADER, advancementId));
   }
 }

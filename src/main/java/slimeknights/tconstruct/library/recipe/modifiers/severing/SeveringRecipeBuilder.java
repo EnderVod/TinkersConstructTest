@@ -55,9 +55,9 @@ public class SeveringRecipeBuilder extends AbstractRecipeBuilder<SeveringRecipeB
   public void save(Consumer<FinishedRecipe> consumer, ResourceLocation id) {
     ResourceLocation advancementId = this.buildOptionalAdvancement(id, "severing");
     if (childOutput != null) {
-      consumer.accept(new LoadableFinishedRecipe<>(new AgeableSeveringRecipe(id, ingredient, output, childOutput, baseChance, lootingBonus), AgeableSeveringRecipe.LOADER, advancementId));
+      consumer.accept(new LoadableFinishedRecipe<>(id, new AgeableSeveringRecipe(id, ingredient, output, childOutput, baseChance, lootingBonus), AgeableSeveringRecipe.LOADER, advancementId));
     } else {
-      consumer.accept(new LoadableFinishedRecipe<>(new SeveringRecipe(id, ingredient, output, baseChance, lootingBonus), SeveringRecipe.LOADER, advancementId));
+      consumer.accept(new LoadableFinishedRecipe<>(id, new SeveringRecipe(id, ingredient, output, baseChance, lootingBonus), SeveringRecipe.LOADER, advancementId));
     }
   }
 }
