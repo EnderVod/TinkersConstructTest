@@ -23,24 +23,23 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply guarded shared and fluid compatibility batch
+      - name: Apply guarded mechanical compatibility batch
         run: python3 .github/scripts/port-smeltery-batch.py
 
       - name: Verify migration
         shell: bash
         run: |
-          ! grep -Fq 'Blocks::never' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -Fq 'Registries.TRIGGER_TYPE, getResource("block_container_opened")' src/main/java/slimeknights/tconstruct/shared/TinkerCommons.java
-          grep -Fq 'Integer getBeaconColorMultiplier' src/main/java/slimeknights/tconstruct/shared/block/ClearStainedGlassPaneBlock.java
-          grep -Fq 'source.pos().relative(source.state()' src/main/java/slimeknights/tconstruct/shared/block/PlaceBlockDispenserBehavior.java
-          grep -Fq 'TConstruct.getResource("fluid_container")' src/main/java/slimeknights/tconstruct/fluids/FluidClientEvents.java
-          grep -R -Fq 'public ItemInteractionResult interact(' src/main/java/slimeknights/tconstruct/fluids/util
-          grep -Fq 'CauldronInteraction.WATER.map().put' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
-          grep -Fq 'TinkerEffects.holder(TinkerEffects.bouncy)' src/main/java/slimeknights/tconstruct/fluids/TinkerFluids.java
-          grep -Fq 'effect.getCures().clear()' src/main/java/slimeknights/tconstruct/fluids/block/MobEffectLiquidBlock.java
-          grep -Fq 'entity.igniteForSeconds(burnTime)' src/main/java/slimeknights/tconstruct/fluids/block/BurningLiquidBlock.java
-          grep -Fq 'EffectCures.MILK' src/main/java/slimeknights/tconstruct/shared/item/CheeseItem.java
-          grep -Fq 'FoodProperties.PossibleEffect' src/main/java/slimeknights/tconstruct/fluids/item/ContainerFoodItem.java
+          grep -Fq '.builtInRegistryHolder().is(tag)' src/main/java/slimeknights/tconstruct/library/tools/nbt/IToolContext.java
+          grep -Fq 'StreamSupport.stream(BuiltInRegistries.BLOCK.getTagOrEmpty(tag).spliterator(), false)' src/main/java/slimeknights/tconstruct/library/recipe/ingredient/BlockTagIngredient.java
+          grep -Fq 'ResourceLocation.withDefaultNamespace("missingno")' src/main/java/slimeknights/tconstruct/library/recipe/material/MaterialRecipe.java
+          ! grep -R -Fq 'ItemHandlerHelper.copyStackWithSize' src/main/java/slimeknights/tconstruct/library/tools/capability/inventory src/main/java/slimeknights/tconstruct/library/recipe/material/MaterialRecipe.java
+          grep -Fq 'TagUtil.readItem(compound)' src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/InventoryModule.java
+          grep -Fq 'ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, stack)' src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/ToolInventoryCapability.java
+          ! grep -R -E 'new FluidStack\((resource|drained|current),' src/main/java/slimeknights/tconstruct/library/tools/capability/fluid
+          grep -Fq 'FluidStack.STREAM_CODEC' src/main/java/slimeknights/tconstruct/tools/network/FluidDataSerializer.java
+          grep -Fq 'TagUtil.hasTag(tool)' src/main/java/slimeknights/tconstruct/library/tools/definition/module/mining/MiningSpeedToolHook.java
+          grep -Fq 'InteractionSource.ARMOR' src/main/java/slimeknights/tconstruct/library/modifiers/hook/interaction/InteractionSource.java
+          grep -Fq 'Attributes.ATTACK_DAMAGE.value()' src/main/java/slimeknights/tconstruct/library/tools/context/ToolAttackContext.java
           git diff --check
 
       - name: Commit compatibility batch
@@ -50,7 +49,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate shared and fluid APIs to 1.21'
+            git commit -m 'Migrate mechanical tool and recipe APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
