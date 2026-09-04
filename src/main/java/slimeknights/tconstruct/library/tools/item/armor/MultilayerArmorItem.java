@@ -37,8 +37,9 @@ public class MultilayerArmorItem extends ModifiableArmorItem {
 
   @Nullable
   @Override
-  public String getArmorTexture(ItemStack stack, Entity entity, EquipmentSlot slot, String type) {
-    return ArmorUtil.getDummyArmorTexture(slot);
+  public ResourceLocation getArmorTexture(ItemStack stack, Entity entity, EquipmentSlot slot, ArmorMaterial.Layer layer, boolean innerModel) {
+    // bypasses vanilla's missing-texture errors; our own model dispatcher handles the real rendering
+    return ResourceLocation.parse(ArmorUtil.getDummyArmorTexture(slot));
   }
 
   @Override

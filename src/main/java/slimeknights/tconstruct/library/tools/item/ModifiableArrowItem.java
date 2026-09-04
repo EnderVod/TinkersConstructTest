@@ -3,7 +3,6 @@ package slimeknights.tconstruct.library.tools.item;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Position;
 import lombok.Getter;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.stats.Stats;
@@ -18,8 +17,8 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.inventory.ClickAction;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ArrowItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import slimeknights.mantle.client.SafeClientAccess;
@@ -29,7 +28,6 @@ import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.modifiers.hook.build.ConditionalStatModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.InventoryTickModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.SlotStackModifierHook;
-import slimeknights.tconstruct.library.modifiers.modules.build.RarityModule;
 import slimeknights.tconstruct.library.tools.IndestructibleItemEntity;
 import slimeknights.tconstruct.library.tools.definition.ToolDefinition;
 import slimeknights.tconstruct.library.tools.definition.module.display.ToolNameHook;
@@ -69,15 +67,7 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
   }
 
   @Override
-  public Projectile asProjectile(Level level, Position position, ItemStack stack, Direction direction) {
-    ModifiableArrow arrow = new ModifiableArrow(level, position.x(), position.y(), position.z());
-    arrow.onCreate(stack, null);
-    arrow.pickup = AbstractArrow.Pickup.ALLOWED;
-    return arrow;
-  }
-
-  @Override
-  public boolean isInfinite(ItemStack stack, ItemStack bow, Player player) {
+  public boolean isInfinite(ItemStack stack, ItemStack bow, LivingEntity shooter) {
     return false;
   }
 
@@ -112,12 +102,6 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
 
   /* Loading */
 
-
-  @Override
-  public void verifyTagAfterLoad(CompoundTag nbt) {
-    ToolStack.verifyTag(this, nbt, getToolDefinition());
-  }
-
   @Override
   public void onCraftedBy(ItemStack stack, Level worldIn, Player playerIn) {
     ToolStack.ensureInitialized(stack, getToolDefinition());
@@ -132,11 +116,8 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
     // however, if a modifier wants to glow let them
     return ModifierUtil.checkVolatileFlag(stack, SHINY);
   }
-
-  @Override
-  public Rarity getRarity(ItemStack stack) {
-    return RarityModule.getRarity(stack);
-  }
+  // TODO(neoport): dynamic rarity (RarityModule.getRarity) now lives in the RARITY data component (getRarity override
+  //  removed in 1.21); applied at tool build time. Owned by the build pipeline.
 
 
   /* Indestructible items */
@@ -179,14 +160,10 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
   }
 
   @Override
-  public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-    TooltipUtil.addInformation(this, stack, level, tooltip, SafeClientAccess.getTooltipKey(), flag);
+  public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+    TooltipUtil.addInformation(this, stack, context.level(), tooltip, SafeClientAccess.getTooltipKey(), flag);
   }
-
-  @Override
-  public int getDefaultTooltipHideFlags(ItemStack stack) {
-    return TooltipUtil.getModifierHideFlags(getToolDefinition());
-  }
+  // TODO(neoport): getDefaultTooltipHideFlags removed in 1.21; tooltip visibility is now per-component (showInTooltip).
 
   @Override
   public List<Component> getStatInformation(IToolStackView tool, @Nullable Player player, List<Component> tooltips, TooltipKey key, TooltipFlag tooltipFlag) {

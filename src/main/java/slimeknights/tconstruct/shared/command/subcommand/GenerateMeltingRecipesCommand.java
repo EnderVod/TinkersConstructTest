@@ -11,12 +11,9 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.ResourceArgument;
-import com.mojang.serialization.JsonOps;
-import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -49,6 +46,7 @@ import slimeknights.mantle.fluid.transfer.FluidContainerTransferManager;
 import slimeknights.mantle.fluid.transfer.IFluidContainerTransfer;
 import slimeknights.mantle.fluid.transfer.IFluidContainerTransfer.TransferDirection;
 import slimeknights.mantle.fluid.transfer.IFluidContainerTransfer.TransferResult;
+import slimeknights.mantle.recipe.data.FinishedRecipe;
 import slimeknights.mantle.recipe.helper.FluidOutput;
 import slimeknights.mantle.util.JsonHelper;
 import slimeknights.mantle.util.LogicHelper;
@@ -136,19 +134,11 @@ public class GenerateMeltingRecipesCommand {
     Comparator<MeltingResult> nameComparator = Comparator.<MeltingResult,ResourceLocation>comparing(r -> Loadables.FLUID.getKey(r.fluid.getFluid())).reversed();
     MutableInt successes = new MutableInt(0);
     Path data = pack.resolve(PackType.SERVER_DATA.getDirectory());
-    RecipeOutput consumer = new RecipeOutput() {
-      @Override
-      public void accept(ResourceLocation id, Recipe<?> recipe, @Nullable AdvancementHolder advancement, net.neoforged.neoforge.common.conditions.ICondition... conditions) {
-        Path path = data.resolve(id.getNamespace() + "/recipes/" + id.getPath() + ".json");
-        // serialize the recipe via its codec to a generated datapack JSON
-        if (GeneratePackHelper.saveJson(Recipe.CODEC.encodeStart(access.createSerializationContext(JsonOps.INSTANCE), recipe).getOrThrow(JsonParseException::new), path)) {
-          successes.increment();
-        }
-      }
-
-      @Override
-      public net.minecraft.advancements.Advancement.Builder advancement() {
-        return net.minecraft.advancements.Advancement.Builder.recipeAdvancement().parent(net.minecraft.data.recipes.RecipeBuilder.ROOT_RECIPE_ADVANCEMENT);
+    Consumer<FinishedRecipe> consumer = recipe -> {
+      ResourceLocation id = recipe.getId();
+      Path path = data.resolve(id.getNamespace() + "/recipes/" + id.getPath() + ".json");
+      if (GeneratePackHelper.saveJson(recipe.serializeRecipe(), path)) {
+        successes.increment();
       }
     };
 

@@ -2,8 +2,6 @@ package slimeknights.tconstruct.tools.item;
 
 import it.unimi.dsi.fastutil.objects.Object2BooleanArrayMap;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Block;
 import slimeknights.tconstruct.common.recipe.RecipeCacheInvalidator;
 import slimeknights.tconstruct.library.materials.MaterialRegistry;
@@ -46,9 +44,4 @@ public class FakeStorageBlockItem extends MaterialBlockItem implements IRepairKi
     return false;
   }
 
-  @Override
-  public Rarity getRarity(ItemStack stack) {
-    // override rarity, since vanilla ingots don't use it
-    return Rarity.COMMON;
-  }
 }
