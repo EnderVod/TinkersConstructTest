@@ -104,6 +104,6 @@ public class MultilevelIncrementalModifierRecipeBuilder extends AbstractMultilev
       throw new IllegalStateException("Must have at least 1 level");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "modifiers");
-    consumer.accept(new LoadableFinishedRecipe<>(new MultilevelIncrementalModifierRecipe(id, input, amountPerItem, neededPerLevel, tools, maxToolSize, result, leftover, allowCrystal, levels, checkTraitLevel), MultilevelIncrementalModifierRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new MultilevelIncrementalModifierRecipe(id, input, amountPerItem, neededPerLevel, tools, maxToolSize, result, leftover, allowCrystal, levels, checkTraitLevel), MultilevelIncrementalModifierRecipe.LOADER, advancementId));
   }
 }

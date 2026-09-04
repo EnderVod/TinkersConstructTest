@@ -52,6 +52,6 @@ public class SwappableModifierRecipeBuilder extends ModifierRecipeBuilder {
       throw new IllegalStateException("Must have at least 1 input");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "modifiers");
-    consumer.accept(new LoadableFinishedRecipe<>(new SwappableModifierRecipe(id, inputs, tools, maxToolSize, result, value, variantFormatter, slots, allowCrystal), SwappableModifierRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new SwappableModifierRecipe(id, inputs, tools, maxToolSize, result, value, variantFormatter, slots, allowCrystal), SwappableModifierRecipe.LOADER, advancementId));
   }
 }
