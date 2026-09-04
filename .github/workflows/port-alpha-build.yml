@@ -1,0 +1,85 @@
+name: Tinkers 1.21.1 Alpha Build
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-alpha-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: tinkers-1.21.1-alpha-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Download green Mantle 1.21.1 build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p libs mantle-artifact
+          gh api /repos/EnderVod/MantleTest/actions/artifacts/9840020829/zip > mantle.zip
+          unzip -q mantle.zip -d mantle-artifact
+          mantle_jar=$(find mantle-artifact -type f -name 'Mantle-*.jar' ! -name '*-sources.jar' | head -n 1)
+          if [ -z "$mantle_jar" ]; then
+            echo 'Could not find the Mantle runtime JAR in the downloaded artifact.'
+            find mantle-artifact -maxdepth 3 -type f -print
+            exit 1
+          fi
+          cp "$mantle_jar" libs/
+          echo "Using Mantle dependency: $(basename "$mantle_jar")"
+
+      - name: Assemble Tinkers runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew assemble --no-daemon --stacktrace 2>&1 | tee alpha-build.log
+
+      - name: Collect runtime JAR
+        shell: bash
+        run: |
+          mkdir -p runtime-artifact
+          runtime_jar=$(find build/libs -maxdepth 1 -type f -name 'TinkersConstruct-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+          if [ -z "$runtime_jar" ]; then
+            echo 'No Tinkers runtime JAR was produced.'
+            find build/libs -maxdepth 1 -type f -print || true
+            exit 1
+          fi
+          cp "$runtime_jar" runtime-artifact/
+          echo "Runtime candidate: $(basename "$runtime_jar")"
+
+      - name: Upload alpha runtime JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinkers-1.21.1-alpha-runtime
+          path: runtime-artifact/*.jar
+          if-no-files-found: error
+
+      - name: Upload alpha build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinkers-1.21.1-alpha-build-log
+          path: alpha-build.log
+          if-no-files-found: warn
