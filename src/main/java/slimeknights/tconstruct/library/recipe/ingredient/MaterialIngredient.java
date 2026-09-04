@@ -16,6 +16,7 @@ import slimeknights.tconstruct.library.materials.MaterialRegistry;
 import slimeknights.tconstruct.library.materials.definition.IMaterial;
 import slimeknights.tconstruct.library.materials.definition.MaterialVariantId;
 import slimeknights.tconstruct.library.recipe.material.MaterialRecipeCache;
+import slimeknights.tconstruct.library.utils.TagUtil;
 import slimeknights.tconstruct.library.tools.part.IMaterialItem;
 import slimeknights.tconstruct.shared.TinkerMaterials;
 
@@ -124,7 +125,7 @@ public class MaterialIngredient extends NestedIngredient {
       .flatMap(stack -> MaterialRecipeCache.getAllVariants().stream()
         .filter(material::matches)
         .map(mat -> IMaterialItem.withMaterial(stack, mat))
-        .filter(ItemStack::hasTag))
+        .filter(TagUtil::hasTag))
       .distinct();
   }
 

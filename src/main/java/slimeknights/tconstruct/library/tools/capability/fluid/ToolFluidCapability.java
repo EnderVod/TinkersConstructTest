@@ -130,7 +130,7 @@ public class ToolFluidCapability extends FluidModifierHookIterator<ModifierEntry
     }
     int size = container.getCount();
     if (size > 1) {
-      resource = new FluidStack(resource, resource.getAmount() / size);
+      resource = resource.copyWithAmount(resource.getAmount() / size);
     }
     return scaleResult(drain(tool.get(), resource, action), size);
   }

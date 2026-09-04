@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /** Item ingredient matching items with a block form in the given tag. */
 @RequiredArgsConstructor
@@ -42,7 +43,7 @@ public class BlockTagIngredient implements ICustomIngredient {
   /** Gets the ordered matching items set. */
   private Set<Item> getMatchingItems() {
     if (matchingItems == null) {
-      matchingItems = BuiltInRegistries.BLOCK.getTagOrEmpty(tag).stream()
+      matchingItems = StreamSupport.stream(BuiltInRegistries.BLOCK.getTagOrEmpty(tag).spliterator(), false)
         .map(Holder::value)
         .map(Block::asItem)
         .filter(item -> item != Items.AIR)
