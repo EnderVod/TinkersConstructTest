@@ -19,4 +19,4 @@ jobs:
       - name: Start Tinkers compile
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
+        run: gh workflow run port-compile.yml --repo EnderVod/TinkersConstructTest --ref 1.21.1-neoforge
