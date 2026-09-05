@@ -1,4 +1,4 @@
-name: Tinkers Block Interaction API Migration
+name: Tinkers Small API Cleanup Batch
 
 on:
   push:
@@ -23,118 +23,121 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port ranged block interaction to 1.21 APIs
+      - name: Port small 1.21 API removals
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java')
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != count:
+                  raise RuntimeError(f'{path}: expected {count} occurrences of {old!r}, found {actual}')
+              p.write_text(text.replace(old, new, count), encoding='utf-8')
+
+          replace(
+              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/armor/ReplaceBlockWalkerModule.java',
+              'ForgeEventFactory.onBlockPlace',
+              'EventHooks.onBlockPlace')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/ArmorStatModule.java')
           text = path.read_text(encoding='utf-8')
-
-          def add_import(anchor, imp):
-              global text
-              if imp not in text:
-                  if anchor not in text:
-                      raise RuntimeError(f'import anchor missing: {anchor!r}')
-                  text = text.replace(anchor, imp + anchor, 1)
-
-          add_import('import net.minecraft.server.level.ServerPlayer;\n', 'import net.minecraft.server.level.ServerLevel;\n')
-          add_import('import net.minecraft.world.InteractionResult;\n', 'import net.minecraft.world.ItemInteractionResult;\n')
-
-          old = (
-              '    if (!level.isClientSide && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {\n'
-              '      // unable to call Forge damageItem as that needs entity access, but its just vanilla broken anyways, right?\n'
-              '      stack.hurt(1, level.getRandom(), null);\n'
-              '      // calling methods again instead of using return as return may be incorrect for custom broken stacks\n'
-              '      if (stack.getDamageValue() >= stack.getMaxDamage()) {\n'
-              '        // but that won\'t happen, right? will need to consider another workaround in that case.\n'
-              '        stack.shrink(1);\n'
-              '        stack.setDamageValue(0);\n'
-              '        level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);\n'
-              '      }\n'
-              '    }'
-          )
-          new = (
-              '    if (level instanceof ServerLevel server && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {\n'
-              '      // Player-less item use does not damage vanilla tools itself. Use the 1.21 durability path so enchantments/components are honored.\n'
-              '      stack.hurtAndBreak(1, server, null,\n'
-              '        item -> level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F));\n'
-              '    }'
-          )
+          if 'import net.minecraft.world.entity.LivingEntity;\n' not in text:
+              anchor = 'import net.minecraft.world.entity.Entity;\n'
+              if anchor not in text:
+                  raise RuntimeError('ArmorStatModule entity import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.entity.LivingEntity;\n', 1)
+          old = 'return living.getCapability(TinkerDataCapability.CAPABILITY).resolve().map(data -> data.get(key)).orElse(0f);'
+          new = 'return living instanceof LivingEntity entity ? TinkerDataCapability.getData(entity).get(key, 0f) : 0f;'
           if text.count(old) != 1:
-              raise RuntimeError('legacy player-less durability block changed unexpectedly')
-          text = text.replace(old, new, 1)
+              raise RuntimeError('ArmorStatModule legacy capability access changed unexpectedly')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          old = (
-              '      // click the block\n'
-              '      ItemStack original = heldItem.copy();\n'
-              '      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {\n'
-              '        InteractionResult result = state.use(world, player, hand, hitResult);\n'
-              '        if (result.consumesAction()) {\n'
-              '          if (player instanceof ServerPlayer serverPlayer) {\n'
-              '            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);\n'
-              '          }\n'
-              '          player.swing(hand, true);\n'
-              '          return 1;\n'
-              '        }\n'
-              '      }'
-          )
-          new = (
-              '      // click the block. In 1.21 vanilla split item-on-block interaction from default empty-hand-style block interaction.\n'
-              '      ItemStack original = heldItem.copy();\n'
-              '      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {\n'
-              '        ItemInteractionResult itemResult = state.useItemOn(heldItem, world, player, hand, hitResult);\n'
-              '        if (itemResult.consumesAction()) {\n'
-              '          if (player instanceof ServerPlayer serverPlayer) {\n'
-              '            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);\n'
-              '          }\n'
-              '          player.swing(hand, true);\n'
-              '          return 1;\n'
-              '        }\n'
-              '        if (itemResult == ItemInteractionResult.FAIL) {\n'
-              '          return 0;\n'
-              '        }\n'
-              '        if (itemResult == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION && hand == InteractionHand.MAIN_HAND) {\n'
-              '          InteractionResult result = state.useWithoutItem(world, player, hitResult);\n'
-              '          if (result.consumesAction()) {\n'
-              '            if (player instanceof ServerPlayer serverPlayer) {\n'
-              '              CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);\n'
-              '            }\n'
-              '            player.swing(hand, true);\n'
-              '            return 1;\n'
-              '          }\n'
-              '          if (result == InteractionResult.FAIL) {\n'
-              '            return 0;\n'
-              '          }\n'
-              '        }\n'
-              '      }'
-          )
-          if text.count(old) != 1:
-              raise RuntimeError('legacy BlockState.use block changed unexpectedly')
-          text = text.replace(old, new, 1)
+          replace(
+              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleConsumeDurabilityModule.java',
+              'player.broadcastBreakEvent(player.getUsedItemHand());',
+              'player.onEquippedItemBroken(tool.getItem(), eatenSlot);')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/BlockTransformModule.java')
+          text = path.read_text(encoding='utf-8')
+          if text.count('player.broadcastBreakEvent(slotType);') != 1:
+              raise RuntimeError('BlockTransformModule slot break callback changed unexpectedly')
+          if text.count('player.broadcastBreakEvent(context.getHand());') != 1:
+              raise RuntimeError('BlockTransformModule hand break callback changed unexpectedly')
+          text = text.replace('player.broadcastBreakEvent(slotType);', 'player.onEquippedItemBroken(stack.getItem(), slotType);', 1)
+          text = text.replace('player.broadcastBreakEvent(context.getHand());', 'player.onEquippedItemBroken(stack.getItem(), slotType);', 1)
           path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/InfinityModule.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.library.tools.nbt.ModDataNBT;\n'
+              if anchor not in text:
+                  raise RuntimeError('InfinityModule import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
+          if text.count('CompoundTag tag = ammo.getOrCreateTag();') != 1:
+              raise RuntimeError('InfinityModule getOrCreateTag call changed unexpectedly')
+          text = text.replace('CompoundTag tag = ammo.getOrCreateTag();', 'CompoundTag tag = TagUtil.getOrCreateTag(ammo);', 1)
+          if text.count('    return ammo;\n') != 1:
+              raise RuntimeError('InfinityModule ammo return shape changed unexpectedly')
+          text = text.replace('    return ammo;\n', '    TagUtil.setTag(ammo, tag);\n    return ammo;\n', 1)
+          if text.count('CompoundTag tag = ammo.getTag();') != 1:
+              raise RuntimeError('InfinityModule getTag call changed unexpectedly')
+          text = text.replace('CompoundTag tag = ammo.getTag();', 'CompoundTag tag = TagUtil.getTag(ammo);', 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/variable/StatLoadable.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import io.netty.handler.codec.EncoderException;\n' not in text:
+              anchor = 'import io.netty.handler.codec.DecoderException;\n'
+              if anchor not in text:
+                  raise RuntimeError('StatLoadable decoder import anchor missing')
+              text = text.replace(anchor, anchor + 'import io.netty.handler.codec.EncoderException;\n', 1)
+          text = text.replace('import net.minecraft.world.item.enchantment.Enchantment;\n', '')
+          old = '  /** Encodes the value to the registry using the type generics */\n  @SuppressWarnings("deprecation")\n  private <T> void encodeGeneric(FriendlyByteBuf buffer, Stat<T> value) {\n    StatType<T> type = value.getType();\n    buffer.writeId(BuiltInRegistries.STAT_TYPE, type);\n    buffer.writeId(type.getRegistry(), value.getValue());\n  }'
+          new = '  /** Writes a registry value by numeric ID, throwing for unregistered values. */\n  private static <T> void encodeRegistry(FriendlyByteBuf buffer, Registry<T> registry, T value) {\n    int id = registry.getId(value);\n    if (id < 0) {\n      throw new EncoderException("Unknown " + registry.key().location() + " value " + value);\n    }\n    buffer.writeVarInt(id);\n  }\n\n  /** Encodes the value to the registry using the type generics */\n  @SuppressWarnings("deprecation")\n  private <T> void encodeGeneric(FriendlyByteBuf buffer, Stat<T> value) {\n    StatType<T> type = value.getType();\n    encodeRegistry(buffer, BuiltInRegistries.STAT_TYPE, type);\n    encodeRegistry(buffer, type.getRegistry(), value.getValue());\n  }'
+          if text.count(old) != 1:
+              raise RuntimeError('StatLoadable legacy registry encoder changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = '    } else if (registry == BuiltInRegistries.MOB_EFFECT) {\n      name = ((MobEffect) value).getDisplayName();\n    } else if (registry == BuiltInRegistries.ENCHANTMENT) {\n      name = Component.translatable(((Enchantment) value).getDescriptionId());\n    } else {'
+          new = '    } else if (registry == BuiltInRegistries.MOB_EFFECT) {\n      name = ((MobEffect) value).getDisplayName();\n    } else {'
+          if text.count(old) != 1:
+              raise RuntimeError('StatLoadable invalid enchantment registry branch changed unexpectedly')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Verify block interaction migration
+      - name: Verify small API cleanup
         shell: bash
         run: |
-          grep -Fq 'stack.hurtAndBreak(1, server, null,' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          grep -Fq 'state.useItemOn(heldItem, world, player, hand, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          grep -Fq 'ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          grep -Fq 'state.useWithoutItem(world, player, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          grep -Fq 'CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          ! grep -Fq 'stack.hurt(1, level.getRandom(), null)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
-          ! grep -Fq 'state.use(world, player, hand, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'EventHooks.onBlockPlace' src/main/java/slimeknights/tconstruct/library/modifiers/modules/armor/ReplaceBlockWalkerModule.java
+          grep -Fq 'TinkerDataCapability.getData(entity).get(key, 0f)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/ArmorStatModule.java
+          grep -Fq 'player.onEquippedItemBroken(tool.getItem(), eatenSlot);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleConsumeDurabilityModule.java
+          test "$(grep -Fc 'player.onEquippedItemBroken(stack.getItem(), slotType);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/BlockTransformModule.java)" -eq 2
+          grep -Fq 'CompoundTag tag = TagUtil.getOrCreateTag(ammo);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/InfinityModule.java
+          grep -Fq 'TagUtil.setTag(ammo, tag);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/InfinityModule.java
+          grep -Fq 'encodeRegistry(buffer, BuiltInRegistries.STAT_TYPE, type);' src/main/java/slimeknights/tconstruct/library/json/variable/StatLoadable.java
+          ! grep -R -F 'broadcastBreakEvent' \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleConsumeDurabilityModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/BlockTransformModule.java
+          ! grep -Fq 'BuiltInRegistries.ENCHANTMENT' src/main/java/slimeknights/tconstruct/library/json/variable/StatLoadable.java
           git diff --check
 
-      - name: Commit block interaction migration
+      - name: Commit small API cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          git add \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/armor/ReplaceBlockWalkerModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/ArmorStatModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleConsumeDurabilityModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/BlockTransformModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/InfinityModule.java \
+            src/main/java/slimeknights/tconstruct/library/json/variable/StatLoadable.java
           git diff --cached --quiet || {
-            git commit -m 'Port ranged block interaction to 1.21 APIs'
+            git commit -m 'Port small modifier APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
