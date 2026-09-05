@@ -1,4 +1,4 @@
-name: Tinkers Fluid Projectile Migration
+name: Tinkers Combat Fishing Hook Migration
 
 on:
   push:
@@ -23,117 +23,90 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port fluid projectile to 1.21
+      - name: Port combat fishing hook to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java')
-          text = path.read_text(encoding='utf-8')
+          hook = Path('src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java')
+          text = hook.read_text(encoding='utf-8')
 
-          # Replace old Forge capability imports with NeoForge's block capability system.
-          for imp in [
-              'import net.minecraft.world.level.block.entity.BlockEntity;\n',
-              'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
-              'import slimeknights.mantle.inventory.EmptyItemHandler;\n']:
-              text = text.replace(imp, '')
-          anchor = 'import net.neoforged.neoforge.event.EventHooks;\n'
+          anchor = 'import net.minecraft.server.level.ServerPlayer;\n'
           if text.count(anchor) != 1:
-              raise RuntimeError('FluidEffectProjectile EventHooks import anchor changed')
-          if 'import net.neoforged.neoforge.capabilities.Capabilities;\n' not in text:
-              text = text.replace(anchor, 'import net.neoforged.neoforge.capabilities.Capabilities;\n' + anchor, 1)
-
-          old = ('    if (this.cannon != null && level.isLoaded(this.cannon)) {\n'
-                 '      BlockEntity cannonBE = level.getBlockEntity(this.cannon);\n'
-                 '      if (cannonBE != null && cannonBE.getCapability(ForgeCapabilities.ITEM_HANDLER).orElse(EmptyItemHandler.INSTANCE) instanceof IItemHandlerModifiable modifiable) {\n'
-                 '        return modifiable;\n'
-                 '      }\n'
-                 '    }')
-          new = ('    if (this.cannon != null && level.isLoaded(this.cannon)) {\n'
-                 '      IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK, this.cannon, null);\n'
-                 '      if (handler instanceof IItemHandlerModifiable modifiable) {\n'
-                 '        return modifiable;\n'
-                 '      }\n'
-                 '    }')
-          if text.count(old) != 1:
-              raise RuntimeError('FluidEffectProjectile cannon capability block changed')
-          text = text.replace(old, new, 1)
-
-          if text.count('if (hitType != HitResult.Type.MISS && !ForgeEventFactory.onProjectileImpact(this, hitResult)) {') != 1:
-              raise RuntimeError('FluidEffectProjectile old projectile impact hook changed')
-          text = text.replace('if (hitType != HitResult.Type.MISS && !ForgeEventFactory.onProjectileImpact(this, hitResult)) {', 'if (hitType != HitResult.Type.MISS && !EventHooks.onProjectileImpact(this, hitResult)) {', 1)
-          if text.count('      this.onHit(hitResult);') != 1:
-              raise RuntimeError('FluidEffectProjectile direct onHit changed')
-          text = text.replace('      this.onHit(hitResult);', '      this.hitTargetOrDeflectSelf(hitResult);', 1)
-
-          if text.count('factor += dimensions.height;') != 1 or text.count('factor += dimensions.width / 2;') != 1:
-              raise RuntimeError('FluidEffectProjectile EntityDimensions access changed')
-          text = text.replace('factor += dimensions.height;', 'factor += dimensions.height();', 1)
-          text = text.replace('factor += dimensions.width / 2;', 'factor += dimensions.width() / 2;', 1)
+              raise RuntimeError('CombatFishingHook ServerPlayer import anchor changed')
+          if 'import net.minecraft.server.level.ServerLevel;\n' not in text:
+              text = text.replace(anchor, 'import net.minecraft.server.level.ServerLevel;\n' + anchor, 1)
+          anchor = 'import net.minecraft.world.entity.ai.attributes.AttributeInstance;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('CombatFishingHook AttributeInstance import anchor changed')
+          if 'import net.minecraft.world.entity.ai.attributes.Attributes;\n' not in text:
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.entity.ai.attributes.Attributes;\n', 1)
 
           old = ('  @Override\n'
                  '  protected void defineSynchedData() {\n'
-                 '    this.entityData.define(FLUID, FluidStack.EMPTY);\n'
-                 '    this.entityData.define(WATER_INERTIA, 0.6f);\n'
+                 '    super.defineSynchedData();\n'
+                 '    this.entityData.define(GRAPPLE, (byte) GrappleType.NONE.ordinal());\n'
+                 '    this.entityData.define(COLLECTING, false);\n'
+                 '    this.entityData.define(MATERIAL, MaterialId.UNKNOWN);\n'
                  '  }')
           new = ('  @Override\n'
                  '  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n'
-                 '    builder.define(FLUID, FluidStack.EMPTY);\n'
-                 '    builder.define(WATER_INERTIA, 0.6f);\n'
+                 '    super.defineSynchedData(builder);\n'
+                 '    builder.define(GRAPPLE, (byte) GrappleType.NONE.ordinal());\n'
+                 '    builder.define(COLLECTING, false);\n'
+                 '    builder.define(MATERIAL, MaterialId.UNKNOWN);\n'
                  '  }')
           if text.count(old) != 1:
-              raise RuntimeError('FluidEffectProjectile synced-data block changed')
+              raise RuntimeError('CombatFishingHook synced-data block changed')
           text = text.replace(old, new, 1)
 
-          if text.count('nbt.put(KEY_FLUID, fluid.writeToNBT(new CompoundTag()));') != 1:
-              raise RuntimeError('FluidEffectProjectile legacy fluid save changed')
-          text = text.replace('nbt.put(KEY_FLUID, fluid.writeToNBT(new CompoundTag()));', 'nbt.put(KEY_FLUID, fluid.save(this.registryAccess()));', 1)
-
-          old = ('    if (nbt.contains(KEY_CANNON)) {\n'
-                 '      this.cannon = NbtUtils.readBlockPos(nbt.getCompound(KEY_CANNON));\n'
-                 '    } else {\n'
-                 '      this.cannon = null;\n'
-                 '    }')
-          new = ('    if (nbt.contains(KEY_CANNON)) {\n'
-                 '      this.cannon = NbtUtils.readBlockPos(nbt, KEY_CANNON).orElse(null);\n'
-                 '    } else {\n'
-                 '      this.cannon = null;\n'
-                 '    }')
+          old = ('            if (targetLiving != null) {\n'
+                 '              EnchantmentHelper.doPostHurtEffects(targetLiving, owner);\n'
+                 '            }')
+          new = ('            if (targetLiving != null && this.level() instanceof ServerLevel serverLevel) {\n'
+                 '              EnchantmentHelper.doPostAttackEffectsWithItemSource(serverLevel, targetLiving, source, null);\n'
+                 '            }')
           if text.count(old) != 1:
-              raise RuntimeError('FluidEffectProjectile cannon NBT load changed')
+              raise RuntimeError('CombatFishingHook legacy post-hurt enchantment block changed')
           text = text.replace(old, new, 1)
 
-          if text.count('setFluid(FluidStack.loadFluidStackFromNBT(nbt.getCompound(KEY_FLUID)));') != 1:
-              raise RuntimeError('FluidEffectProjectile legacy fluid load changed')
-          text = text.replace('setFluid(FluidStack.loadFluidStackFromNBT(nbt.getCompound(KEY_FLUID)));', 'setFluid(FluidStack.parseOptional(this.registryAccess(), nbt.getCompound(KEY_FLUID)));', 1)
+          if text.count('      player.startAutoSpinAttack(20);') != 1:
+              raise RuntimeError('CombatFishingHook old auto-spin call changed')
+          text = text.replace(
+              '      player.startAutoSpinAttack(20);',
+              '      player.startAutoSpinAttack(20, (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE), player.getWeaponItem());',
+              1)
+          hook.write_text(text, encoding='utf-8')
 
-          path.write_text(text, encoding='utf-8')
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = at.read_text(encoding='utf-8')
+          old = 'protected net.minecraft.world.entity.projectile.FishingHook f_37103_ # life'
+          new = 'protected net.minecraft.world.entity.projectile.FishingHook life'
+          if text.count(old) != 1:
+              raise RuntimeError(f'FishingHook life AT changed; expected legacy line once, got {text.count(old)}')
+          at.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Verify fluid projectile migration
+      - name: Verify combat fishing hook migration
         shell: bash
         run: |
-          grep -Fq 'Capabilities.ItemHandler.BLOCK' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'EventHooks.onProjectileImpact(this, hitResult)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'this.hitTargetOrDeflectSelf(hitResult);' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'dimensions.height()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'dimensions.width()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'fluid.save(this.registryAccess())' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'NbtUtils.readBlockPos(nbt, KEY_CANNON).orElse(null)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          grep -Fq 'FluidStack.parseOptional(this.registryAccess()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          ! grep -Fq 'ForgeCapabilities' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          ! grep -Fq 'ForgeEventFactory' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java
+          grep -Fq 'super.defineSynchedData(builder);' src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java
+          grep -Fq 'EnchantmentHelper.doPostAttackEffectsWithItemSource(serverLevel, targetLiving, source, null);' src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java
+          grep -Fq 'startAutoSpinAttack(20, (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE), player.getWeaponItem())' src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java
+          grep -Fq 'protected net.minecraft.world.entity.projectile.FishingHook life' src/main/resources/META-INF/accesstransformer.cfg
+          ! grep -Fq 'doPostHurtEffects' src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java
+          ! grep -Fq 'FishingHook f_37103_' src/main/resources/META-INF/accesstransformer.cfg
           git diff --check
 
-      - name: Commit fluid projectile migration
+      - name: Commit combat fishing hook migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
-          git commit -m 'Port fluid effect projectile to 1.21'
+          git add src/main/java/slimeknights/tconstruct/tools/entity/CombatFishingHook.java src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Port combat fishing hook to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
