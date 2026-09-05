@@ -59,7 +59,7 @@ public class StrongBonesModifier extends SingleLevelModifier {
     }
     level = ArmorLevelModule.getLevel(living, CALCIFIABLE);
     if (level > 0) {
-      MobEffectInstance effect = new MobEffectInstance(TinkerModifiers.calcifiedEffect.get(), flat + eachLevel * level, 0);
+      MobEffectInstance effect = new MobEffectInstance(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.calcifiedEffect), flat + eachLevel * level, 0);
       didSomething |= action.execute() ? living.addEffect(effect) : living.canBeAffected(effect);
     }
     return didSomething;

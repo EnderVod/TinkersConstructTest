@@ -1,6 +1,6 @@
 package slimeknights.tconstruct.tools.modifiers;
 
-import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.world.damagesource.DamageSource;
@@ -30,7 +30,7 @@ import javax.annotation.Nonnull;
 
 /** Global loot modifier for modifiers */
 public class ModifierLootModifier extends LootModifier {
-  public static final Codec<ModifierLootModifier> CODEC = RecordCodecBuilder.create(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));
+  public static final MapCodec<ModifierLootModifier> CODEC = RecordCodecBuilder.mapCodec(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));
 
   protected ModifierLootModifier(LootItemCondition[] conditionsIn) {
     super(conditionsIn);
@@ -51,7 +51,7 @@ public class ModifierLootModifier extends LootModifier {
     if (stack == null) {
       // if this loot is due to a projectile fired by one of our tools, then use that projectile as the loot source
       // prevents weirdness when held tool switches after firing a projectile
-      if (context.getParamOrNull(LootContextParams.DIRECT_KILLER_ENTITY) instanceof Projectile projectile) {
+      if (context.getParamOrNull(LootContextParams.DIRECT_ATTACKING_ENTITY) instanceof Projectile projectile) {
         ModifierNBT modifiers = EntityModifierCapability.getOrEmpty(projectile);
 
         // no need to build the dummy tool if we lack modifiers
@@ -69,7 +69,7 @@ public class ModifierLootModifier extends LootModifier {
       // not a projectile causing it, fetch the killer entity directly from loot context
       // requires a melee damage source, the held tool is not responsible for kills it did not make such as explosions
       DamageSource damageSource = context.getParamOrNull(LootContextParams.DAMAGE_SOURCE);
-      if (damageSource != null && damageSource.is(TinkerTags.DamageTypes.LOOT_MODIFIER_WHITELIST) && context.getParamOrNull(LootContextParams.KILLER_ENTITY) instanceof LivingEntity living) {
+      if (damageSource != null && damageSource.is(TinkerTags.DamageTypes.LOOT_MODIFIER_WHITELIST) && context.getParamOrNull(LootContextParams.ATTACKING_ENTITY) instanceof LivingEntity living) {
         stack = living.getItemBySlot(ModifierLootingHandler.getLootingSlot(living));
       }
     }
@@ -86,7 +86,7 @@ public class ModifierLootModifier extends LootModifier {
   }
 
   @Override
-  public Codec<? extends IGlobalLootModifier> codec() {
+  public MapCodec<? extends IGlobalLootModifier> codec() {
     return CODEC;
   }
 }

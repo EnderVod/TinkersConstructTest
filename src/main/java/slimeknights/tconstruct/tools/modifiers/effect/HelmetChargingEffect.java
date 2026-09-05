@@ -85,7 +85,7 @@ public class HelmetChargingEffect extends MobEffect {
   /** Starts using the helmet with the charge time rendering */
   public static int startUsingHelmet(IToolStackView tool, LivingEntity living, float speedFactor) {
     int time = GeneralInteractionModifierHook.startDrawing(tool, living, speedFactor);
-    living.addEffect(new MobEffectInstance(TinkerModifiers.helmetCharging.get(), time + 20, 0, true, false, true));
+    living.addEffect(new MobEffectInstance(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.helmetCharging), time + 20, 0, true, false, true));
     return time;
   }
 }
