@@ -1,4 +1,4 @@
-name: Tinkers Geometry Baking Migration
+name: Tinkers Model Data Component Cleanup
 
 on:
   push:
@@ -23,141 +23,123 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port model baking signatures to NeoForge 1.21
+      - name: Port residual model data APIs to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new, label):
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          # NeoForge 1.21 IUnbakedGeometry.bake no longer passes a ResourceLocation.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialModel.java')
-          replace_once(
-              path,
-              'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material, TextureAtlasSprite> spriteGetter, ModelState modelTransform, ItemOverrides vanillaOverrides, ResourceLocation modelLocation) {',
-              'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material, TextureAtlasSprite> spriteGetter, ModelState modelTransform, ItemOverrides vanillaOverrides) {',
-              'MaterialModel bake signature')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/UniqueGuiModel.java')
-          text = path.read_text(encoding='utf-8')
-          old = '''  public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides, ResourceLocation location) {\n    return new Baked(\n      model.bake(owner, baker, spriteGetter, transform, overrides, location),\n      gui.bake(owner, baker, spriteGetter, transform, overrides, location)\n    );\n  }'''
-          new = '''  public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides) {\n    return new Baked(\n      model.bake(owner, baker, spriteGetter, transform, overrides),\n      gui.bake(owner, baker, spriteGetter, transform, overrides)\n    );\n  }'''
-          if text.count(old) != 1:
-              raise RuntimeError('UniqueGuiModel bake block changed unexpectedly')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
+          # MaterialBlockModel has two distinct data stores: TOOL_DATA for full tools, CUSTOM_DATA for parts/retextures.
           path = Path('src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java')
           text = path.read_text(encoding='utf-8')
-          old_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material, TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides, ResourceLocation location) {'
-          new_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material, TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides) {'
-          if text.count(old_sig) != 1:
-              raise RuntimeError('MaterialBlockModel bake signature changed unexpectedly')
-          text = text.replace(old_sig, new_sig, 1)
-          if text.count('model.bake(owner, baker, spriteGetter, transform, overrides, location)') != 1:
-              raise RuntimeError('MaterialBlockModel nested bake changed unexpectedly')
-          text = text.replace('model.bake(owner, baker, spriteGetter, transform, overrides, location)', 'model.bake(owner, baker, spriteGetter, transform, overrides)', 1)
-          if text.count('tints.get(face.texture)') != 1:
-              raise RuntimeError('MaterialBlockModel face texture accessor changed unexpectedly')
-          text = text.replace('tints.get(face.texture)', 'tints.get(face.texture())', 1)
+          anchor = 'import slimeknights.tconstruct.library.tools.nbt.MaterialIdNBT;\n'
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              if anchor not in text: raise RuntimeError('MaterialBlockModel ToolData import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n', 1)
+          anchor = 'import slimeknights.tconstruct.library.tools.part.IMaterialItem;\n'
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
+              if anchor not in text: raise RuntimeError('MaterialBlockModel TagUtil import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
+          old = '      if (stack.isEmpty() || !stack.hasTag()) {'
+          if text.count(old) != 3:
+              raise RuntimeError(f'MaterialBlockModel expected 3 legacy tag guards, found {text.count(old)}')
+          text = text.replace(old, '      if (stack.isEmpty() || ToolDataComponents.getTag(stack) == null) {', 1)
+          text = text.replace(old, '        if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
+          text = text.replace(old, '        if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java')
-          text = path.read_text(encoding='utf-8')
-          old_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides, ResourceLocation location) {'
-          new_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides) {'
-          if text.count(old_sig) != 1:
-              raise RuntimeError('TankModel bake signature changed unexpectedly')
-          text = text.replace(old_sig, new_sig, 1)
-          text = text.replace('model.bake(owner, baker, spriteGetter, transform, overrides, location)', 'model.bake(owner, baker, spriteGetter, transform, overrides)', 1)
-          text = text.replace('gui.bake(owner, baker, spriteGetter, transform, overrides, location)', 'gui.bake(owner, baker, spriteGetter, transform, overrides)', 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Models that still need a location for logs/cache keys recover it from the baking context.
+          # Tool model stored ammo is still legacy CompoundTag inside modifier data; parse via the 1.21 registry-aware helper.
           path = Path('src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java')
           text = path.read_text(encoding='utf-8')
-          old_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelTransform, ItemOverrides overrides, ResourceLocation modelLocation) {'
-          new_sig = '''public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelTransform, ItemOverrides overrides) {\n    ResourceLocation modelLocation = ResourceLocation.tryParse(owner.getModelName());\n    if (modelLocation == null) {\n      modelLocation = TConstruct.getResource(\"unknown_model\");\n    }'''
-          if text.count(old_sig) != 1:
-              raise RuntimeError('ToolModel bake signature changed unexpectedly')
-          path.write_text(text.replace(old_sig, new_sig, 1), encoding='utf-8')
+          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '')
+          anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
+              if anchor not in text: raise RuntimeError('ToolModel TagUtil import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
+          old = '''        ammo = ItemStack.of(persistentData.getCompound(ammoKey));\n        builder.add(ammo.getItem());\n        CompoundTag tag = ammo.getTag();\n        if (tag != null) {\n          builder.add(tag);\n        }'''
+          new = '''        ammo = TagUtil.readItem(persistentData.getCompound(ammoKey));\n        builder.add(ammo.getItem());\n        builder.add(ammo.getComponents());'''
+          if text.count(old) != 1:
+              raise RuntimeError('ToolModel stored-ammo block changed unexpectedly')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Fluid container model: retain legacy JSON NBT compatibility through Mantle NBTLoadable + Tinkers custom-data helper.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
+          anchor = 'import slimeknights.mantle.data.loadable.Loadables;\n'
+          if 'import slimeknights.mantle.data.loadable.common.NBTLoadable;' not in text:
+              if anchor not in text: raise RuntimeError('FluidContainerModel NBTLoadable anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.mantle.data.loadable.common.NBTLoadable;\n', 1)
+          anchor = 'import slimeknights.tconstruct.TConstruct;\n'
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
+              if anchor not in text: raise RuntimeError('FluidContainerModel TagUtil anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
+          text = text.replace('tag = CraftingHelper.getNBT(fluidObject.get("nbt"));', 'tag = NBTLoadable.ALLOW_STRING.convert(fluidObject.get("nbt"), "nbt");')
+          text = text.replace('fluidStack = new FluidStack(fluid, FluidType.BUCKET_VOLUME, tag);', 'fluidStack = TagUtil.createFluidStack(fluid, FluidType.BUCKET_VOLUME, tag);')
+          text = text.replace('UnbakedGeometryHelper.createUnbakedItemElements(0, baseSprite.contents())', 'UnbakedGeometryHelper.createUnbakedItemElements(0, baseSprite)')
+          text = text.replace('UnbakedGeometryHelper.createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")).contents())', 'UnbakedGeometryHelper.createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")))')
+          text = text.replace('        $ -> baseSprite, modelState, modelLocation\n', '        $ -> baseSprite, modelState\n')
+          text = text.replace('        new SimpleModelState(modelState.getRotation().compose(FLUID_TRANSFORM), modelState.isUvLocked()),\n        modelLocation\n', '        new SimpleModelState(modelState.getRotation().compose(FLUID_TRANSFORM), modelState.isUvLocked())\n')
+          if 'CraftingHelper.getNBT' in text or 'new FluidStack(fluid, FluidType.BUCKET_VOLUME, tag)' in text or '.contents()),\n        $ ->' in text:
+              raise RuntimeError('FluidContainerModel legacy APIs remain after migration')
+          path.write_text(text, encoding='utf-8')
+
+          # Item overrides can query their component-backed helpers directly.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java')
+          text = path.read_text(encoding='utf-8')
+          anchor = 'import slimeknights.tconstruct.smeltery.item.TankItem;\n'
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
+              if anchor not in text: raise RuntimeError('TankModel TagUtil anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.utils.TagUtil;\n' + anchor, 1)
+          if text.count('if (stack.isEmpty() || !stack.hasTag()) {') != 1:
+              raise RuntimeError('TankModel legacy tag guard changed unexpectedly')
+          text = text.replace('if (stack.isEmpty() || !stack.hasTag()) {', 'if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
+          path.write_text(text, encoding='utf-8')
 
           path = Path('src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java')
           text = path.read_text(encoding='utf-8')
-          old_sig = 'public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides, ResourceLocation modelLocation) {'
-          new_sig = '''public BakedModel bake(IGeometryBakingContext owner, ModelBaker baker, Function<Material,TextureAtlasSprite> spriteGetter, ModelState transform, ItemOverrides overrides) {\n    ResourceLocation modelLocation = ResourceLocation.tryParse(owner.getModelName());\n    if (modelLocation == null) {\n      modelLocation = TConstruct.getResource(\"unknown_model\");\n    }'''
-          if text.count(old_sig) != 1:
-              raise RuntimeError('FluidTextureModel bake signature changed unexpectedly')
-          text = text.replace(old_sig, new_sig, 1)
-          if text.count('model.bake(owner, baker, spriteGetter, transform, overrides, modelLocation)') != 1:
-              raise RuntimeError('FluidTextureModel nested bake changed unexpectedly')
-          text = text.replace('model.bake(owner, baker, spriteGetter, transform, overrides, modelLocation)', 'model.bake(owner, baker, spriteGetter, transform, overrides)', 1)
-          text = text.replace('trimTextureName(face.texture)', 'trimTextureName(face.texture())')
+          anchor = 'import slimeknights.tconstruct.library.client.model.ModelProperties;\n'
+          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
+              if anchor not in text: raise RuntimeError('FluidTextureModel TagUtil anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
+          if text.count('if (stack.isEmpty() || !stack.hasTag()) {') != 1:
+              raise RuntimeError('FluidTextureModel legacy tag guard changed unexpectedly')
+          text = text.replace('if (stack.isEmpty() || !stack.hasTag()) {', 'if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
           path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java')
-          text = path.read_text(encoding='utf-8')
-          old_sig = 'public BakedModel bake(IGeometryBakingContext context, ModelBaker bakery, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides, ResourceLocation modelLocation) {'
-          new_sig = '''public BakedModel bake(IGeometryBakingContext context, ModelBaker bakery, Function<Material,TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides) {\n    ResourceLocation modelLocation = ResourceLocation.tryParse(context.getModelName());\n    if (modelLocation == null) {\n      modelLocation = TConstruct.getResource(\"unknown_model\");\n    }'''
-          if text.count(old_sig) != 1:
-              raise RuntimeError('FluidContainerModel bake signature changed unexpectedly')
-          path.write_text(text.replace(old_sig, new_sig, 1), encoding='utf-8')
-
-          # NeoForge helper signatures now take the sprite directly and no bake location.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java')
-          text = path.read_text(encoding='utf-8')
-          old_mask = 'UnbakedGeometryHelper.createUnbakedItemMaskElements(-1, spriteGetter.apply(template).contents())'
-          new_mask = 'UnbakedGeometryHelper.createUnbakedItemMaskElements(-1, spriteGetter.apply(template))'
-          if text.count(old_mask) != 1:
-              raise RuntimeError('FluidModifierModel mask helper changed unexpectedly')
-          text = text.replace(old_mask, new_mask, 1)
-          old_bake = 'UnbakedGeometryHelper.bakeElements(unbaked, mat -> fluidSprite, new SimpleModelState(transforms.applyOrigin(ORIGIN).compose(FluidContainerModel.FLUID_TRANSFORM), false), BAKE_LOCATION)'
-          new_bake = 'UnbakedGeometryHelper.bakeElements(unbaked, mat -> fluidSprite, new SimpleModelState(transforms.applyOrigin(ORIGIN).compose(FluidContainerModel.FLUID_TRANSFORM), false))'
-          if text.count(old_bake) != 1:
-              raise RuntimeError('FluidModifierModel bake helper changed unexpectedly')
-          path.write_text(text.replace(old_bake, new_bake, 1), encoding='utf-8')
           PY
 
-      - name: Verify geometry migration
+      - name: Verify model data cleanup
         shell: bash
         run: |
-          ! grep -R -F 'ItemOverrides overrides, ResourceLocation' \
-            src/main/java/slimeknights/tconstruct/library/client/model/UniqueGuiModel.java \
+          grep -Fq 'ToolDataComponents.getTag(stack) == null' src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java
+          test "$(grep -F -c '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java)" -eq 2
+          grep -Fq 'ammo = TagUtil.readItem' src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java
+          grep -Fq 'builder.add(ammo.getComponents());' src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java
+          grep -Fq 'NBTLoadable.ALLOW_STRING.convert' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
+          grep -Fq 'TagUtil.createFluidStack' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
+          grep -Fq 'createUnbakedItemElements(0, baseSprite)' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
+          grep -Fq 'createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")))' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
+          grep -Fq '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java
+          grep -Fq '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
+          ! grep -R -F 'stack.hasTag()' \
             src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java \
             src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq 'ResourceLocation.tryParse(owner.getModelName())' src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java
-          grep -Fq 'ResourceLocation.tryParse(owner.getModelName())' src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
-          grep -Fq 'ResourceLocation.tryParse(context.getModelName())' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq 'tints.get(face.texture())' src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java
-          grep -Fq 'createUnbakedItemMaskElements(-1, spriteGetter.apply(template))' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
-          ! grep -Fq 'bakeElements(unbaked, mat -> fluidSprite, new SimpleModelState(transforms.applyOrigin(ORIGIN).compose(FluidContainerModel.FLUID_TRANSFORM), false), BAKE_LOCATION)' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
+            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
           git diff --check
 
-      - name: Commit geometry migration
+      - name: Commit model data cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/client/model/UniqueGuiModel.java \
             src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialModel.java \
             src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java \
             src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
+            src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java \
+            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
           git diff --cached --quiet || {
-            git commit -m 'Port custom model baking APIs to NeoForge 1.21'
+            git commit -m 'Port residual model data APIs to 1.21 components'
             git push origin HEAD:1.21.1-neoforge
           }
 
