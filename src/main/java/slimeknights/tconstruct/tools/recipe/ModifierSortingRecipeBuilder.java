@@ -23,6 +23,6 @@ public class ModifierSortingRecipeBuilder extends AbstractSizedIngredientRecipeB
       throw new IllegalStateException("Must have at least one ingredient");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "modifiers");
-    consumer.accept(new LoadableFinishedRecipe<>(new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId));
   }
 }

@@ -88,6 +88,6 @@ public class ModifierRemovalRecipeBuilder extends AbstractSizedIngredientRecipeB
       throw new IllegalStateException("Must have at least one input");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "modifiers");
-    consumer.accept(new LoadableFinishedRecipe<>(constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId));
   }
 }
