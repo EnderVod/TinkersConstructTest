@@ -1,4 +1,4 @@
-name: Tinkers Small 1.21 Compatibility Cleanup
+name: Tinkers Mob Effect Holder Migration
 
 on:
   push:
@@ -23,89 +23,112 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port remaining small 1.21 APIs
+      - name: Port mob effect callsites to 1.21 holders
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Durability capability moved from Item to component-bearing ItemStack.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java')
+          # Raw effects still deserialize through Mantle; wrap at vanilla 1.21 holder callsites.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java')
           text = path.read_text(encoding='utf-8')
-          old = 'if (!stack.getItem().canBeDepleted() || !stack.is(TinkerTags.Items.DURABILITY)) {'
-          new = 'if (!stack.isDamageableItem() || !stack.is(TinkerTags.Items.DURABILITY)) {'
-          if text.count(old) != 1:
-              raise RuntimeError('DurabilityDisplayModifierHook stack durability check changed unexpectedly')
-          text = text.replace(old, new, 1)
-          old = 'return tool.getItem().canBeDepleted() && tool.getDamage() > 0;'
-          new = 'return tool.getDamage() > 0;'
-          if text.count(old) != 1:
-              raise RuntimeError('DurabilityDisplayModifierHook fallback durability check changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Adventure-mode placement predicate is still exposed directly on ItemStack under its 1.21 name.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java')
-          text = path.read_text(encoding='utf-8')
-          old = 'stack.hasAdventureModePlaceTagForBlock(level.registryAccess().registryOrThrow(Registries.BLOCK), new BlockInWorld(level, getBlockPos(), false))'
-          new = 'stack.canPlaceOnBlockInAdventureMode(new BlockInWorld(level, getBlockPos(), false))'
-          if text.count(old) != 1:
-              raise RuntimeError('FluidEffectContext adventure placement call changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # ChangeOverTimeBlock renamed applyChangeOverTime to changeOverTime in vanilla 1.21.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java')
-          text = path.read_text(encoding='utf-8')
-          old = 'copper.applyChangeOverTime(state, world, context.getBlockPos(), world.getRandom());'
-          new = 'copper.changeOverTime(state, world, context.getBlockPos(), world.getRandom());'
-          if text.count(old) != 1:
-              raise RuntimeError('FluidEffect copper weathering call changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Mantle owns the compatibility wrapper for NeoForge condition codecs.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
-          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' not in text:
-              anchor = 'import slimeknights.mantle.recipe.ingredient.FluidIngredient;\n'
+          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
+              anchor = 'import net.minecraft.core.RegistryAccess;\n'
               if anchor not in text:
-                  raise RuntimeError('FluidEffectManager Mantle import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' + anchor, 1)
-          old = 'if (!CraftingHelper.processConditions(json, "conditions", conditionContext)) {'
-          new = 'if (!ConditionHelper.processConditions(json, "conditions", conditionContext)) {'
+                  raise RuntimeError('RemoveEffectFluidEffect import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.core.registries.BuiltInRegistries;\n', 1)
+          old = '''      if (action.simulate()) {\n        return living.hasEffect(effect) ? 1 : 0;\n      }\n      return living.removeEffect(effect) ? 1 : 0;'''
+          new = '''      var holder = BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);\n      if (action.simulate()) {\n        return living.hasEffect(holder) ? 1 : 0;\n      }\n      return living.removeEffect(holder) ? 1 : 0;'''
           if text.count(old) != 1:
-              raise RuntimeError('FluidEffectManager condition call changed unexpectedly')
+              raise RuntimeError('RemoveEffectFluidEffect holder callsites changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # PotionContents already provides Holder<MobEffect>; preserve that holder all the way through.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import net.minecraft.core.Holder;\n' not in text:
+              anchor = 'import net.minecraft.core.component.DataComponents;\n'
+              if anchor not in text:
+                  raise RuntimeError('PotionFluidEffect component import anchor missing')
+              text = text.replace(anchor, 'import net.minecraft.core.Holder;\n' + anchor, 1)
+          text = text.replace('import net.minecraft.world.effect.MobEffect;\n', '')
+          old = '''        for (MobEffectInstance instance : effects) {\n          MobEffect effect = instance.getEffect();\n          if (effect.isInstantenous()) {'''
+          new = '''        for (MobEffectInstance instance : effects) {\n          Holder<net.minecraft.world.effect.MobEffect> effect = instance.getEffect();\n          if (effect.value().isInstantenous()) {'''
+          if text.count(old) != 1:
+              raise RuntimeError('PotionFluidEffect effect holder declaration changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = 'effect.applyInstantenousEffect(directSource, attacker, target, instance.getAmplifier(), used * scale);'
+          new = 'effect.value().applyInstantenousEffect(directSource, attacker, target, instance.getAmplifier(), used * scale);'
+          if text.count(old) != 1:
+              raise RuntimeError('PotionFluidEffect instant application changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # FluidMobEffect keeps its serialized raw MobEffect API but uses a holder with vanilla entities/instances.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
+              anchor = 'import net.minecraft.network.chat.Component;\n'
+              if anchor not in text:
+                  raise RuntimeError('FluidMobEffect import anchor missing')
+              text = text.replace(anchor, 'import net.minecraft.core.registries.BuiltInRegistries;\n' + anchor, 1)
+          old = 'MobEffectInstance instance = new MobEffectInstance(effect, time, this.level - 1);'
+          new = 'MobEffectInstance instance = new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), time, this.level - 1);'
+          if text.count(old) != 1:
+              raise RuntimeError('FluidMobEffect constructor changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = 'MobEffectInstance existingInstance = target.getEffect(effect);'
+          new = 'MobEffectInstance existingInstance = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'
+          if text.count(old) != 1:
+              raise RuntimeError('FluidMobEffect existing effect lookup changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Combat module follows the same serialized-raw/runtime-holder pattern.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
+              anchor = 'import net.minecraft.core.BlockPos;\n'
+              if anchor not in text:
+                  raise RuntimeError('MobEffectModule import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.core.registries.BuiltInRegistries;\n', 1)
+          old = 'MobEffectInstance instance = new MobEffectInstance(effect, (int)duration, level);'
+          new = 'MobEffectInstance instance = new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level);'
+          if text.count(old) != 1:
+              raise RuntimeError('MobEffectModule local instance constructor changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = 'target.addEffect(new MobEffectInstance(effect, (int)duration, level), cause);'
+          new = 'target.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level), cause);'
+          if text.count(old) != 1:
+              raise RuntimeError('MobEffectModule add effect constructor changed unexpectedly')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify small compatibility cleanup
+      - name: Verify mob effect holder migration
         shell: bash
         run: |
-          grep -Fq '!stack.isDamageableItem()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
-          grep -Fq 'return tool.getDamage() > 0;' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
-          ! grep -Fq 'canBeDepleted()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
-          grep -Fq 'stack.canPlaceOnBlockInAdventureMode(new BlockInWorld' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
-          ! grep -Fq 'hasAdventureModePlaceTagForBlock' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
-          grep -Fq 'copper.changeOverTime(state, world, context.getBlockPos(), world.getRandom());' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java
-          grep -Fq 'ConditionHelper.processConditions(json, "conditions", conditionContext)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
-          ! grep -Fq 'CraftingHelper.processConditions' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
+          grep -Fq 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java
+          grep -Fq 'Holder<net.minecraft.world.effect.MobEffect> effect = instance.getEffect();' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
+          grep -Fq 'effect.value().isInstantenous()' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
+          grep -Fq 'effect.value().applyInstantenousEffect' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
+          test "$(grep -F -c 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java)" -eq 2
+          test "$(grep -F -c 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java)" -eq 2
           git diff --check
 
-      - name: Commit small compatibility cleanup
+      - name: Commit mob effect holder migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
           git diff --cached --quiet || {
-            git commit -m 'Port remaining small compatibility APIs to 1.21'
+            git commit -m 'Port mob effect callsites to 1.21 holders'
             git push origin HEAD:1.21.1-neoforge
           }
 
