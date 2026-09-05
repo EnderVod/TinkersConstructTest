@@ -5,10 +5,12 @@ import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -43,16 +45,10 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
     // vanilla tools tend not to call the proper damage methods if player is null, so just manually damage the stack
     // we expect modded items will have the same bug, so just go ahead and damage them. On the chance it works, they get 2 damage, no big deal
     // our tools we know work so ignore them
-    if (!level.isClientSide && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
-      // unable to call Forge damageItem as that needs entity access, but its just vanilla broken anyways, right?
-      stack.hurt(1, level.getRandom(), null);
-      // calling methods again instead of using return as return may be incorrect for custom broken stacks
-      if (stack.getDamageValue() >= stack.getMaxDamage()) {
-        // but that won't happen, right? will need to consider another workaround in that case.
-        stack.shrink(1);
-        stack.setDamageValue(0);
-        level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);
-      }
+    if (level instanceof ServerLevel server && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
+      // Player-less item use does not damage vanilla tools itself. Use the 1.21 durability path so enchantments/components are honored.
+      stack.hurtAndBreak(1, server, null,
+        item -> level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F));
     }
   }
 
@@ -135,16 +131,32 @@ public enum BlockInteractFluidEffect implements FluidEffect<FluidEffectContext.B
         }
       }
 
-      // click the block
+      // click the block. In 1.21 vanilla split item-on-block interaction from default empty-hand-style block interaction.
       ItemStack original = heldItem.copy();
       if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
-        InteractionResult result = state.use(world, player, hand, hitResult);
-        if (result.consumesAction()) {
+        ItemInteractionResult itemResult = state.useItemOn(heldItem, world, player, hand, hitResult);
+        if (itemResult.consumesAction()) {
           if (player instanceof ServerPlayer serverPlayer) {
             CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);
           }
           player.swing(hand, true);
           return 1;
+        }
+        if (itemResult == ItemInteractionResult.FAIL) {
+          return 0;
+        }
+        if (itemResult == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION && hand == InteractionHand.MAIN_HAND) {
+          InteractionResult result = state.useWithoutItem(world, player, hitResult);
+          if (result.consumesAction()) {
+            if (player instanceof ServerPlayer serverPlayer) {
+              CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);
+            }
+            player.swing(hand, true);
+            return 1;
+          }
+          if (result == InteractionResult.FAIL) {
+            return 0;
+          }
         }
       }
 
