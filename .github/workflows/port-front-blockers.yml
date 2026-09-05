@@ -1,4 +1,4 @@
-name: Tinkers Thrown Tool and AT Migration
+name: Tinkers Banner Component Migration
 
 on:
   push:
@@ -23,134 +23,147 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Refresh 1.21 access targets and thrown tool stack state
+      - name: Port banner patterns to 1.21 components and asset IDs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Refresh stale access-transformer names to Mojmap 1.21.1 members.
-          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          # Banner module: store registry ID, asset ID, and translation key instead of removed short hashes.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java')
           text = path.read_text(encoding='utf-8')
-          replacements = {
-            'public net.minecraft.world.entity.LivingEntity m_21060_(Lnet/minecraft/world/item/ItemStack;I)V # spawnItemParticles':
-              'public net.minecraft.world.entity.LivingEntity spawnItemParticles(Lnet/minecraft/world/item/ItemStack;I)V # eating particles',
-            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37555_ # tridentItem\n': '',
-            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37556_ # dealtDamage':
-              'protected net.minecraft.world.entity.projectile.ThrownTrident dealtDamage',
-            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37558_ # ID_LOYALTY':
-              'protected net.minecraft.world.entity.projectile.ThrownTrident ID_LOYALTY',
-            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37554_ # ID_FOIL':
-              'protected net.minecraft.world.entity.projectile.ThrownTrident ID_FOIL',
-            'protected net.minecraft.world.entity.projectile.AbstractArrow f_36697_ # life':
-              'protected net.minecraft.world.entity.projectile.AbstractArrow life',
-            'public net.minecraft.world.level.biome.Biome m_47505_(Lnet/minecraft/core/BlockPos;)F # getTemperature':
-              'public net.minecraft.world.level.biome.Biome getTemperature(Lnet/minecraft/core/BlockPos;)F # positional temperature',
-          }
-          for old, new in replacements.items():
-              if text.count(old) != 1:
-                  raise RuntimeError(f'access transformer target changed unexpectedly: {old}')
-              text = text.replace(old, new, 1)
+          text = text.replace('import net.minecraft.core.registries.BuiltInRegistries;\n', 'import net.minecraft.core.registries.Registries;\n')
+          if 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n' not in text:
+              anchor = 'import net.minecraft.world.level.block.entity.BannerPattern;\n'
+              if anchor not in text:
+                  raise RuntimeError('BannerModule BannerPattern import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n', 1)
+          old = '  /** Key for a pattern hash, from {@link BannerPattern#getHashname()} */\n  public static final String KEY_PATTERN = "pattern";'
+          new = '  /** Key for the banner pattern registry ID. */\n  public static final String KEY_PATTERN = "pattern";\n  /** Key for the banner pattern asset ID used by shield/banner textures. */\n  public static final String KEY_ASSET = "asset";\n  /** Key for the banner pattern translation key. */\n  public static final String KEY_TRANSLATION = "translation";'
+          if text.count(old) != 1:
+              raise RuntimeError('BannerModule pattern constant block changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          old = '''          Holder<BannerPattern> holder = BannerPattern.byHash(tag.getString(KEY_PATTERN));\n          if (holder != null) {\n            // note that Forge is dumb in BannerItem with their patch - mojang already adds the mod ID to the tooltip key\n            holder.unwrapKey().ifPresent(key ->\n              tooltip.add(Component.translatable("block.minecraft.banner." + key.location().toShortLanguageKey() + '.' + dye.getName()).withStyle(ChatFormatting.GRAY)));\n\n          }'''
+          new = '''          String translation = tag.getString(KEY_TRANSLATION);\n          if (!translation.isEmpty()) {\n            tooltip.add(Component.translatable(translation + '.' + dye.getName()).withStyle(ChatFormatting.GRAY));\n          } else if (access != null) {\n            ResourceLocation patternId = ResourceLocation.tryParse(tag.getString(KEY_PATTERN));\n            if (patternId != null) {\n              access.lookupOrThrow(Registries.BANNER_PATTERN).get(ResourceKey.create(Registries.BANNER_PATTERN, patternId))\n                .ifPresent(holder -> tooltip.add(Component.translatable(holder.value().translationKey() + '.' + dye.getName()).withStyle(ChatFormatting.GRAY)));\n            }\n          }'''
+          if text.count(old) != 1:
+              raise RuntimeError('BannerModule legacy tooltip lookup changed unexpectedly')
+          text = text.replace(old, new, 1)
+          if 'import net.minecraft.resources.ResourceKey;\n' not in text:
+              anchor = 'import net.minecraft.resources.ResourceLocation;\n'
+              if anchor not in text:
+                  raise RuntimeError('BannerModule ResourceLocation import anchor missing')
+              text = text.replace(anchor, 'import net.minecraft.resources.ResourceKey;\n' + anchor, 1)
+
+          marker = '  /** Copies the given list of patterns from banner format to the tool\'s NBT */\n'
+          start = text.find(marker)
+          end = text.rfind('\n}')
+          if start < 0 or end <= start:
+              raise RuntimeError('BannerModule copyPatterns region not found')
+          replacement = '''  /** Adds one banner layer to persistent tool data. */\n  private static void addPattern(ListTag patterns, Holder<BannerPattern> holder, DyeColor dye) {\n    BannerPattern pattern = holder.value();\n    CompoundTag tag = new CompoundTag();\n    holder.unwrapKey().ifPresent(key -> tag.putString(KEY_PATTERN, key.location().toString()));\n    tag.putString(KEY_ASSET, pattern.assetId().toString());\n    tag.putString(KEY_TRANSLATION, pattern.translationKey());\n    tag.putInt(KEY_DYE, dye.getId());\n    tag.putInt(KEY_COLOR, Util.getColor(dye));\n    patterns.add(tag);\n  }\n\n  /** Copies the given banner pattern component to the tool's persistent data. */\n  public static void copyPatterns(ModDataNBT data, ModifierId id, DyeColor dye, RegistryAccess access, BannerPatternLayers banner) {\n    int baseColor = Util.getColor(dye);\n    ListTag patterns = new ListTag();\n\n    // tools render the banner base as a pattern layer, matching shield rendering behavior\n    Holder<BannerPattern> base = access.lookupOrThrow(Registries.BANNER_PATTERN).getOrThrow(BannerPatterns.BASE);\n    addPattern(patterns, base, dye);\n\n    int hashCode = baseColor;\n    for (BannerPatternLayers.Layer layer : banner.layers()) {\n      addPattern(patterns, layer.pattern(), layer.color());\n      int color = Util.getColor(layer.color());\n      hashCode = 31 * (31 * hashCode + color) + layer.pattern().value().assetId().hashCode();\n    }\n\n    data.put(patternKey(id), patterns);\n    data.putInt(cacheKey(id), hashCode);\n  }\n'''
+          text = text[:start] + replacement + text[end:]
           path.write_text(text, encoding='utf-8')
 
-          # Public current-tick eye-fluid query replaces the removed protected previous-eye flag.
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java')
+          # Model: asset IDs are stored directly, so no registry/hash lookup or private Sheets map is needed.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.tags.FluidTags;\n' not in text:
-              anchor = 'import net.minecraft.core.BlockPos;\n'
+          for imp in [
+              'import net.minecraft.client.renderer.Sheets;\n',
+              'import net.minecraft.core.Holder;\n',
+              'import net.minecraft.resources.ResourceKey;\n',
+              'import net.minecraft.world.level.block.entity.BannerPattern;\n',
+              'import slimeknights.tconstruct.common.config.Config;\n']:
+              text = text.replace(imp, '')
+          vstart = text.find('  @Override\n  public void validate(')
+          vend = text.find('  @Override\n  public Object getCacheKey', vstart)
+          if vstart < 0 or vend < 0:
+              raise RuntimeError('BannerModifierModel validate method region missing')
+          text = text[:vstart] + '''  @Override\n  public void validate(Function<Material, TextureAtlasSprite> spriteGetter) {\n    // Banner patterns are data-driven in 1.21, so there is no static pattern set to validate here.\n  }\n\n''' + text[vend:]
+          qstart = text.find('  @Override\n  public void addQuads(')
+          qend = text.rfind('\n}')
+          if qstart < 0 or qend <= qstart:
+              raise RuntimeError('BannerModifierModel addQuads region missing')
+          qmethod = '''  @Override\n  public void addQuads(IToolStackView tool, ModifierEntry modifier, Function<Material, TextureAtlasSprite> spriteGetter, Transformation transforms, boolean isLarge, int startTintIndex, Consumer<Collection<BakedQuad>> quadConsumer, @Nullable ItemLayerPixels pixels) {\n    ResourceLocation prefix = isLarge ? largePrefix : smallPrefix;\n    if (prefix != null) {\n      IModDataView modData = tool.getPersistentData();\n      ResourceLocation key = BannerModule.patternKey(modifier.getId());\n      if (modData.contains(key, CompoundTag.TAG_LIST)) {\n        ListTag list = modData.getList(key, ListTag.TAG_COMPOUND);\n        List<BakedQuad> quads = new ArrayList<>(list.size());\n        for (int i = 0; i < list.size(); i++) {\n          CompoundTag tag = list.getCompound(i);\n          ResourceLocation asset = ResourceLocation.tryParse(tag.getString(BannerModule.KEY_ASSET));\n          if (asset == null) {\n            // best-effort compatibility for data that stored a full resource ID before the asset field existed\n            asset = ResourceLocation.tryParse(tag.getString(BannerModule.KEY_PATTERN));\n          }\n          if (asset != null) {\n            int color = tag.getInt(BannerModule.KEY_COLOR);\n            TextureAtlasSprite sprite = spriteGetter.apply(ModifierModel.blockAtlas(prefix.withSuffix(MaterialRenderInfo.getSuffix(asset))));\n            if (!MissingTextureAtlasSprite.getLocation().equals(sprite.contents().name())) {\n              quads.add(MantleItemLayerModel.getQuadForGui(color, -1, sprite, transforms, 0));\n            }\n          }\n        }\n        if (!quads.isEmpty()) {\n          quadConsumer.accept(quads);\n        }\n      }\n    }\n  }\n'''
+          text = text[:qstart] + qmethod + text[qend:]
+          path.write_text(text, encoding='utf-8')
+
+          # Recipe: banner patterns moved from BlockEntity NBT to a data component.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '')
+          text = text.replace('import net.minecraft.nbt.ListTag;\n', '')
+          text = text.replace('import net.minecraft.nbt.Tag;\n', '')
+          text = text.replace('import net.minecraft.world.item.BlockItem;\n', '')
+          if 'import net.minecraft.core.component.DataComponents;\n' not in text:
+              anchor = 'import net.minecraft.core.RegistryAccess;\n'
               if anchor not in text:
-                  raise RuntimeError('EntityVariable BlockPos import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.tags.FluidTags;\n', 1)
-          old = '    if (entity.isInWater() || entity.wasEyeInWater) {'
-          new = '    if (entity.isInWater() || entity.isEyeInFluid(FluidTags.WATER)) {'
+                  raise RuntimeError('BannerModifierRecipe RegistryAccess import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.core.component.DataComponents;\n', 1)
+          if 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n' not in text:
+              anchor = 'import net.minecraft.world.level.Level;\n'
+              if anchor not in text:
+                  raise RuntimeError('BannerModifierRecipe Level import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n', 1)
+          old = '''    // get the banner data\n    CompoundTag bannerData = BlockItem.getBlockEntityData(banner);\n    ListTag patterns = new ListTag();\n    if (bannerData != null) {\n      patterns = bannerData.getList("Patterns", Tag.TAG_COMPOUND);\n    }\n\n    // apply the pattern\n    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, patterns);'''
+          new = '''    // banner patterns are a data component in 1.21\n    BannerPatternLayers patterns = banner.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY);\n\n    // apply the pattern\n    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, access, patterns);'''
           if text.count(old) != 1:
-              raise RuntimeError('EntityVariable water check changed unexpectedly')
+              raise RuntimeError('BannerModifierRecipe legacy banner NBT block changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = '      ListTag patterns = new ListTag();\n      List<ModifierEntry> results = List.of(RESULT);\n      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, patterns))).toList();'
+          new = '      BannerPatternLayers patterns = BannerPatternLayers.EMPTY;\n      List<ModifierEntry> results = List.of(RESULT);\n      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, access, patterns))).toList();'
+          if text.count(old) != 1:
+              raise RuntimeError('BannerModifierRecipe display banner block changed unexpectedly')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # ThrownTool can keep extending ThrownTrident. The old tridentItem field is gone in 1.21;
-          # use AbstractArrow's protected pickup stack setter and public origin accessor instead.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java')
+          # Sprite source: scan the actual shield-pattern texture folder instead of private Sheets.SHIELD_MATERIALS.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
           text = path.read_text(encoding='utf-8')
-
-          old = '    this.tridentItem = stack.copyWithCount(1);'
-          new = '    this.setPickupItemStack(stack.copyWithCount(1));'
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownTool legacy trident stack assignment changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          anchor = '  /** Sets any relevant properties from the stack */\n'
-          helper = '''  /** Gets the actual tool stack. Clients use the synced display stack as AbstractArrow does not sync its pickup origin. */\n  private ItemStack getToolItem() {\n    if (level().isClientSide) {\n      ItemStack synced = this.entityData.get(STACK);\n      if (!synced.isEmpty()) {\n        return synced;\n      }\n    }\n    return this.getPickupItemStackOrigin();\n  }\n\n'''
-          if anchor not in text or 'private ItemStack getToolItem()' in text:
-              raise RuntimeError('ThrownTool helper insertion shape changed unexpectedly')
-          text = text.replace(anchor, helper + anchor, 1)
-
-          # All remaining old tridentItem reads refer to the current tool stack.
-          if text.count('tridentItem') != 27:
-              raise RuntimeError(f'ThrownTool expected 27 remaining tridentItem references, found {text.count("tridentItem")}')
-          text = text.replace('tridentItem', 'getToolItem()')
-
-          # Avoid using the client-selected stack while refreshing authoritative server state.
-          old = '''  private void updateFromStack() {\n    this.entityData.set(STACK, getToolItem());\n    this.entityData.set(ID_LOYALTY, (byte) ModifierUtil.getVolatileInt(getToolItem(), LOYALTY));\n    this.entityData.set(ID_FOIL, ModifierUtil.checkVolatileFlag(getToolItem(), ModifiableItem.SHINY));\n    this.noDespawn = ModifierUtil.checkVolatileFlag(getToolItem(), IndestructibleItemEntity.INDESTRUCTIBLE_ENTITY);\n    if (!level().isClientSide) {\n      this.magnet = ModifierUtil.getVolatileInt(getToolItem(), MAGNET);\n    }\n  }'''
-          new = '''  private void updateFromStack() {\n    ItemStack stack = this.getPickupItemStackOrigin();\n    this.tool = null;\n    this.entityData.set(STACK, stack);\n    this.entityData.set(ID_LOYALTY, (byte) ModifierUtil.getVolatileInt(stack, LOYALTY));\n    this.entityData.set(ID_FOIL, ModifierUtil.checkVolatileFlag(stack, ModifiableItem.SHINY));\n    this.noDespawn = ModifierUtil.checkVolatileFlag(stack, IndestructibleItemEntity.INDESTRUCTIBLE_ENTITY);\n    if (!level().isClientSide) {\n      this.magnet = ModifierUtil.getVolatileInt(stack, MAGNET);\n    }\n  }'''
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownTool updateFromStack block changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '  @Override\n  public boolean isChanneling() {'
-          new = '  public boolean isChanneling() {'
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownTool isChanneling override shape changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          if text.count('ItemStack.isSameItemSameTags(current, pickup)') != 1:
-              raise RuntimeError('ThrownTool legacy stack component comparison changed unexpectedly')
-          text = text.replace('ItemStack.isSameItemSameTags(current, pickup)', 'ItemStack.isSameItemSameComponents(current, pickup)', 1)
-
-          old = '''  @Override\n  protected void defineSynchedData() {\n    super.defineSynchedData();\n    this.entityData.define(STACK, ItemStack.EMPTY);\n    this.entityData.define(WATER_INERTIA, 0.6f);\n  }'''
-          new = '''  @Override\n  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n    super.defineSynchedData(builder);\n    builder.define(STACK, ItemStack.EMPTY);\n    builder.define(WATER_INERTIA, 0.6f);\n  }'''
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownTool synced data definition changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '''    super.readAdditionalSaveData(tag);\n    // update the tool to sync to client, if its set\n    if (tag.contains("Trident", CompoundTag.TAG_COMPOUND)) {\n      updateFromStack();\n    }'''
-          new = '''    super.readAdditionalSaveData(tag);\n    // AbstractArrow 1.21 restores the pickup stack from its "item" field before this point.\n    updateFromStack();'''
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownTool legacy Trident NBT refresh changed unexpectedly')
-          text = text.replace(old, new, 1)
-
+          for imp in [
+              'import net.minecraft.client.renderer.Sheets;\n',
+              'import net.minecraft.client.resources.model.Material;\n',
+              'import net.minecraft.resources.ResourceKey;\n',
+              'import net.minecraft.world.level.block.entity.BannerPattern;\n']:
+              text = text.replace(imp, '')
+          rstart = text.find('  @Override\n  public void run(ResourceManager manager, Output output) {')
+          rend = text.find('  @Override\n  public SpriteSourceType type()', rstart)
+          if rstart < 0 or rend < 0:
+              raise RuntimeError('ShieldBannerModifierSpriteSource run method region missing')
+          run_method = '''  @Override\n  public void run(ResourceManager manager, Output output) {\n    String root = "textures/entity/shield/";\n    for (Entry<ResourceLocation,Resource> entry : manager.listResources("textures/entity/shield", id -> id.getPath().endsWith(".png")).entrySet()) {\n      ResourceLocation input = entry.getKey();\n      String path = input.getPath();\n      if (!path.startsWith(root) || !path.endsWith(".png")) {\n        continue;\n      }\n      String assetPath = path.substring(root.length(), path.length() - 4);\n      ResourceLocation assetId = ResourceLocation.fromNamespaceAndPath(input.getNamespace(), assetPath);\n      LazyLoadedImage image = new LazyLoadedImage(input, entry.getValue(), 1);\n      ResourceLocation destination = destinationPrefix.withSuffix(MaterialRenderInfo.getSuffix(assetId));\n      output.add(destination, new BannerModifierSpriteSupplier(image, input, destination));\n    }\n  }\n\n'''
+          text = text[:rstart] + run_method + text[rend:]
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify thrown tool and access target migration
+      - name: Verify banner component migration
         shell: bash
         run: |
-          grep -Fq 'public net.minecraft.world.entity.LivingEntity spawnItemParticles(Lnet/minecraft/world/item/ItemStack;I)V' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident dealtDamage' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident ID_LOYALTY' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident ID_FOIL' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'protected net.minecraft.world.entity.projectile.AbstractArrow life' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'public net.minecraft.world.level.biome.Biome getTemperature(Lnet/minecraft/core/BlockPos;)F' src/main/resources/META-INF/accesstransformer.cfg
-          ! grep -Fq 'f_37555_ # tridentItem' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'entity.isEyeInFluid(FluidTags.WATER)' src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java
-          grep -Fq 'this.setPickupItemStack(stack.copyWithCount(1));' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
-          grep -Fq 'return this.getPickupItemStackOrigin();' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
-          grep -Fq 'protected void defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
-          grep -Fq 'ItemStack.isSameItemSameComponents(current, pickup)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
-          ! grep -Fq 'tridentItem' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
-          ! grep -Fq 'tag.contains("Trident"' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          grep -Fq 'public static final String KEY_ASSET = "asset";' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
+          grep -Fq 'pattern.assetId().toString()' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
+          grep -Fq 'BannerPatternLayers banner' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
+          grep -Fq 'DataComponents.BANNER_PATTERNS' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
+          grep -Fq 'BannerModule.KEY_ASSET' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java
+          grep -Fq 'manager.listResources("textures/entity/shield"' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          grep -Fq 'MaterialRenderInfo.getSuffix(assetId)' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          ! grep -R -F 'BannerPattern.byHash' \
+            src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java
+          ! grep -R -F 'Sheets.SHIELD_MATERIALS' \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java \
+            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          ! grep -Fq 'BlockItem.getBlockEntityData(banner)' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
           git diff --check
 
-      - name: Commit thrown tool and access target migration
+      - name: Commit banner component migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/resources/META-INF/accesstransformer.cfg \
-            src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java \
-            src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+            src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java \
+            src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java \
+            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
           git diff --cached --quiet || {
-            git commit -m 'Port thrown tool state and access targets to 1.21'
+            git commit -m 'Port banner patterns to 1.21 components'
             git push origin HEAD:1.21.1-neoforge
           }
 
