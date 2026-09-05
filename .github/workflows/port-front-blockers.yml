@@ -1,4 +1,4 @@
-name: Tinkers Banner Component Migration
+name: Tinkers 1.21 Compatibility Cleanup
 
 on:
   push:
@@ -23,151 +23,172 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port banner patterns to 1.21 components and asset IDs
+      - name: Apply 1.21 compatibility cleanup
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Banner module: store registry ID, asset ID, and translation key instead of removed short hashes.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java')
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise RuntimeError(f'{label}: expected exactly one match, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 1.21 enchantments expose slot matching and component-driven protection calculation.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.core.registries.BuiltInRegistries;\n', 'import net.minecraft.core.registries.Registries;\n')
-          if 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n' not in text:
-              anchor = 'import net.minecraft.world.level.block.entity.BannerPattern;\n'
-              if anchor not in text:
-                  raise RuntimeError('BannerModule BannerPattern import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n', 1)
-          old = '  /** Key for a pattern hash, from {@link BannerPattern#getHashname()} */\n  public static final String KEY_PATTERN = "pattern";'
-          new = '  /** Key for the banner pattern registry ID. */\n  public static final String KEY_PATTERN = "pattern";\n  /** Key for the banner pattern asset ID used by shield/banner textures. */\n  public static final String KEY_ASSET = "asset";\n  /** Key for the banner pattern translation key. */\n  public static final String KEY_TRANSLATION = "translation";'
+          text = text.replace('import slimeknights.mantle.util.LogicHelper;\n', '')
+          anchor = 'import net.minecraft.resources.ResourceLocation;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('EnchantmentModule ResourceLocation import anchor changed')
+          text = text.replace(anchor, anchor + 'import net.minecraft.server.level.ServerLevel;\n', 1)
+          anchor = 'import org.jetbrains.annotations.ApiStatus.Internal;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('EnchantmentModule Internal import anchor changed')
+          text = text.replace(anchor, 'import org.apache.commons.lang3.mutable.MutableFloat;\n' + anchor, 1)
+          old = '''        Enchantment enchantment = enchantment();
+        if (subtractLevel > 0 && LogicHelper.isInList(enchantment.slots, slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)) {
+          modifierValue -= enchantment.getDamageProtection(subtractLevel, source);
+        }'''
+          new = '''        Enchantment enchantment = enchantment();
+        if (subtractLevel > 0 && enchantment.matchingSlot(slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)
+            && context.getLevel() instanceof ServerLevel serverLevel) {
+          MutableFloat protection = new MutableFloat(0f);
+          enchantment.modifyDamageProtection(serverLevel, subtractLevel, context.getEntity().getItemBySlot(slotType), context.getEntity(), source, protection);
+          modifierValue -= protection.floatValue();
+        }'''
           if text.count(old) != 1:
-              raise RuntimeError('BannerModule pattern constant block changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '''          Holder<BannerPattern> holder = BannerPattern.byHash(tag.getString(KEY_PATTERN));\n          if (holder != null) {\n            // note that Forge is dumb in BannerItem with their patch - mojang already adds the mod ID to the tooltip key\n            holder.unwrapKey().ifPresent(key ->\n              tooltip.add(Component.translatable("block.minecraft.banner." + key.location().toShortLanguageKey() + '.' + dye.getName()).withStyle(ChatFormatting.GRAY)));\n\n          }'''
-          new = '''          String translation = tag.getString(KEY_TRANSLATION);\n          if (!translation.isEmpty()) {\n            tooltip.add(Component.translatable(translation + '.' + dye.getName()).withStyle(ChatFormatting.GRAY));\n          } else if (access != null) {\n            ResourceLocation patternId = ResourceLocation.tryParse(tag.getString(KEY_PATTERN));\n            if (patternId != null) {\n              access.lookupOrThrow(Registries.BANNER_PATTERN).get(ResourceKey.create(Registries.BANNER_PATTERN, patternId))\n                .ifPresent(holder -> tooltip.add(Component.translatable(holder.value().translationKey() + '.' + dye.getName()).withStyle(ChatFormatting.GRAY)));\n            }\n          }'''
-          if text.count(old) != 1:
-              raise RuntimeError('BannerModule legacy tooltip lookup changed unexpectedly')
-          text = text.replace(old, new, 1)
-          if 'import net.minecraft.resources.ResourceKey;\n' not in text:
-              anchor = 'import net.minecraft.resources.ResourceLocation;\n'
-              if anchor not in text:
-                  raise RuntimeError('BannerModule ResourceLocation import anchor missing')
-              text = text.replace(anchor, 'import net.minecraft.resources.ResourceKey;\n' + anchor, 1)
-
-          marker = '  /** Copies the given list of patterns from banner format to the tool\'s NBT */\n'
-          start = text.find(marker)
-          end = text.rfind('\n}')
-          if start < 0 or end <= start:
-              raise RuntimeError('BannerModule copyPatterns region not found')
-          replacement = '''  /** Adds one banner layer to persistent tool data. */\n  private static void addPattern(ListTag patterns, Holder<BannerPattern> holder, DyeColor dye) {\n    BannerPattern pattern = holder.value();\n    CompoundTag tag = new CompoundTag();\n    holder.unwrapKey().ifPresent(key -> tag.putString(KEY_PATTERN, key.location().toString()));\n    tag.putString(KEY_ASSET, pattern.assetId().toString());\n    tag.putString(KEY_TRANSLATION, pattern.translationKey());\n    tag.putInt(KEY_DYE, dye.getId());\n    tag.putInt(KEY_COLOR, Util.getColor(dye));\n    patterns.add(tag);\n  }\n\n  /** Copies the given banner pattern component to the tool's persistent data. */\n  public static void copyPatterns(ModDataNBT data, ModifierId id, DyeColor dye, RegistryAccess access, BannerPatternLayers banner) {\n    int baseColor = Util.getColor(dye);\n    ListTag patterns = new ListTag();\n\n    // tools render the banner base as a pattern layer, matching shield rendering behavior\n    Holder<BannerPattern> base = access.lookupOrThrow(Registries.BANNER_PATTERN).getOrThrow(BannerPatterns.BASE);\n    addPattern(patterns, base, dye);\n\n    int hashCode = baseColor;\n    for (BannerPatternLayers.Layer layer : banner.layers()) {\n      addPattern(patterns, layer.pattern(), layer.color());\n      int color = Util.getColor(layer.color());\n      hashCode = 31 * (31 * hashCode + color) + layer.pattern().value().assetId().hashCode();\n    }\n\n    data.put(patternKey(id), patterns);\n    data.putInt(cacheKey(id), hashCode);\n  }\n'''
-          text = text[:start] + replacement + text[end:]
-          path.write_text(text, encoding='utf-8')
-
-          # Model: asset IDs are stored directly, so no registry/hash lookup or private Sheets map is needed.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java')
-          text = path.read_text(encoding='utf-8')
-          for imp in [
-              'import net.minecraft.client.renderer.Sheets;\n',
-              'import net.minecraft.core.Holder;\n',
-              'import net.minecraft.resources.ResourceKey;\n',
-              'import net.minecraft.world.level.block.entity.BannerPattern;\n',
-              'import slimeknights.tconstruct.common.config.Config;\n']:
-              text = text.replace(imp, '')
-          vstart = text.find('  @Override\n  public void validate(')
-          vend = text.find('  @Override\n  public Object getCacheKey', vstart)
-          if vstart < 0 or vend < 0:
-              raise RuntimeError('BannerModifierModel validate method region missing')
-          text = text[:vstart] + '''  @Override\n  public void validate(Function<Material, TextureAtlasSprite> spriteGetter) {\n    // Banner patterns are data-driven in 1.21, so there is no static pattern set to validate here.\n  }\n\n''' + text[vend:]
-          qstart = text.find('  @Override\n  public void addQuads(')
-          qend = text.rfind('\n}')
-          if qstart < 0 or qend <= qstart:
-              raise RuntimeError('BannerModifierModel addQuads region missing')
-          qmethod = '''  @Override\n  public void addQuads(IToolStackView tool, ModifierEntry modifier, Function<Material, TextureAtlasSprite> spriteGetter, Transformation transforms, boolean isLarge, int startTintIndex, Consumer<Collection<BakedQuad>> quadConsumer, @Nullable ItemLayerPixels pixels) {\n    ResourceLocation prefix = isLarge ? largePrefix : smallPrefix;\n    if (prefix != null) {\n      IModDataView modData = tool.getPersistentData();\n      ResourceLocation key = BannerModule.patternKey(modifier.getId());\n      if (modData.contains(key, CompoundTag.TAG_LIST)) {\n        ListTag list = modData.getList(key, ListTag.TAG_COMPOUND);\n        List<BakedQuad> quads = new ArrayList<>(list.size());\n        for (int i = 0; i < list.size(); i++) {\n          CompoundTag tag = list.getCompound(i);\n          ResourceLocation asset = ResourceLocation.tryParse(tag.getString(BannerModule.KEY_ASSET));\n          if (asset == null) {\n            // best-effort compatibility for data that stored a full resource ID before the asset field existed\n            asset = ResourceLocation.tryParse(tag.getString(BannerModule.KEY_PATTERN));\n          }\n          if (asset != null) {\n            int color = tag.getInt(BannerModule.KEY_COLOR);\n            TextureAtlasSprite sprite = spriteGetter.apply(ModifierModel.blockAtlas(prefix.withSuffix(MaterialRenderInfo.getSuffix(asset))));\n            if (!MissingTextureAtlasSprite.getLocation().equals(sprite.contents().name())) {\n              quads.add(MantleItemLayerModel.getQuadForGui(color, -1, sprite, transforms, 0));\n            }\n          }\n        }\n        if (!quads.isEmpty()) {\n          quadConsumer.accept(quads);\n        }\n      }\n    }\n  }\n'''
-          text = text[:qstart] + qmethod + text[qend:]
-          path.write_text(text, encoding='utf-8')
-
-          # Recipe: banner patterns moved from BlockEntity NBT to a data component.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '')
-          text = text.replace('import net.minecraft.nbt.ListTag;\n', '')
-          text = text.replace('import net.minecraft.nbt.Tag;\n', '')
-          text = text.replace('import net.minecraft.world.item.BlockItem;\n', '')
-          if 'import net.minecraft.core.component.DataComponents;\n' not in text:
-              anchor = 'import net.minecraft.core.RegistryAccess;\n'
-              if anchor not in text:
-                  raise RuntimeError('BannerModifierRecipe RegistryAccess import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.core.component.DataComponents;\n', 1)
-          if 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n' not in text:
-              anchor = 'import net.minecraft.world.level.Level;\n'
-              if anchor not in text:
-                  raise RuntimeError('BannerModifierRecipe Level import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.world.level.block.entity.BannerPatternLayers;\n', 1)
-          old = '''    // get the banner data\n    CompoundTag bannerData = BlockItem.getBlockEntityData(banner);\n    ListTag patterns = new ListTag();\n    if (bannerData != null) {\n      patterns = bannerData.getList("Patterns", Tag.TAG_COMPOUND);\n    }\n\n    // apply the pattern\n    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, patterns);'''
-          new = '''    // banner patterns are a data component in 1.21\n    BannerPatternLayers patterns = banner.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY);\n\n    // apply the pattern\n    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, access, patterns);'''
-          if text.count(old) != 1:
-              raise RuntimeError('BannerModifierRecipe legacy banner NBT block changed unexpectedly')
-          text = text.replace(old, new, 1)
-          old = '      ListTag patterns = new ListTag();\n      List<ModifierEntry> results = List.of(RESULT);\n      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, patterns))).toList();'
-          new = '      BannerPatternLayers patterns = BannerPatternLayers.EMPTY;\n      List<ModifierEntry> results = List.of(RESULT);\n      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, access, patterns))).toList();'
-          if text.count(old) != 1:
-              raise RuntimeError('BannerModifierRecipe display banner block changed unexpectedly')
+              raise RuntimeError('EnchantmentModule legacy protection block changed')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Sprite source: scan the actual shield-pattern texture folder instead of private Sheets.SHIELD_MATERIALS.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
+          # This legacy Gson loot-entry loadable has no remaining consumers; 1.21 loot entries are codec-based.
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java')
           text = path.read_text(encoding='utf-8')
           for imp in [
-              'import net.minecraft.client.renderer.Sheets;\n',
-              'import net.minecraft.client.resources.model.Material;\n',
-              'import net.minecraft.resources.ResourceKey;\n',
-              'import net.minecraft.world.level.block.entity.BannerPattern;\n']:
-              text = text.replace(imp, '')
-          rstart = text.find('  @Override\n  public void run(ResourceManager manager, Output output) {')
-          rend = text.find('  @Override\n  public SpriteSourceType type()', rstart)
-          if rstart < 0 or rend < 0:
-              raise RuntimeError('ShieldBannerModifierSpriteSource run method region missing')
-          run_method = '''  @Override\n  public void run(ResourceManager manager, Output output) {\n    String root = "textures/entity/shield/";\n    for (Entry<ResourceLocation,Resource> entry : manager.listResources("textures/entity/shield", id -> id.getPath().endsWith(".png")).entrySet()) {\n      ResourceLocation input = entry.getKey();\n      String path = input.getPath();\n      if (!path.startsWith(root) || !path.endsWith(".png")) {\n        continue;\n      }\n      String assetPath = path.substring(root.length(), path.length() - 4);\n      ResourceLocation assetId = ResourceLocation.fromNamespaceAndPath(input.getNamespace(), assetPath);\n      LazyLoadedImage image = new LazyLoadedImage(input, entry.getValue(), 1);\n      ResourceLocation destination = destinationPrefix.withSuffix(MaterialRenderInfo.getSuffix(assetId));\n      output.add(destination, new BannerModifierSpriteSupplier(image, input, destination));\n    }\n  }\n\n'''
-          text = text[:rstart] + run_method + text[rend:]
+              'import net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer;\n',
+              'import net.neoforged.neoforge.common.loot.LootModifierManager;\n',
+              'import slimeknights.tconstruct.library.utils.GsonLoadable;\n']:
+              if text.count(imp) != 1:
+                  raise RuntimeError(f'TinkerLoadables import changed: {imp.strip()}')
+              text = text.replace(imp, '', 1)
+          old = '''  /* Loot tables */
+  /** Loadable for a loot entry instance */
+  public static final Loadable<LootPoolEntryContainer> LOOT_ENTRY = new GsonLoadable<>(LootModifierManager.GSON_INSTANCE, LootPoolEntryContainer.class);
+
+'''
+          if text.count(old) != 1:
+              raise RuntimeError('TinkerLoadables legacy LOOT_ENTRY block changed')
+          path.write_text(text.replace(old, '', 1), encoding='utf-8')
+
+          # Pass registry access into the banner display recipe as required by data-driven banner patterns.
+          replace_once(
+              'src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java',
+              'return Stream.of(new DisplayRecipe(id, toolInputs, banner));',
+              'return Stream.of(new DisplayRecipe(id, toolInputs, banner, access));',
+              'BannerModifierRecipe display call')
+          replace_once(
+              'src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java',
+              'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner) {',
+              'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner, RegistryAccess access) {',
+              'BannerModifierRecipe display constructor')
+
+          # Codec itself owns validate() in current DFU; ExtraCodecs no longer provides the old wrapper.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
+          text = path.read_text(encoding='utf-8')
+          old = 'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = ExtraCodecs.validate(RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group('
+          new = 'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group('
+          if text.count(old) != 1:
+              raise RuntimeError('ShieldBanner codec opening changed')
+          text = text.replace(old, new, 1)
+          old = '  ).apply(inst, ShieldBannerModifierSpriteSource::new)), source -> {'
+          new = '  ).apply(inst, ShieldBannerModifierSpriteSource::new)).validate(source -> {'
+          if text.count(old) != 1:
+              raise RuntimeError('ShieldBanner codec validation join changed')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Holder.Reference and holder-valued trim ingredients use value() in 1.21.
+          replace_once(
+              'src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java',
+              'TrimMaterial material = holder.get();',
+              'TrimMaterial material = holder.value();',
+              'ArmorTrim holder value')
+          replace_once(
+              'src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java',
+              'this.material = List.of(new ItemStack(material.ingredient().get()));',
+              'this.material = List.of(new ItemStack(material.ingredient().value()));',
+              'ArmorTrim ingredient holder value')
+
+          # Small vanilla API moves in the main tools module.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
+          text = path.read_text(encoding='utf-8')
+          anchor = 'import net.minecraft.core.particles.SimpleParticleType;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('TinkerTools particle import anchor changed')
+          if 'import net.minecraft.core.component.DataComponents;\n' not in text:
+              text = text.replace(anchor, 'import net.minecraft.core.component.DataComponents;\n' + anchor, 1)
+          old = 'public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));'
+          new = 'public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<AddToolDataFunction>> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));'
+          if text.count(old) != 1:
+              raise RuntimeError('TinkerTools loot function holder declaration changed')
+          text = text.replace(old, new, 1)
+          if text.count('player.disableShield(true);') != 1:
+              raise RuntimeError('TinkerTools disableShield call changed')
+          text = text.replace('player.disableShield(true);', 'player.disableShield();', 1)
+          if text.count('stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));') != 1:
+              raise RuntimeError('TinkerTools EFLN name call changed')
+          text = text.replace('stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));', 'stack.set(DataComponents.CUSTOM_NAME, TConstruct.makeTranslation("item", "efln_ball"));', 1)
+          path.write_text(text, encoding='utf-8')
+
+          # These record constructors are private in vanilla 1.21 but Tinkers datagen still constructs the formulas.
+          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = path.read_text(encoding='utf-8')
+          anchor = 'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('ApplyBonus Uniform AT anchor changed')
+          additions = (
+              'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$BinomialWithBonusCount <init>(IF)V\n'
+              'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount <init>(I)V\n'
+          )
+          if '<init>(IF)V' not in text:
+              text = text.replace(anchor, anchor + additions, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify banner component migration
+      - name: Verify compatibility cleanup
         shell: bash
         run: |
-          grep -Fq 'public static final String KEY_ASSET = "asset";' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
-          grep -Fq 'pattern.assetId().toString()' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
-          grep -Fq 'BannerPatternLayers banner' src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java
-          grep -Fq 'DataComponents.BANNER_PATTERNS' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
-          grep -Fq 'BannerModule.KEY_ASSET' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java
-          grep -Fq 'manager.listResources("textures/entity/shield"' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          grep -Fq 'MaterialRenderInfo.getSuffix(assetId)' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          ! grep -R -F 'BannerPattern.byHash' \
-            src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java \
-            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java
-          ! grep -R -F 'Sheets.SHIELD_MATERIALS' \
-            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java \
-            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          ! grep -Fq 'BlockItem.getBlockEntityData(banner)' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
+          grep -Fq 'enchantment.matchingSlot(slotType)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java
+          grep -Fq 'enchantment.modifyDamageProtection(serverLevel' src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java
+          ! grep -Fq 'LOOT_ENTRY' src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java
+          grep -Fq 'new DisplayRecipe(id, toolInputs, banner, access)' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
+          grep -Fq ').validate(source -> {' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          grep -Fq 'TrimMaterial material = holder.value();' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java
+          grep -Fq 'material.ingredient().value()' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java
+          grep -Fq 'player.disableShield();' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -Fq 'DataComponents.CUSTOM_NAME' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
+          grep -Fq 'ApplyBonusCount$BinomialWithBonusCount <init>(IF)V' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'ApplyBonusCount$UniformBonusCount <init>(I)V' src/main/resources/META-INF/accesstransformer.cfg
           git diff --check
 
-      - name: Commit banner component migration
+      - name: Commit compatibility cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/tools/modules/cosmetic/BannerModule.java \
-            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/BannerModifierModel.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java \
+            src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java \
             src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java \
-            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          git diff --cached --quiet || {
-            git commit -m 'Port banner patterns to 1.21 components'
-            git push origin HEAD:1.21.1-neoforge
-          }
+            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java \
+            src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java \
+            src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
+            src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Clear 1.21 compatibility frontier'
+          git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run port-compile.yml --repo "$GITHUB_REPOSITORY" --ref 1.21.1-neoforge
+        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
