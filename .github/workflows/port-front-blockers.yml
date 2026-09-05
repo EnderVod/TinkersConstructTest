@@ -1,4 +1,4 @@
-name: Tinkers Context and Entity API Cleanup
+name: Tinkers Book Recipe API Migration
 
 on:
   push:
@@ -23,121 +23,74 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port context and entity helpers to 1.21
+      - name: Port book recipe and component APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new, label):
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          # NeoForge 1.21 moved final block XP from BreakEvent to BlockDropsEvent.
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java')
+          # ContentTool: RecipeManager 1.21 exposes RecipeHolder lists through getAllRecipesFor().
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.neoforged.neoforge.event.level.BlockDropsEvent;' not in text:
-              anchor = 'import net.neoforged.neoforge.event.level.BlockEvent;\n'
+          text = text.replace('import net.minecraft.world.inventory.CraftingContainer;\n', '')
+          text = text.replace('import net.minecraft.world.item.crafting.Recipe;\n', '')
+          if 'import net.minecraft.world.item.crafting.CraftingRecipe;\n' not in text:
+              anchor = 'import net.minecraft.world.item.crafting.Ingredient;\n'
               if anchor not in text:
-                  raise RuntimeError('BlockSideHitListener BlockEvent import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.neoforged.neoforge.event.level.BlockDropsEvent;\n', 1)
-          old = '''  private static void breakBlock(BlockEvent.BreakEvent event) {\n    TinkerDataCapability.Holder data = TinkerDataCapability.getData(event.getPlayer());\n    if (data != null) {\n      data.put(LAST_XP, event.getExpToDrop());\n    }\n  }'''
-          new = '''  private static void breakBlock(BlockDropsEvent event) {\n    if (event.getBreaker() instanceof Player player) {\n      TinkerDataCapability.Holder data = TinkerDataCapability.getData(player);\n      if (data != null) {\n        data.put(LAST_XP, event.getDroppedExperience());\n      }\n    }\n  }'''
-          if old not in text:
-              raise RuntimeError('BlockSideHitListener XP listener changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+                  raise RuntimeError('ContentTool Ingredient import anchor missing')
+              text = text.replace(anchor, 'import net.minecraft.world.item.crafting.CraftingRecipe;\n' + anchor, 1)
 
-          # UseOnContext#getHitResult is protected in 1.21; reconstruct from public accessors.
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java')
-          replace_once(path,
-            'this(base.getLevel(), base.getPlayer(), base.getHand(), base.getItemInHand(), base.getHitResult());',
-            'this(base.getLevel(), base.getPlayer(), base.getHand(), base.getItemInHand(), new BlockHitResult(base.getClickLocation(), base.getClickedFace(), base.getClickedPos(), base.isInside()));',
-            'MutableUseOnContext hit result')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/Util.java')
-          text = path.read_text(encoding='utf-8')
-          old = '''  private static int calcColor(DyeColor color) {\n    float[] diffuse = color.getTextureDiffuseColors();\n    return FastColor.ARGB32.color(255, Math.round(255 * diffuse[0]), Math.round(255 * diffuse[1]), Math.round(255 * diffuse[2]));\n  }'''
-          new = '''  private static int calcColor(DyeColor color) {\n    return color.getTextureDiffuseColor();\n  }'''
-          if old not in text:
-              raise RuntimeError('Util dye color helper changed unexpectedly')
-          text = text.replace(old, new, 1)
-          old = 'return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(context.getHitResult(), offset));'
-          new = 'return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(new BlockHitResult(context.getClickLocation(), context.getClickedFace(), context.getClickedPos(), context.isInside()), offset));'
+          old = '''      Recipe<CraftingContainer> recipe = Optional.ofNullable(Minecraft.getInstance().level)\n                                                 .flatMap(world -> {\n                                                   RegistryAccess access = world.registryAccess();\n                                                   return world.getRecipeManager().byType(RecipeType.CRAFTING).values().stream()\n                                                        .filter(r -> r.getResultItem(access).getItem() == tool.asItem())\n                                                        .findFirst();\n                                                 })\n                                                 .orElse(null);'''
+          new = '''      CraftingRecipe recipe = Optional.ofNullable(Minecraft.getInstance().level)\n                                                 .flatMap(world -> {\n                                                   RegistryAccess access = world.registryAccess();\n                                                   return world.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()\n                                                        .map(holder -> holder.value())\n                                                        .filter(r -> r.getResultItem(access).getItem() == tool.asItem())\n                                                        .findFirst();\n                                                 })\n                                                 .orElse(null);'''
           if text.count(old) != 1:
-              raise RuntimeError('Util UseOnContext offset changed unexpectedly')
+              raise RuntimeError('ContentTool crafting recipe lookup changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          old = '''        List<Ingredient> extraRequirements = Optional.ofNullable(Minecraft.getInstance().level)\n                                                     .flatMap(world -> world.getRecipeManager().byType(TinkerRecipeTypes.TINKER_STATION.get()).values().stream()\n                                                                            .filter(r -> r instanceof ToolBuildingRecipe toolRecipe && toolRecipe.getOutput() == tool)\n                                                                            .map(r -> ((ToolBuildingRecipe)r).getExtraRequirements())\n                                                                            .findFirst()).orElse(List.of());'''
+          new = '''        List<Ingredient> extraRequirements = Optional.ofNullable(Minecraft.getInstance().level)\n                                                     .flatMap(world -> world.getRecipeManager().getAllRecipesFor(TinkerRecipeTypes.TINKER_STATION.get()).stream()\n                                                                            .map(holder -> holder.value())\n                                                                            .filter(r -> r instanceof ToolBuildingRecipe toolRecipe && toolRecipe.getOutput() == tool)\n                                                                            .map(r -> ((ToolBuildingRecipe)r).getExtraRequirements())\n                                                                            .findFirst()).orElse(List.of());'''
+          if text.count(old) != 1:
+              raise RuntimeError('ContentTool tinker station recipe lookup changed unexpectedly')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
 
-          # DamageSource no longer exposes isIndirect; direct damage means direct and causing entities are identical.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java')
-          replace_once(path,
-            'return source.getEntity() != null && !source.isIndirect() && !source.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS);',
-            'return source.getEntity() != null && source.getDirectEntity() == source.getEntity() && !source.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS);',
-            'OnAttacked direct damage')
-
-          # Entity#setSecondsOnFire was replaced by igniteForSeconds(float).
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java')
+          # Component.Serializer is static-only in 1.21; SerializerAdapter is the Gson adapter.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java')
           text = path.read_text(encoding='utf-8')
-          count = text.count('target.setSecondsOnFire(')
-          if count != 2:
-              raise RuntimeError(f'FireFluidEffect expected 2 legacy ignition calls, found {count}')
-          text = text.replace('target.setSecondsOnFire(', 'target.igniteForSeconds(')
+          if 'import net.minecraft.core.RegistryAccess;\n' not in text:
+              anchor = 'import net.minecraft.network.chat.Component;\n'
+              if anchor not in text:
+                  raise RuntimeError('TinkerBook Component import anchor missing')
+              text = text.replace(anchor, 'import net.minecraft.core.RegistryAccess;\n' + anchor, 1)
+          old = 'BookLoader.registerGsonTypeAdapter(Component.class, new Component.Serializer());'
+          new = 'BookLoader.registerGsonTypeAdapter(Component.class, new Component.SerializerAdapter(RegistryAccess.EMPTY));'
+          if text.count(old) != 1:
+              raise RuntimeError('TinkerBook component adapter call changed unexpectedly')
+          text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
-
-          # MobEffectInstance now exposes a holder; inspect the effect value for instant behavior.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java')
-          replace_once(path, 'instance.getEffect().isInstantenous()', 'instance.getEffect().value().isInstantenous()', 'PotionCloud instant effect')
-
-          # ResourceLocation single-string constructors are private/removed in 1.21.
-          for name in (
-              'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java',
-              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java',
-          ):
-              path = Path(name)
-              text = path.read_text(encoding='utf-8')
-              old = 'new ResourceLocation("missingno")'
-              if text.count(old) != 1:
-                  raise RuntimeError(f'{name}: expected one legacy missingno ResourceLocation')
-              text = text.replace(old, 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")', 1)
-              path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify context and entity cleanup
+      - name: Verify book API migration
         shell: bash
         run: |
-          grep -Fq 'private static void breakBlock(BlockDropsEvent event)' src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java
-          grep -Fq 'event.getDroppedExperience()' src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java
-          ! grep -R -F 'getHitResult()' \
-            src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java \
-            src/main/java/slimeknights/tconstruct/library/utils/Util.java
-          grep -Fq 'return color.getTextureDiffuseColor();' src/main/java/slimeknights/tconstruct/library/utils/Util.java
-          grep -Fq 'source.getDirectEntity() == source.getEntity()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java
-          test "$(grep -F -c 'target.igniteForSeconds(' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java)" -eq 2
-          grep -Fq 'instance.getEffect().value().isInstantenous()' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java
-          grep -Fq 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java
-          grep -Fq 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")' src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java
+          grep -Fq 'CraftingRecipe recipe = Optional.ofNullable' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
+          test "$(grep -F -c 'getAllRecipesFor(' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java)" -eq 2
+          test "$(grep -F -c '.map(holder -> holder.value())' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java)" -eq 2
+          ! grep -Fq '.byType(' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
+          ! grep -Fq 'CraftingContainer' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
+          grep -Fq 'new Component.SerializerAdapter(RegistryAccess.EMPTY)' src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
+          ! grep -Fq 'new Component.Serializer()' src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
           git diff --check
 
-      - name: Commit context and entity cleanup
+      - name: Commit book API migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java \
-            src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java \
-            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java
+            src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java \
+            src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
           git diff --cached --quiet || {
-            git commit -m 'Port context and entity helpers to 1.21'
+            git commit -m 'Port book recipe lookups to 1.21 holders'
             git push origin HEAD:1.21.1-neoforge
           }
 
