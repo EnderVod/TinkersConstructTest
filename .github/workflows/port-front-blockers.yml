@@ -1,4 +1,4 @@
-name: Tinkers Arrow Compatibility Migration
+name: Tinkers Common Code 1.21 Migration
 
 on:
   push:
@@ -23,118 +23,202 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port arrows and punch to 1.21
+      - name: Port menu and recipes to 1.21 components
         shell: bash
         run: |
-          python3 - <<'PY'
+          cat > /tmp/migrate.py <<'PY'
           from pathlib import Path
+          root=Path('src/main/java')
 
-          def replace_exact(path, old, new, count=1):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              actual = text.count(old)
-              if actual != count:
-                  raise RuntimeError(f'{path}: expected {count} matches, got {actual}: {old[:100]!r}')
-              p.write_text(text.replace(old, new, count), encoding='utf-8')
+          def rep(rel, old, new, count=1):
+              p=root/rel
+              s=p.read_text()
+              n=s.count(old)
+              if n!=count: raise SystemExit(f'{rel}: expected {count}, got {n} for {old[:100]!r}')
+              p.write_text(s.replace(old,new,count))
 
-          arrow = 'src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java'
-          replace_exact(arrow, 'import net.minecraft.network.syncher.SynchedEntityData;\n', 'import net.minecraft.network.syncher.SynchedEntityData;\nimport net.minecraft.world.damagesource.DamageSource;\n')
-          replace_exact(arrow, 'import net.minecraft.world.entity.LivingEntity;\n', 'import net.minecraft.world.entity.LivingEntity;\nimport net.minecraft.world.entity.ai.attributes.Attributes;\n')
-          replace_exact(arrow, 'import slimeknights.tconstruct.library.modifiers.entity.ReusableProjectile;\n', 'import slimeknights.tconstruct.library.modifiers.entity.ProjectileWithKnockback;\nimport slimeknights.tconstruct.library.modifiers.entity.ReusableProjectile;\n')
-          replace_exact(arrow, 'public class ModifiableArrow extends AbstractArrow implements ToolProjectile, ReusableProjectile {', 'public class ModifiableArrow extends AbstractArrow implements ToolProjectile, ProjectileWithKnockback, ReusableProjectile {')
-          replace_exact(arrow, '  private boolean dealtDamage = false;\n', '  private boolean dealtDamage = false;\n  /** Extra knockback supplied by Tinkers modifiers, on top of vanilla weapon enchantments. */\n  private float knockback = 0;\n')
-          replace_exact(arrow, '  public ModifiableArrow(Level level, double pX, double pY, double pZ) {\n    super(TinkerTools.materialArrow.get(), pX, pY, pZ, level);\n  }\n\n  public ModifiableArrow(Level level, LivingEntity shooter) {\n    super(TinkerTools.materialArrow.get(), shooter, level);\n  }', '  public ModifiableArrow(Level level, double pX, double pY, double pZ) {\n    super(TinkerTools.materialArrow.get(), pX, pY, pZ, level, new ItemStack(TinkerTools.arrow), null);\n  }\n\n  public ModifiableArrow(Level level, LivingEntity shooter) {\n    this(level, shooter, new ItemStack(TinkerTools.arrow), null);\n  }\n\n  public ModifiableArrow(Level level, LivingEntity shooter, ItemStack ammo, @Nullable ItemStack weapon) {\n    super(TinkerTools.materialArrow.get(), shooter, level, ammo.copyWithCount(1), weapon);\n  }')
-          replace_exact(arrow, '  @Override\n  public ItemStack getPickupItem() {\n    return stack.copy();\n  }', '  @Override\n  protected ItemStack getDefaultPickupItem() {\n    return new ItemStack(TinkerTools.arrow);\n  }\n\n  @Override\n  public ItemStack getPickupItem() {\n    return stack.copy();\n  }')
-          replace_exact(arrow, '  // need to replace some setters with adders so vanilla bows work with our logic\n\n  @Override\n  public void setKnockback(int knockback) {\n    super.setKnockback(getKnockback() + knockback);\n  }\n\n  @Override\n  public void setPierceLevel(byte pierceLevel) {\n    super.setPierceLevel((byte) (getPierceLevel() + pierceLevel));\n  }', '  // Vanilla 1.21 handles weapon knockback through the firing-weapon stack. Keep Tinkers modifier\n  // knockback separate and apply it after vanilla knockback.\n  @Override\n  public void addKnockback(float amount) {\n    this.knockback += amount;\n  }\n\n  @Override\n  protected void doKnockback(LivingEntity target, DamageSource source) {\n    super.doKnockback(target, source);\n    if (knockback > 0) {\n      double resistance = Math.max(0.0, 1.0 - target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));\n      Vec3 velocity = this.getDeltaMovement().multiply(1, 0, 1).normalize().scale(knockback * 0.6 * resistance);\n      if (velocity.lengthSqr() > 0) {\n        target.push(velocity.x, 0.1, velocity.z);\n      }\n    }\n  }\n\n  @Override\n  public void setPierceLevel(byte pierceLevel) {\n    super.setPierceLevel((byte) (getPierceLevel() + pierceLevel));\n  }')
-          replace_exact(arrow, '  @Override\n  protected void defineSynchedData() {\n    super.defineSynchedData();\n    this.entityData.define(STACK, ItemStack.EMPTY);\n    this.entityData.define(WATER_INERTIA, 0.6f);\n  }', '  @Override\n  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n    super.defineSynchedData(builder);\n    builder.define(STACK, ItemStack.EMPTY);\n    builder.define(WATER_INERTIA, 0.6f);\n  }')
-          replace_exact(arrow, '    tag.put(KEY_STACK, this.stack.save(new CompoundTag()));', '    tag.put(KEY_STACK, this.stack.save(this.registryAccess()));')
-          replace_exact(arrow, '      setStack(ItemStack.of(tag.getCompound(KEY_STACK)));', '      setStack(ItemStack.parse(this.registryAccess(), tag.getCompound(KEY_STACK)).orElse(ItemStack.EMPTY));')
+          # ToolContainerMenu
+          rel='slimeknights/tconstruct/tools/menu/ToolContainerMenu.java'
+          rep(rel,'import net.minecraft.network.FriendlyByteBuf;\n','import net.minecraft.network.FriendlyByteBuf;\nimport net.minecraft.network.RegistryFriendlyByteBuf;\nimport net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;\nimport net.minecraft.server.level.ServerPlayer;\n')
+          rep(rel,'import net.minecraft.world.inventory.CraftingMenu;\n','')
+          rep(rel,'import net.minecraft.world.item.ItemStack;\n', 'import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.crafting.CraftingInput;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\nimport net.minecraft.world.item.crafting.RecipeType;\n')
+          rep(rel,'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n','import slimeknights.tconstruct.library.tools.nbt.ToolStack;\nimport slimeknights.tconstruct.library.utils.TagUtil;\n')
+          rep(rel,'import javax.annotation.Nullable;\n','import javax.annotation.Nullable;\nimport java.util.Optional;\n')
+          rep(rel,'      stack = buffer.readItem();','      stack = ItemStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer);')
+          rep(rel,'    if (stack.hasTag() && stack.is(TinkerTags.Items.MODIFIABLE)) {','    if (TagUtil.hasTag(stack) && stack.is(TinkerTags.Items.MODIFIABLE)) {')
+          rep(rel,'''    if (craftingContainer != null && resultContainer != null) {
+      CraftingMenu.slotChangedCraftingGrid(this, player.level(), player, craftingContainer, resultContainer);
+    }
+''','''    if (craftingContainer != null && resultContainer != null && !player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
+      CraftingInput input = craftingContainer.asCraftInput();
+      ItemStack result = ItemStack.EMPTY;
+      Optional<RecipeHolder<CraftingRecipe>> recipe = player.level().getServer().getRecipeManager()
+        .getRecipeFor(RecipeType.CRAFTING, input, player.level(), null);
+      if (recipe.isPresent()) {
+        RecipeHolder<CraftingRecipe> holder = recipe.get();
+        CraftingRecipe craftingRecipe = holder.value();
+        if (resultContainer.setRecipeUsed(player.level(), serverPlayer, holder)) {
+          ItemStack assembled = craftingRecipe.assemble(input, player.level().registryAccess());
+          if (assembled.isItemEnabled(player.level().enabledFeatures())) {
+            result = assembled;
+          }
+        }
+      }
+      resultContainer.setItem(0, result);
+      setRemoteSlot(0, result);
+      serverPlayer.connection.send(new ClientboundContainerSetSlotPacket(containerId, incrementStateId(), 0, result));
+    }
+''')
 
-          item = 'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java'
-          replace_exact(item, '    ModifiableArrow arrow = new ModifiableArrow(level, shooter);', '    ModifiableArrow arrow = new ModifiableArrow(level, shooter, stack, weapon);')
-          replace_exact(item, '        ModifiableArrow arrow = new ModifiableArrow(level, player);', '        ModifiableArrow arrow = new ModifiableArrow(level, player, stack, null);')
+          # EnchantmentConvertingRecipe
+          rel='slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java'
+          rep(rel,'import net.minecraft.core.registries.BuiltInRegistries;\n','import net.minecraft.core.component.DataComponents;\nimport net.minecraft.core.registries.BuiltInRegistries;\n')
+          rep(rel,'import net.minecraft.world.item.enchantment.Enchantment;\n','')
+          rep(rel,'import net.minecraft.world.item.enchantment.EnchantmentInstance;\n','import net.minecraft.world.item.enchantment.EnchantmentInstance;\nimport net.minecraft.world.item.enchantment.ItemEnchantments;\n')
+          rep(rel,'import java.util.Map;\n','')
+          rep(rel,'import java.util.Map.Entry;\n','')
+          rep(rel,'''  /** Gets the enchantment map from the given stack */
+  private Map<Enchantment,Integer> getEnchantments(ItemStack stack) {
+    return EnchantmentHelper.deserializeEnchantments(matchBook ? EnchantedBookItem.getEnchantments(stack) : stack.getEnchantmentTags());
+  }
+''','''  /** Gets the enchantments from the given stack, including stored enchantments on books. */
+  private ItemEnchantments getEnchantments(ItemStack stack) {
+    return EnchantmentHelper.getEnchantmentsForCrafting(stack);
+  }
+''')
+          rep(rel,'IntStream.rangeClosed(1, enchantment.getMaxLevel())','IntStream.rangeClosed(1, enchantment.value().getMaxLevel())',2)
+          rep(rel,'''      Map<Enchantment,Integer> enchantments = getEnchantments(current);
+      for (Entry<Enchantment,Integer> entry : enchantments.entrySet()) {
+        Enchantment enchantment = entry.getKey();
+        Modifier enchantmentModifier = ModifierManager.INSTANCE.get(enchantment);
+        if (enchantmentModifier != null && enchantmentModifier.getId().equals(modifier)) {
+          int newLevel = entry.getValue() - 1;
+          if (newLevel <= 0) {
+            enchantments.remove(enchantment);
+          } else {
+            enchantments.put(enchantment, newLevel);
+          }
+          break;
+        }
+      }
 
-          punch = 'src/main/java/slimeknights/tconstruct/tools/modules/ranged/common/PunchModule.java'
-          replace_exact(punch, 'import net.minecraft.world.entity.LivingEntity;\n', 'import net.minecraft.resources.ResourceLocation;\nimport net.minecraft.world.entity.LivingEntity;\nimport net.minecraft.world.entity.ai.attributes.Attributes;\n')
-          replace_exact(punch, 'import slimeknights.mantle.data.loadable.record.RecordLoadable;\n', 'import slimeknights.mantle.data.loadable.record.RecordLoadable;\nimport slimeknights.tconstruct.TConstruct;\n')
-          replace_exact(punch, 'import slimeknights.tconstruct.library.tools.nbt.ModDataNBT;\n', 'import slimeknights.tconstruct.library.tools.capability.PersistentDataCapability;\nimport slimeknights.tconstruct.library.tools.nbt.ModDataNBT;\n')
-          replace_exact(punch, '  private static final List<ModuleHook<?>> DEFAULT_HOOKS = HookProvider.<PunchModule>defaultHooks(ModifierHooks.PROJECTILE_LAUNCH, ModifierHooks.PROJECTILE_SHOT);', '  private static final List<ModuleHook<?>> DEFAULT_HOOKS = HookProvider.<PunchModule>defaultHooks(ModifierHooks.PROJECTILE_LAUNCH, ModifierHooks.PROJECTILE_SHOT);\n  private static final ResourceLocation ARROW_KNOCKBACK = TConstruct.getResource("punch_knockback");')
-          replace_exact(punch, '      if (amount > 0) {\n        if (arrow != null) {\n          arrow.setKnockback((int) amount);\n        } else if (projectile instanceof ProjectileWithKnockback withKnockback) {\n          withKnockback.addKnockback(amount);\n        }\n      }', '      if (amount > 0) {\n        if (projectile instanceof ProjectileWithKnockback withKnockback) {\n          withKnockback.addKnockback(amount);\n        } else if (arrow != null) {\n          persistentData.putFloat(ARROW_KNOCKBACK, persistentData.getFloat(ARROW_KNOCKBACK) + amount);\n        }\n      }')
-          p = Path(punch)
-          text = p.read_text(encoding='utf-8')
-          anchor = '\n  }\n}\n'
-          if text.count(anchor) < 1:
-              raise RuntimeError('PunchModule closing anchor changed')
-          helper = '\n  }\n\n  /** Applies stored Tinkers punch after vanilla has accepted the arrow damage. */\n  public static void applyArrowKnockback(AbstractArrow arrow, LivingEntity target) {\n    ModDataNBT persistentData = PersistentDataCapability.getOrWarn(arrow);\n    float knockback = persistentData.getFloat(ARROW_KNOCKBACK);\n    if (knockback > 0) {\n      double resistance = Math.max(0.0, 1.0 - target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));\n      net.minecraft.world.phys.Vec3 velocity = arrow.getDeltaMovement().multiply(1, 0, 1).normalize().scale(knockback * 0.6 * resistance);\n      if (velocity.lengthSqr() > 0) {\n        target.push(velocity.x, 0.1, velocity.z);\n      }\n    }\n  }\n}\n'
-          pos = text.rfind(anchor)
-          p.write_text(text[:pos] + helper + text[pos + len(anchor):], encoding='utf-8')
+      ItemStack unenchanted;
+      if (matchBook && enchantments.isEmpty()) {
+        unenchanted = new ItemStack(Items.BOOK);
+        if (current.hasCustomHoverName()) {
+          unenchanted.setHoverName(current.getHoverName());
+        }
+      } else {
+        unenchanted = current.copy();
+        if (matchBook) {
+          // for some dumb reason setEnchantments for a book just adds them instead of setting them
+          unenchanted.removeTagKey("StoredEnchantments");
+        }
+        EnchantmentHelper.setEnchantments(enchantments, unenchanted);
+      }
+''','''      ItemEnchantments enchantments = getEnchantments(current);
+      ItemEnchantments.Mutable updatedEnchantments = new ItemEnchantments.Mutable(enchantments);
+      for (var entry : enchantments.entrySet()) {
+        var enchantment = entry.getKey();
+        Modifier enchantmentModifier = ModifierManager.INSTANCE.get(enchantment);
+        if (enchantmentModifier != null && enchantmentModifier.getId().equals(modifier)) {
+          updatedEnchantments.set(enchantment, entry.getIntValue() - 1);
+          break;
+        }
+      }
+      ItemEnchantments updated = updatedEnchantments.toImmutable();
 
-          events = 'src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java'
-          replace_exact(events, 'import slimeknights.tconstruct.tools.TinkerModifiers;\n', 'import slimeknights.tconstruct.tools.TinkerModifiers;\nimport slimeknights.tconstruct.tools.modules.ranged.common.PunchModule;\n')
-          p = Path(events)
-          text = p.read_text(encoding='utf-8')
-          marker = '  /** Modifier ID used for the extra correction damage on armor. Needs to be a "real modifier" for the tag so we use protection as a reasonable enough source. */'
-          if text.count(marker) != 1:
-              raise RuntimeError('ToolEvents living damage insertion marker changed')
-          method = '  /** Applies Tinkers punch to ordinary arrows after vanilla has accepted their damage. */\n  @SubscribeEvent\n  static void projectilePunch(LivingDamageEvent.Post event) {\n    Entity direct = event.getSource().getDirectEntity();\n    if (direct instanceof AbstractArrow arrow) {\n      PunchModule.applyArrowKnockback(arrow, event.getEntity());\n    }\n  }\n\n'
-          p.write_text(text.replace(marker, method + marker, 1), encoding='utf-8')
+      ItemStack unenchanted;
+      if (matchBook && updated.isEmpty()) {
+        unenchanted = new ItemStack(Items.BOOK);
+        Component customName = current.get(DataComponents.CUSTOM_NAME);
+        if (customName != null) {
+          unenchanted.set(DataComponents.CUSTOM_NAME, customName);
+        }
+      } else {
+        unenchanted = current.copy();
+        EnchantmentHelper.setEnchantments(unenchanted, updated);
+      }
+''')
 
-          crystal = 'src/main/java/slimeknights/tconstruct/tools/item/CrystalshotItem.java'
-          replace_exact(crystal, 'import net.minecraft.world.entity.player.Player;\n', '')
-          replace_exact(crystal, 'import net.minecraft.world.item.enchantment.Enchantments;\n', '')
-          replace_exact(crystal, 'import slimeknights.tconstruct.common.Sounds;\n', 'import slimeknights.tconstruct.common.Sounds;\nimport slimeknights.tconstruct.library.utils.TagUtil;\n')
-          replace_exact(crystal, '  @Override\n  public AbstractArrow createArrow(Level pLevel, ItemStack pStack, LivingEntity pShooter) {\n    CrystalshotEntity arrow = new CrystalshotEntity(pLevel, pShooter);', '  @Override\n  public AbstractArrow createArrow(Level pLevel, ItemStack pStack, LivingEntity pShooter, javax.annotation.Nullable ItemStack weapon) {\n    CrystalshotEntity arrow = new CrystalshotEntity(pLevel, pShooter, pStack, weapon);')
-          replace_exact(crystal, '    CompoundTag tag = pStack.getTag();', '    CompoundTag tag = TagUtil.getTag(pStack);')
-          replace_exact(crystal, '\n  @Override\n  public boolean isInfinite(ItemStack stack, ItemStack bow, Player player) {\n    return bow.getEnchantmentLevel(Enchantments.INFINITY_ARROWS) > 0;\n  }\n', '\n')
-          replace_exact(crystal, '    stack.getOrCreateTag().putString(TAG_VARIANT, variant);', '    CompoundTag tag = TagUtil.getOrCreateTag(stack);\n    tag.putString(TAG_VARIANT, variant);\n    TagUtil.setTag(stack, tag);')
-          replace_exact(crystal, '      soundEvent = Sounds.CRYSTALSHOT.getSound();', '      setSoundEvent(Sounds.CRYSTALSHOT.getSound());', 2)
-          replace_exact(crystal, '    public CrystalshotEntity(Level level, LivingEntity shooter) {\n      super(TinkerTools.crystalshotEntity.get(), shooter, level);\n      setSoundEvent(Sounds.CRYSTALSHOT.getSound());\n    }', '    public CrystalshotEntity(Level level, LivingEntity shooter, ItemStack ammo, javax.annotation.Nullable ItemStack weapon) {\n      super(TinkerTools.crystalshotEntity.get(), shooter, level, ammo.copyWithCount(1), weapon);\n      setSoundEvent(Sounds.CRYSTALSHOT.getSound());\n    }')
-          replace_exact(crystal, '    @Override\n    protected void defineSynchedData() {\n      super.defineSynchedData();\n      this.entityData.define(SYNC_VARIANT, "");\n    }', '    @Override\n    protected void defineSynchedData(SynchedEntityData.Builder builder) {\n      super.defineSynchedData(builder);\n      builder.define(SYNC_VARIANT, "");\n    }')
-          replace_exact(crystal, '    @Override\n    public ItemStack getPickupItem() {\n      return withVariant(getVariant(), 1);\n    }', '    @Override\n    protected ItemStack getDefaultPickupItem() {\n      return new ItemStack(TinkerTools.crystalshotItem);\n    }\n\n    @Override\n    public ItemStack getPickupItem() {\n      return withVariant(getVariant(), 1);\n    }')
+          # Modifier removal copy helper
+          rel='slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java'
+          rep(rel,'import net.neoforged.neoforge.items.ItemHandlerHelper;\n','')
+          rep(rel,'          tool = ItemHandlerHelper.copyStackWithSize(tool, stack.getCount());','          tool = tool.copyWithCount(stack.getCount());')
 
-          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
-          text = at.read_text(encoding='utf-8')
-          line = 'public net.minecraft.world.entity.projectile.AbstractArrow setPierceLevel(B)V'
-          if line not in text:
-              anchor = 'protected net.minecraft.world.entity.projectile.AbstractArrow life\n'
-              if text.count(anchor) != 1:
-                  raise RuntimeError('AbstractArrow life AT anchor changed')
-              text = text.replace(anchor, anchor + line + '\n', 1)
-          at.write_text(text, encoding='utf-8')
+          # Builders: new 4-arg constructor requires explicit id
+          for rel, old, new in [
+          ('slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java',
+           'new LoadableFinishedRecipe<>(constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId)',
+           'new LoadableFinishedRecipe<>(id, constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId)'),
+          ('slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java',
+           'new LoadableFinishedRecipe<>(new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId)',
+           'new LoadableFinishedRecipe<>(id, new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId)'),
+          ('slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java',
+           'new LoadableFinishedRecipe<>(new EnchantmentConvertingRecipe(id, name, inputs, matchBook, returnInput, modifierPredicate), EnchantmentConvertingRecipe.LOADER, advancementId)',
+           'new LoadableFinishedRecipe<>(id, new EnchantmentConvertingRecipe(id, name, inputs, matchBook, returnInput, modifierPredicate), EnchantmentConvertingRecipe.LOADER, advancementId)'),
+          ('slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java',
+           'new LoadableFinishedRecipe<>(new ToggleInteractionWorktableRecipe(id, tools, inputs), ToggleInteractionWorktableRecipe.LOADER, advancementId)',
+           'new LoadableFinishedRecipe<>(id, new ToggleInteractionWorktableRecipe(id, tools, inputs), ToggleInteractionWorktableRecipe.LOADER, advancementId)'),
+          ]: rep(rel,old,new)
+
+          # Player head profile component
+          rel='slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java'
+          rep(rel,'import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.NbtUtils;\n','import net.minecraft.core.component.DataComponents;\n')
+          rep(rel,'import net.minecraft.world.item.Items;\n','import net.minecraft.world.item.Items;\nimport net.minecraft.world.item.component.ResolvableProfile;\n')
+          rep(rel,'''      GameProfile gameprofile = ((Player)entity).getGameProfile();
+      stack.getOrCreateTag().put("SkullOwner", NbtUtils.writeGameProfile(new CompoundTag(), gameprofile));
+''','''      GameProfile gameprofile = ((Player)entity).getGameProfile();
+      stack.set(DataComponents.PROFILE, new ResolvableProfile(gameprofile));
+''')
+
+          # Dye color packed ARGB
+          rel='slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java'
+          rep(rel,'''          float[] color = dye.getTextureDiffuseColors();
+          int r = (int)(color[0] * 255);
+          int g = (int)(color[1] * 255);
+          int b = (int)(color[2] * 255);
+''','''          int color = dye.getTextureDiffuseColor();
+          int r = color >> 16 & 255;
+          int g = color >> 8 & 255;
+          int b = color & 255;
+''')
+
           PY
+          python3 /tmp/migrate.py
 
-      - name: Verify arrow migration
+      - name: Verify common-code migration
         shell: bash
         run: |
-          grep -Fq 'implements ToolProjectile, ProjectileWithKnockback, ReusableProjectile' src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java
-          grep -Fq 'super(TinkerTools.materialArrow.get(), shooter, level, ammo.copyWithCount(1), weapon);' src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java
-          grep -Fq 'protected ItemStack getDefaultPickupItem()' src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java
-          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java
-          grep -Fq 'ItemStack.parse(this.registryAccess()' src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java
-          grep -Fq 'PunchModule.applyArrowKnockback' src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java
-          grep -Fq 'persistentData.putFloat(ARROW_KNOCKBACK' src/main/java/slimeknights/tconstruct/tools/modules/ranged/common/PunchModule.java
-          grep -Fq 'createArrow(Level pLevel, ItemStack pStack, LivingEntity pShooter, javax.annotation.Nullable ItemStack weapon)' src/main/java/slimeknights/tconstruct/tools/item/CrystalshotItem.java
-          grep -Fq 'TagUtil.getTag(pStack)' src/main/java/slimeknights/tconstruct/tools/item/CrystalshotItem.java
-          grep -Fq 'public net.minecraft.world.entity.projectile.AbstractArrow setPierceLevel(B)V' src/main/resources/META-INF/accesstransformer.cfg
-          ! grep -Fq 'setKnockback(' src/main/java/slimeknights/tconstruct/tools/modules/ranged/common/PunchModule.java
-          ! grep -Fq 'getOrCreateTag()' src/main/java/slimeknights/tconstruct/tools/item/CrystalshotItem.java
+          set -euxo pipefail
+          grep -Fq 'ItemStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer)' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
+          grep -Fq 'TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
+          grep -Fq 'CraftingInput input = craftingContainer.asCraftInput();' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
+          grep -Fq 'EnchantmentHelper.getEnchantmentsForCrafting(stack)' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
+          grep -Fq 'EnchantmentHelper.setEnchantments(unenchanted, updated);' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
+          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java
+          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java
+          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java
+          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java
+          grep -Fq 'stack.set(DataComponents.PROFILE, new ResolvableProfile(gameprofile));' src/main/java/slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java
+          grep -Fq 'int color = dye.getTextureDiffuseColor();' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java
+          grep -Fq 'tool = tool.copyWithCount(stack.getCount());' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java
           git diff --check
 
-      - name: Commit arrow migration
+      - name: Commit common-code migration
         shell: bash
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/entity/ModifiableArrow.java \
-                  src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableArrowItem.java \
-                  src/main/java/slimeknights/tconstruct/tools/modules/ranged/common/PunchModule.java \
-                  src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
-                  src/main/java/slimeknights/tconstruct/tools/item/CrystalshotItem.java \
-                  src/main/resources/META-INF/accesstransformer.cfg
-          git commit -m 'Port arrow projectiles and punch to 1.21'
+          set -euxo pipefail
+          git config user.name 'tinkers-port-bot'
+          git config user.email 'tinkers-port-bot@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java \
+                  src/main/java/slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java
+          git commit -m 'Port tool menu and recipe components to 1.21'
           git push origin HEAD:1.21.1-neoforge
-
-      - name: Trigger fresh compile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
