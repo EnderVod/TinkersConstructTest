@@ -121,9 +121,9 @@ public class ToolClientEvents extends ClientEventBase {
 
   @SubscribeEvent
   static void registerModelLoaders(RegisterGeometryLoaders event) {
-    event.register("material", MaterialModel.LOADER);
-    event.register("tool", ToolModel.LOADER);
-    event.register("material_block", MaterialBlockModel.LOADER);
+    event.register(getResource("material"), MaterialModel.LOADER);
+    event.register(getResource("tool"), ToolModel.LOADER);
+    event.register(getResource("material_block"), MaterialBlockModel.LOADER);
   }
 
   @SubscribeEvent
@@ -357,7 +357,7 @@ public class ToolClientEvents extends ClientEventBase {
     if (player.isUsingItem() && !player.isPassenger()) {
       ItemStack using = player.getUseItem();
       // start with the attribute
-      double speed = player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED.get());
+      double speed = player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED);
       // start by calculating tool stat, not an attribute to ensure both hands get their say
       if (using.is(TinkerTags.Items.HELD)) {
         ToolStack tool = ToolStack.from(using);

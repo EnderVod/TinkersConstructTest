@@ -44,9 +44,7 @@ public class EntityMovementChangePacket implements IThreadsafePacket {
 
   @Override
   public void handleThreadsafe(IPayloadContext context) {
-    if (context.getSender() != null) {
-      HandleClient.handle(this);
-    }
+    HandleClient.handle(this);
   }
 
   /** Safely runs client side only code in a method only called on client */

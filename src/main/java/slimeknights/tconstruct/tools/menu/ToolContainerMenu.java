@@ -284,7 +284,7 @@ public class ToolContainerMenu extends AbstractContainerMenu {
       CraftingInput input = craftingContainer.asCraftInput();
       ItemStack result = ItemStack.EMPTY;
       Optional<RecipeHolder<CraftingRecipe>> recipe = player.level().getServer().getRecipeManager()
-        .getRecipeFor(RecipeType.CRAFTING, input, player.level(), null);
+        .getRecipeFor(RecipeType.CRAFTING, input, player.level(), (RecipeHolder<CraftingRecipe>) null);
       if (recipe.isPresent()) {
         RecipeHolder<CraftingRecipe> holder = recipe.get();
         CraftingRecipe craftingRecipe = holder.value();
