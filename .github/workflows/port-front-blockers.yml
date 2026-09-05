@@ -1,4 +1,4 @@
-name: Tinkers Item Client API Cleanup
+name: Tinkers Stack Helper API Cleanup
 
 on:
   push:
@@ -23,86 +23,91 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port item client and fluid copy APIs
+      - name: Port stack copy and NBT buffer helpers
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Item properties read Tinkers TOOL_DATA rather than removed raw ItemStack NBT.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java')
+          def replace_once(path, old, new, label):
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # FluidStack 1.21 exposes component-preserving copies through copyWithAmount().
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java')
+          replace_once(path, 'helper.setFluid(tool, new FluidStack(fluid, amount));',
+                       'helper.setFluid(tool, fluid.copyWithAmount(amount));', 'FluidAsCapacityModule copy')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java')
+          replace_once(path, 'helper.setFluid(tool, new FluidStack(fluid, amount));',
+                       'helper.setFluid(tool, fluid.copyWithAmount(amount));', 'FluidPredicateAsCapacityModule copy')
+
+          # FriendlyByteBuf removed readAnySizeNbt(); ordinary readNbt() is the 1.21 API used by Mantle loadables.
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java')
+          replace_once(path, 'CompoundTag tag = buffer.readAnySizeNbt();',
+                       'CompoundTag tag = buffer.readNbt();', 'GsonLoadable NBT read')
+
+          # ItemStack now owns count-preserving copies and component-aware identity comparison.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              if anchor not in text: raise RuntimeError('TinkerItemProperties ToolData import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
-          if text.count('CompoundTag nbt = stack.getTag();') != 1:
-              raise RuntimeError('TinkerItemProperties legacy stack tag access changed unexpectedly')
-          text = text.replace('CompoundTag nbt = stack.getTag();', 'CompoundTag nbt = ToolDataComponents.getTag(stack);', 1)
-          if text.count('stack.getUseDuration()') != 1:
-              raise RuntimeError('TinkerItemProperties use duration call changed unexpectedly')
-          text = text.replace('stack.getUseDuration()', 'stack.getUseDuration(holder)', 1)
+          expected = {
+              'ItemHandlerHelper.copyStackWithSize(ammo, projectilesDesired)': 'ammo.copyWithCount(projectilesDesired)',
+              'ItemHandlerHelper.copyStackWithSize(ammo, Math.min(projectilesDesired, ammo.getCount()))': 'ammo.copyWithCount(Math.min(projectilesDesired, ammo.getCount()))',
+              'ItemHandlerHelper.copyStackWithSize(standardAmmo, projectilesDesired)': 'standardAmmo.copyWithCount(projectilesDesired)',
+              'ItemStack.isSameItemSameTags(stack, match)': 'ItemStack.isSameItemSameComponents(stack, match)',
+          }
+          for old, new in expected.items():
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'BowAmmoModifierHook expected exactly one {old!r}, found {count}')
+              text = text.replace(old, new, 1)
+          if 'ItemHandlerHelper.' not in text:
+              text = text.replace('import net.neoforged.neoforge.items.ItemHandlerHelper;\n', '')
           path.write_text(text, encoding='utf-8')
 
-          # Crossbow arm pose uses the same component-backed tool data.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              if anchor not in text: raise RuntimeError('Crossbow client ToolData import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
-          if text.count('CompoundTag tag = stack.getTag();') != 1:
-              raise RuntimeError('Crossbow client legacy stack tag access changed unexpectedly')
-          text = text.replace('CompoundTag tag = stack.getTag();', 'CompoundTag tag = ToolDataComponents.getTag(stack);', 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Minecraft 1.21 use duration is entity-aware.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java')
-          text = path.read_text(encoding='utf-8')
-          count = text.count('stack.getUseDuration()')
-          if count != 3:
-              raise RuntimeError(f'ModifiableItemClientExtension expected 3 old duration calls, found {count}')
-          text = text.replace('stack.getUseDuration()', 'stack.getUseDuration(player)')
-          path.write_text(text, encoding='utf-8')
-
-          # FluidStack copy constructors were replaced by copyWithAmount(), preserving all data components.
-          path = Path('src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java')
-          text = path.read_text(encoding='utf-8')
-          if text.count('new FluidStack(resource, amount)') != 1:
-              raise RuntimeError('SimpleFluidTank fill copy changed unexpectedly')
-          if text.count('new FluidStack(fluid, drained)') != 1:
-              raise RuntimeError('SimpleFluidTank drain copy changed unexpectedly')
-          text = text.replace('new FluidStack(resource, amount)', 'resource.copyWithAmount(amount)', 1)
-          text = text.replace('new FluidStack(fluid, drained)', 'fluid.copyWithAmount(drained)', 1)
+          old = 'ItemHandlerHelper.copyStackWithSize(item.get(), count * item.getCount())'
+          new = 'item.get().copyWithCount(count * item.getCount())'
+          if text.count(old) != 1:
+              raise RuntimeError('DropItemFluidEffect stack copy changed unexpectedly')
+          text = text.replace(old, new, 1)
+          if 'ItemHandlerHelper.' not in text:
+              text = text.replace('import net.neoforged.neoforge.items.ItemHandlerHelper;\n', '')
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify item client cleanup
+      - name: Verify stack helper cleanup
         shell: bash
         run: |
-          grep -Fq 'ToolDataComponents.getTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java
-          grep -Fq 'stack.getUseDuration(holder)' src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java
-          grep -Fq 'ToolDataComponents.getTag(stack)' src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java
-          test "$(grep -F -c 'stack.getUseDuration(player)' src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java)" -eq 3
-          grep -Fq 'resource.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
-          grep -Fq 'fluid.copyWithAmount(drained)' src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
-          ! grep -R -F 'stack.getUseDuration()' \
-            src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java \
-            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java
+          grep -Fq 'fluid.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java
+          grep -Fq 'fluid.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java
+          grep -Fq 'CompoundTag tag = buffer.readNbt();' src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java
+          test "$(grep -F -c '.copyWithCount(' src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java)" -ge 3
+          grep -Fq 'ItemStack.isSameItemSameComponents(stack, match)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java
+          grep -Fq 'item.get().copyWithCount(count * item.getCount())' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
+          ! grep -R -F 'ItemHandlerHelper.copyStackWithSize' \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
+          ! grep -Fq 'readAnySizeNbt' src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java
           git diff --check
 
-      - name: Commit item client cleanup
+      - name: Commit stack helper cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java \
-            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java \
-            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java \
-            src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java \
+            src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
           git diff --cached --quiet || {
-            git commit -m 'Port item client duration and fluid copy APIs to 1.21'
+            git commit -m 'Port stack copy and buffer helpers to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
