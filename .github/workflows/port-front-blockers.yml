@@ -1,4 +1,4 @@
-name: Tinkers Common Holder and Loot Migration
+name: Tinkers Common API Followup
 
 on:
   push:
@@ -21,84 +21,55 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Apply guarded 1.21 holder and loot API migration
+      - name: Apply guarded API followup
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          root = Path('src/main/java')
-
-          # 1.21 attribute accessors consume Holder<Attribute>; our DeferredHolder is already a holder.
-          attr_pattern = re.compile(r'getAttributeValue\(TinkerAttributes\.([A-Z_]+)\.get\(\)\)')
-          attr_count = 0
-          for path in root.rglob('*.java'):
+          def replace_once(path, old, new):
               text = path.read_text()
-              text2, count = attr_pattern.subn(r'getAttributeValue(TinkerAttributes.\1)', text)
-              if count:
-                  path.write_text(text2)
-                  attr_count += count
-          if attr_count != 11:
-              raise SystemExit(f'Expected 11 direct TinkerAttributes holder migrations, found {attr_count}')
-
-          # Conditional holder expression in ModifierEvents is not covered by the direct-call regex above.
-          modifier_events = root / 'slimeknights/tconstruct/tools/logic/ModifierEvents.java'
-          text = modifier_events.read_text()
-          old = 'beneficial ? TinkerAttributes.GOOD_EFFECT_DURATION.get() : TinkerAttributes.BAD_EFFECT_DURATION.get()'
-          new = 'beneficial ? TinkerAttributes.GOOD_EFFECT_DURATION : TinkerAttributes.BAD_EFFECT_DURATION'
-          if text.count(old) != 1:
-              raise SystemExit('ModifierEvents effect-duration attribute guard failed')
-          modifier_events.write_text(text.replace(old, new))
-
-          # TinkerEffects has a compatibility helper that resolves DeferredHolder subclasses to Holder<MobEffect>.
-          effect_patterns = [
-              (re.compile(r'getEffect\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\)\)'), r'getEffect(TinkerEffects.holder(TinkerEffects.\1))', 2),
-              (re.compile(r'hasEffect\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\)\)'), r'hasEffect(TinkerEffects.holder(TinkerEffects.\1))', 3),
-              (re.compile(r'new MobEffectInstance\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\),'), r'new MobEffectInstance(TinkerEffects.holder(TinkerEffects.\1),', 2),
-          ]
-          for pattern, replacement, expected in effect_patterns:
-              found = 0
-              for path in root.rglob('*.java'):
-                  text = path.read_text()
-                  text2, count = pattern.subn(replacement, text)
-                  if count:
-                      path.write_text(text2)
-                      found += count
-              if found != expected:
-                  raise SystemExit(f'TinkerEffects holder guard failed: expected {expected}, found {found} for {pattern.pattern}')
-
-          # These TinkerModifiers fields are mob-effect DeferredHolders; use the same holder bridge without imports.
-          modifier_effect_patterns = [
-              (re.compile(r'hasEffect\(TinkerModifiers\.([A-Za-z0-9_]+)\.get\(\)\)'), r'hasEffect(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.\1))', 3),
-              (re.compile(r'new MobEffectInstance\(TinkerModifiers\.([A-Za-z0-9_]+)\.get\(\),'), r'new MobEffectInstance(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.\1),', 3),
-          ]
-          for pattern, replacement, expected in modifier_effect_patterns:
-              found = 0
-              for path in root.rglob('*.java'):
-                  text = path.read_text()
-                  text2, count = pattern.subn(replacement, text)
-                  if count:
-                      path.write_text(text2)
-                      found += count
-              if found != expected:
-                  raise SystemExit(f'TinkerModifiers effect holder guard failed: expected {expected}, found {found} for {pattern.pattern}')
-
-          # NeoForge 1.21 global loot modifiers use MapCodec and renamed attacking-entity context params.
-          loot = root / 'slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java'
-          text = loot.read_text()
-          replacements = [
-              ('import com.mojang.serialization.Codec;', 'import com.mojang.serialization.MapCodec;'),
-              ('public static final Codec<ModifierLootModifier> CODEC = RecordCodecBuilder.create(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));',
-               'public static final MapCodec<ModifierLootModifier> CODEC = RecordCodecBuilder.mapCodec(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));'),
-              ('LootContextParams.DIRECT_KILLER_ENTITY', 'LootContextParams.DIRECT_ATTACKING_ENTITY'),
-              ('LootContextParams.KILLER_ENTITY', 'LootContextParams.ATTACKING_ENTITY'),
-              ('public Codec<? extends IGlobalLootModifier> codec()', 'public MapCodec<? extends IGlobalLootModifier> codec()'),
-          ]
-          for old, new in replacements:
               if text.count(old) != 1:
-                  raise SystemExit(f'ModifierLootModifier guard failed for: {old}')
+                  raise SystemExit(f'Guard failed in {path}: expected exactly one occurrence of {old!r}, found {text.count(old)}')
+              path.write_text(text.replace(old, new))
+
+          root = Path('src/main/java/slimeknights/tconstruct')
+
+          # Accept DeferredHolder<R,T> for any R/T subtype chain rooted at MobEffect.
+          effects = root / 'shared/TinkerEffects.java'
+          replace_once(
+              effects,
+              'public static Holder<MobEffect> holder(DeferredHolder<MobEffect, ? extends MobEffect> effect) {',
+              'public static <R extends MobEffect, T extends R> Holder<MobEffect> holder(DeferredHolder<R, T> effect) {'
+          )
+
+          # Item tooltip context replaced the nullable Level parameter in 1.21.
+          repair = root / 'tools/item/RepairKitItem.java'
+          text = repair.read_text()
+          for old, new in [
+              ('import net.minecraft.world.item.ItemStack;\n', 'import net.minecraft.world.item.Item;\nimport net.minecraft.world.item.ItemStack;\n'),
+              ('import net.minecraft.world.level.Level;\n', ''),
+              ('import javax.annotation.Nullable;\n', ''),
+              ('public void appendHoverText(ItemStack stack, @Nullable Level world, List<Component> tooltip, TooltipFlag flag) {\n    super.appendHoverText(stack, world, tooltip, flag);',
+               'public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {\n    super.appendHoverText(stack, context, tooltip, flag);'),
+          ]:
+              if text.count(old) != 1:
+                  raise SystemExit(f'RepairKitItem guard failed for {old!r}: {text.count(old)}')
               text = text.replace(old, new)
-          loot.write_text(text)
+          repair.write_text(text)
+
+          # Enchantments are data-driven holders in 1.21. Resolve Looting through the level registry.
+          shears = root / 'tools/modules/interaction/ShearsModule.java'
+          text = shears.read_text()
+          for old, new in [
+              ('import net.minecraft.world.InteractionHand;\n', 'import net.minecraft.core.registries.Registries;\nimport net.minecraft.world.InteractionHand;\n'),
+              ('import net.minecraft.world.item.enchantment.Enchantments;\n', 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;\n'),
+              ('    LootingContext context = new LootingContext(player, target, null, Util.getSlotType(hand));\n    int looting = LootingModifierHook.getLooting(tool, context, player.getItemInHand(hand).getEnchantmentLevel(Enchantments.MOB_LOOTING));\n    looting = ArmorLootingModifierHook.getLooting(tool, context, looting);\n    Level world = player.getCommandSenderWorld();',
+               '    LootingContext context = new LootingContext(player, target, null, Util.getSlotType(hand));\n    Level world = player.getCommandSenderWorld();\n    int vanillaLooting = EnchantmentHelper.getItemEnchantmentLevel(\n      world.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LOOTING),\n      player.getItemInHand(hand));\n    int looting = LootingModifierHook.getLooting(tool, context, vanillaLooting);\n    looting = ArmorLootingModifierHook.getLooting(tool, context, looting);'),
+          ]:
+              if text.count(old) != 1:
+                  raise SystemExit(f'ShearsModule guard failed for {old!r}: {text.count(old)}')
+              text = text.replace(old, new)
+          shears.write_text(text)
           PY
 
           git diff --check
@@ -110,7 +81,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet && { echo 'No source changes produced'; exit 1; }
-          git commit -m 'Port attribute effect holders and loot modifier API to 1.21'
+          git commit -m 'Fix effect holders repair tooltip and looting lookup'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Start fresh compile
