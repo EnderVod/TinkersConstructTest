@@ -1,4 +1,4 @@
-name: Tinkers Effect Cure Compatibility Migration
+name: Tinkers Attribute and Effect Holder Migration
 
 on:
   push:
@@ -23,129 +23,251 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port curative item behavior to NeoForge effect cures
+      - name: Port attribute and residual effect APIs to 1.21 holders
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+          root = Path('src/main/java')
 
-          helper = Path('src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java')
-          if helper.exists():
-              raise RuntimeError('EffectCureHelper already exists; inspect before replacing')
-          helper.write_text('''package slimeknights.tconstruct.library.modifiers;\n\nimport lombok.AccessLevel;\nimport lombok.NoArgsConstructor;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.world.effect.MobEffectInstance;\nimport net.minecraft.world.item.Item;\nimport net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.Items;\nimport net.neoforged.neoforge.common.EffectCure;\nimport net.neoforged.neoforge.common.EffectCures;\n\nimport javax.annotation.Nullable;\nimport java.util.List;\n\n/** Compatibility helpers for the 1.21 NeoForge effect-cure system. */\n@NoArgsConstructor(access = AccessLevel.PRIVATE)\npublic final class EffectCureHelper {\n  /** Gets the cure selector corresponding to the given item. */\n  public static EffectCure fromItem(Item item) {\n    if (item == Items.MILK_BUCKET) {\n      return EffectCures.MILK;\n    }\n    if (item == Items.HONEY_BOTTLE) {\n      return EffectCures.HONEY;\n    }\n    if (item == Items.TOTEM_OF_UNDYING) {\n      return EffectCures.PROTECTED_BY_TOTEM;\n    }\n    return EffectCure.get(BuiltInRegistries.ITEM.getKey(item).toString());\n  }\n\n  /** Gets the cure selector corresponding to the given stack's item. */\n  public static EffectCure fromStack(ItemStack stack) {\n    return fromItem(stack.getItem());\n  }\n\n  /** Replaces the instance cure set with the cures represented by the legacy curative item list. */\n  public static void replaceCurativeItems(MobEffectInstance instance, @Nullable List<Item> items) {\n    if (items != null) {\n      var cures = instance.getCures();\n      cures.clear();\n      for (Item item : items) {\n        cures.add(fromItem(item));\n      }\n    }\n  }\n}\n''', encoding='utf-8')
+          def path(rel):
+              return root / rel
 
-          # Fluid cure effect: select and remove effects through the deterministic EffectCure.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
-              anchor = 'import slimeknights.tconstruct.library.modifiers.fluid.EffectLevel;\n'
+          def add_import(p, anchor, imp):
+              text = p.read_text(encoding='utf-8')
+              if imp not in text:
+                  if anchor not in text:
+                      raise RuntimeError(f'Import anchor missing in {p}: {anchor!r}')
+                  text = text.replace(anchor, imp + anchor, 1)
+                  p.write_text(text, encoding='utf-8')
+
+          def replace(p, old, new, expected=1):
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != expected:
+                  raise RuntimeError(f'{p}: expected {expected} x {old!r}, found {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Rename the vanilla AttributeModifier operation enum without touching Tinkers StatOperation.
+          counts = {'ADDITION': 0, 'MULTIPLY_BASE': 0, 'MULTIPLY_TOTAL': 0}
+          for p in (root / 'slimeknights/tconstruct').rglob('*.java'):
+              text = p.read_text(encoding='utf-8')
+              if 'import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;' in text:
+                  for old, new in [('ADDITION', 'ADD_VALUE'), ('MULTIPLY_BASE', 'ADD_MULTIPLIED_BASE'), ('MULTIPLY_TOTAL', 'ADD_MULTIPLIED_TOTAL')]:
+                      count = text.count('Operation.' + old)
+                      counts[old] += count
+                      text = text.replace('Operation.' + old, 'Operation.' + new)
+                  p.write_text(text, encoding='utf-8')
+          if counts != {'ADDITION': 30, 'MULTIPLY_BASE': 11, 'MULTIPLY_TOTAL': 24}:
+              raise RuntimeError(f'Unexpected vanilla operation counts: {counts}')
+
+          replace(path('slimeknights/tconstruct/tools/TinkerModifiers.java'),
+                  'AttributeModifier.Operation.ADDITION', 'AttributeModifier.Operation.ADD_VALUE')
+
+          # Accept both legacy Tinkers operation names and the new 1.21 serialized names.
+          p = path('slimeknights/tconstruct/library/json/TinkerLoadables.java')
+          old = '  public static final StringLoadable<Operation> OPERATION = new EnumLoadable<>(Operation.class);'
+          new = '''  public static final StringLoadable<Operation> OPERATION = StringLoadable.DEFAULT.comapFlatMap((name, error) -> switch (name) {
+            case "addition", "add_value" -> Operation.ADD_VALUE;
+            case "multiply_base", "add_multiplied_base" -> Operation.ADD_MULTIPLIED_BASE;
+            case "multiply_total", "add_multiplied_total" -> Operation.ADD_MULTIPLIED_TOTAL;
+            default -> throw error.create("Unknown attribute operation " + name);
+          }, Operation::getSerializedName);'''
+          replace(p, old, new)
+
+          # Residual raw MobEffect values are wrapped only at vanilla Holder callsites.
+          for rel, old, new in [
+              ('slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleRemoveEffectModule.java',
+               'player.removeEffect(effect);', 'player.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'),
+              ('slimeknights/tconstruct/library/json/predicate/HasMobEffectPredicate.java',
+               'living.hasEffect(effect)', 'living.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))'),
+              ('slimeknights/tconstruct/library/json/variable/entity/EntityEffectLevelVariable.java',
+               'entity.getEffect(effect)', 'entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))'),
+              ('slimeknights/tconstruct/tools/modules/ClearEffectOnUnequipModule.java',
+               'entity.removeEffect(effect);', 'entity.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'),
+          ]:
+              p = path(rel)
+              add_import(p, 'import net.minecraft.world.effect.MobEffect;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+              replace(p, old, new)
+
+          # Datagen records still store raw MobEffect, so unwrap vanilla holders at construction.
+          p = path('slimeknights/tconstruct/tools/data/ModifierProvider.java')
+          text = p.read_text(encoding='utf-8')
+          for cls, expected in [('HasMobEffectPredicate', 2), ('EntityEffectLevelVariable', 2), ('EdibleRemoveEffectModule', 1)]:
+              pattern = rf'new {cls}\(MobEffects\.([A-Z0-9_]+)\)'
+              text, count = re.subn(pattern, rf'new {cls}(MobEffects.\1.value())', text)
+              if count != expected:
+                  raise RuntimeError(f'{cls}: expected {expected} vanilla holder constructor callsites, found {count}')
+          p.write_text(text, encoding='utf-8')
+
+          # Raw attribute variable callsite.
+          p = path('slimeknights/tconstruct/library/json/variable/entity/AttributeEntityVariable.java')
+          add_import(p, 'import net.minecraft.world.entity.LivingEntity;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          replace(p, 'entity.getAttributeValue(attribute)',
+                  'entity.getAttributeValue(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
+
+          # Vanilla Attributes constants passed to raw-Attribute records/builders are unwrapped at construction.
+          patterns = [
+              (r'(?<![A-Za-z0-9_])AttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'AttributeModule.builder(Attributes.\1.value(),', 18),
+              (r'MaxArmorAttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'MaxArmorAttributeModule.builder(Attributes.\1.value(),', 1),
+              (r'GoldenAttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'GoldenAttributeModule.builder(Attributes.\1.value(),', 2),
+              (r'new AttributeEntityVariable\(Attributes\.([A-Z0-9_]+)\)', r'new AttributeEntityVariable(Attributes.\1.value())', 3),
+              (r'new LightspeedAttributeModule\(([^,]+), Attributes\.([A-Z0-9_]+),', r'new LightspeedAttributeModule(\1, Attributes.\2.value(),', 1),
+          ]
+          java_files = list((root / 'slimeknights/tconstruct').rglob('*.java'))
+          for pattern, repl, expected in patterns:
+              total = 0
+              for p in java_files:
+                  text = p.read_text(encoding='utf-8')
+                  text, count = re.subn(pattern, repl, text)
+                  if count:
+                      p.write_text(text, encoding='utf-8')
+                      total += count
+              if total != expected:
+                  raise RuntimeError(f'{pattern}: expected {expected}, found {total}')
+
+          # AttributeModule: preserve legacy UUID identity by mapping it into a stable ResourceLocation ID.
+          p = path('slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java')
+          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          add_import(p, 'import slimeknights.mantle.client.TooltipKey;\n', 'import slimeknights.tconstruct.TConstruct;\n')
+          text = p.read_text(encoding='utf-8')
+          anchor = '  /** Gets the UUID from a name */\n  public static UUID getUUID(String name, EquipmentSlot slot) {\n'
+          helper = '''  /** Converts a legacy UUID attribute modifier key into a stable 1.21 ResourceLocation ID. */
+          public static ResourceLocation idFromUUID(UUID uuid) {
+            return TConstruct.getResource("attribute/" + uuid);
+          }
+
+          '''
+          if helper not in text:
               if anchor not in text:
-                  raise RuntimeError('CureEffectsFluidEffect import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
-          old = '''      // when simulating, search the effects list directly for curative effects\n      // may still be wrong if the event cancels things though, no way to safely simulate it\n      if (action.simulate()) {\n        return target.getActiveEffects().stream().anyMatch(effect -> effect.isCurativeItem(stack)) ? 1 : 0;\n      }\n      return target.curePotionEffects(stack) ? 1 : 0;'''
-          new = '''      var cure = EffectCureHelper.fromStack(stack);\n      // when simulating, search the effects list directly for the selected cure\n      // may still be wrong if the event cancels things though, no way to safely simulate it\n      if (action.simulate()) {\n        return target.getActiveEffects().stream().anyMatch(effect -> effect.getCures().contains(cure)) ? 1 : 0;\n      }\n      return target.removeEffectsCuredBy(cure) ? 1 : 0;'''
-          if text.count(old) != 1:
-              raise RuntimeError('CureEffectsFluidEffect legacy cure block changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+                  raise RuntimeError('AttributeModule UUID helper anchor missing')
+              text = text.replace(anchor, helper + anchor, 1)
+              p.write_text(text, encoding='utf-8')
+          replace(p, 'new AttributeModifier(uuid, unique + "." + slot.getName(), formula.apply(tool, modifier), operation)',
+                  'new AttributeModifier(idFromUUID(uuid), formula.apply(tool, modifier), operation)')
+          replace(p, 'context.getEntity().getAttribute(attribute)',
+                  'context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
+          replace(p, 'attributeModifier.getId()', 'attributeModifier.id()')
+          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(idFromUUID(uuid));')
+          replace(p, 'TooltipUtil.addAttribute(attribute, operation, amount, uuid, player, tooltip);',
+                  'TooltipUtil.addAttribute(attribute, operation, amount, uuid == null ? null : idFromUUID(uuid), player, tooltip);')
 
-          # Unequipping a curative armor piece uses that item's deterministic cure selector.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
-              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
-              if anchor not in text:
-                  raise RuntimeError('CureOnRemovalModule import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
-          old = 'context.getEntity().curePotionEffects(new ItemStack(tool.getItem()));'
-          new = 'context.getEntity().removeEffectsCuredBy(EffectCureHelper.fromItem(tool.getItem()));'
-          if text.count(old) != 1:
-              raise RuntimeError('CureOnRemovalModule cure call changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+          # Melee transient attribute.
+          p = path('slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java')
+          add_import(p, 'import net.minecraft.resources.ResourceLocation;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          replace(p, 'target.getAttribute(attribute)',
+                  'target.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
+          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
+          replace(p, 'new AttributeModifier(uuid, unique, amount.compute(modifier.getEffectiveLevel()), operation)',
+                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), amount.compute(modifier.getEffectiveLevel()), operation)')
 
-          # Edible cure module uses the same configured curative item selector.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
-              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
-              if anchor not in text:
-                  raise RuntimeError('EdibleCureEffectsModule import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
-          old = 'player.curePotionEffects(curativeItem);'
-          new = 'player.removeEffectsCuredBy(EffectCureHelper.fromStack(curativeItem));'
-          if text.count(old) != 1:
-              raise RuntimeError('EdibleCureEffectsModule cure call changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+          # Maximum worn-armor attribute.
+          p = path('slimeknights/tconstruct/library/modifiers/modules/armor/MaxArmorAttributeModule.java')
+          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          replace(p, 'context.getEntity().getAttribute(attribute)',
+                  'context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
+          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));')
+          replace(p, 'new AttributeModifier(uuid, unique, attributeValue, operation)',
+                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), attributeValue, operation)')
 
-          # Legacy curative_items now replaces the NeoForge cure set on the instance.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
-              anchor = 'import slimeknights.tconstruct.TConstruct;\n'
-              if anchor not in text:
-                  raise RuntimeError('FluidMobEffect import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n', 1)
-          old = '''    if (curativeItems != null) {\n      instance.setCurativeItems(curativeItems.stream().map(ItemStack::new).collect(Collectors.toList()));\n    }'''
-          new = '    EffectCureHelper.replaceCurativeItems(instance, curativeItems);'
-          if text.count(old) != 1:
-              raise RuntimeError('FluidMobEffect curative item block changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+          # Held tool base attributes and modifier attributes.
+          p = path('slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java')
+          add_import(p, 'import slimeknights.tconstruct.common.TinkerTags;\n',
+                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
+          for old, new in [
+              ('builder.put(Attributes.ATTACK_DAMAGE, new AttributeModifier(Item.BASE_ATTACK_DAMAGE_UUID, "tconstruct.tool.attack_damage", statsNBT.get(ToolStats.ATTACK_DAMAGE), AttributeModifier.Operation.ADDITION));',
+               'builder.put(Attributes.ATTACK_DAMAGE.value(), new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID, statsNBT.get(ToolStats.ATTACK_DAMAGE), AttributeModifier.Operation.ADD_VALUE));'),
+              ('builder.put(Attributes.ATTACK_SPEED, new AttributeModifier(Item.BASE_ATTACK_SPEED_UUID, "tconstruct.tool.attack_speed", statsNBT.get(ToolStats.ATTACK_SPEED) - 4d, AttributeModifier.Operation.ADDITION));',
+               'builder.put(Attributes.ATTACK_SPEED.value(), new AttributeModifier(Item.BASE_ATTACK_SPEED_ID, statsNBT.get(ToolStats.ATTACK_SPEED) - 4d, AttributeModifier.Operation.ADD_VALUE));'),
+              ('builder.put(Attributes.ARMOR, new AttributeModifier(uuid, "tconstruct.held.armor", value, AttributeModifier.Operation.ADDITION));',
+               'builder.put(Attributes.ARMOR.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
+              ('builder.put(Attributes.ARMOR_TOUGHNESS, new AttributeModifier(uuid, "tconstruct.held.toughness", value, AttributeModifier.Operation.ADDITION));',
+               'builder.put(Attributes.ARMOR_TOUGHNESS.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
+              ('builder.put(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier(uuid, "tconstruct.held.knockback_resistance", value, AttributeModifier.Operation.ADDITION));',
+               'builder.put(Attributes.KNOCKBACK_RESISTANCE.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
+          ]:
+              replace(p, old, new)
 
-          # Combat effect module must add the configured instance itself so its cure set is preserved.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
-              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
-              if anchor not in text:
-                  raise RuntimeError('MobEffectModule import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
-          old = '''        if (curativeItems != null) {\n          instance.setCurativeItems(curativeItems.stream().map(ItemStack::new).collect(Collectors.toList()));\n        }\n        target.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level), cause);'''
-          new = '''        EffectCureHelper.replaceCurativeItems(instance, curativeItems);\n        target.addEffect(instance, cause);'''
-          if text.count(old) != 1:
-              raise RuntimeError('MobEffectModule curative/add block changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
+          # Gold-count attribute module.
+          p = path('slimeknights/tconstruct/tools/modules/armor/GoldenAttributeModule.java')
+          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          add_import(p, 'import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;\n',
+                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
+          replace(p, 'attribute == Attributes.MAX_HEALTH', 'attribute == Attributes.MAX_HEALTH.value()')
+          replace(p, 'living.getAttribute(attribute)', 'living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
+          replace(p, 'player.getAttribute(attribute)', 'player.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
+          replace(p, 'instance.getModifier(uuid)', 'instance.getModifier(AttributeModule.idFromUUID(uuid))', 2)
+          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
+          replace(p, 'new AttributeModifier(uuid, unique, amount.compute(totalGold), operation)',
+                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), amount.compute(totalGold), operation)')
+          replace(p, 'modifier.getAmount()', 'modifier.amount()')
+
+          # Light-dependent armor attribute module.
+          p = path('slimeknights/tconstruct/tools/modules/armor/LightspeedAttributeModule.java')
+          add_import(p, 'import net.minecraft.core.BlockPos;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          add_import(p, 'import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;\n',
+                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
+          replace(p, 'living.getAttribute(this.attribute)', 'living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute))')
+          replace(p, 'livingEntity.getAttribute(this.attribute)', 'livingEntity.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute))')
+          replace(p, 'attribute.getModifier(uuid)', 'attribute.getModifier(AttributeModule.idFromUUID(uuid))', 2)
+          replace(p, 'attribute.removeModifier(uuid);', 'attribute.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
+          replace(p, 'new AttributeModifier(uuid, unique, scaledLight * amount * modifier.getEffectiveLevel(), operation)',
+                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), scaledLight * amount * modifier.getEffectiveLevel(), operation)')
+
+          # Deprecated damage/speed trade attribute hook.
+          p = path('slimeknights/tconstruct/tools/modifiers/traits/DamageSpeedTradeModifier.java')
+          add_import(p, 'import slimeknights.tconstruct.library.modifiers.hook.mining.BreakSpeedModifierHook;\n',
+                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
+          replace(p,
+                  'consumer.accept(Attributes.ATTACK_DAMAGE, new AttributeModifier(uuid.get(), attributeName.get(), boost / 2, Operation.ADD_MULTIPLIED_TOTAL));',
+                  'consumer.accept(Attributes.ATTACK_DAMAGE.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid.get()), boost / 2, Operation.ADD_MULTIPLIED_TOTAL));')
+
+          # Armored slime's three built-in attribute modifiers.
+          p = path('slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java')
+          add_import(p, 'import net.minecraft.nbt.CompoundTag;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          add_import(p, 'import org.jetbrains.annotations.Nullable;\n', 'import slimeknights.tconstruct.TConstruct;\n')
+          for old, new in [
+              ('tryAddAttribute(Attributes.ARMOR, new AttributeModifier("tconstruct.small_armor_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
+               'tryAddAttribute(Attributes.ARMOR.value(), new AttributeModifier(TConstruct.getResource("small_armor_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
+              ('tryAddAttribute(Attributes.ARMOR_TOUGHNESS, new AttributeModifier("tconstruct.small_toughness_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
+               'tryAddAttribute(Attributes.ARMOR_TOUGHNESS.value(), new AttributeModifier(TConstruct.getResource("small_toughness_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
+              ('tryAddAttribute(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier("tconstruct.small_resistence_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
+               'tryAddAttribute(Attributes.KNOCKBACK_RESISTANCE.value(), new AttributeModifier(TConstruct.getResource("small_resistence_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
+          ]:
+              replace(p, old, new)
+          replace(p, 'getAttribute(attribute)', 'getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
+
+          # Critical-damage custom attribute is raw, so wrap for LivingEntity's Holder API.
+          p = path('slimeknights/tconstruct/tools/logic/ModifierEvents.java')
+          add_import(p, 'import net.minecraft.advancements.CriteriaTriggers;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
+          replace(p,
+                  'living.getAttributeValue(attribute) - attribute.getDefaultValue()',
+                  'living.getAttributeValue(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute)) - attribute.getDefaultValue()')
           PY
 
-      - name: Verify effect cure compatibility migration
+      - name: Verify attribute and effect holder migration
         shell: bash
         run: |
-          grep -Fq 'return EffectCures.MILK;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
-          grep -Fq 'return EffectCures.HONEY;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
-          grep -Fq 'return EffectCures.PROTECTED_BY_TOTEM;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
-          grep -Fq 'EffectCure.get(BuiltInRegistries.ITEM.getKey(item).toString())' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
-          grep -Fq 'effect.getCures().contains(cure)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java
-          grep -Fq 'target.removeEffectsCuredBy(cure)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java
-          grep -Fq 'EffectCureHelper.fromItem(tool.getItem())' src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java
-          grep -Fq 'EffectCureHelper.fromStack(curativeItem)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java
-          grep -Fq 'EffectCureHelper.replaceCurativeItems(instance, curativeItems);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java
-          grep -Fq 'target.addEffect(instance, cause);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
-          ! grep -R -F 'setCurativeItems' \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
-          ! grep -R -F 'curePotionEffects' \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java
+          grep -Fq 'new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java
+          grep -Fq 'new AttributeModifier(Item.BASE_ATTACK_SPEED_ID' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java
+          grep -Fq 'ResourceLocation idFromUUID(UUID uuid)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java
+          grep -Fq 'BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java
+          grep -Fq 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleRemoveEffectModule.java
+          grep -Fq 'case "addition", "add_value" -> Operation.ADD_VALUE;' src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java
+          ! grep -R -F 'Item.BASE_ATTACK_DAMAGE_UUID' src/main/java/slimeknights/tconstruct
+          ! grep -R -F 'Item.BASE_ATTACK_SPEED_UUID' src/main/java/slimeknights/tconstruct
+          ! grep -R -F 'AttributeModifier.Operation.ADDITION' src/main/java/slimeknights/tconstruct
           git diff --check
 
-      - name: Commit effect cure compatibility migration
+      - name: Commit attribute and effect holder migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
+          git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Port curative item behavior to NeoForge effect cures'
+            git commit -m 'Port attribute and residual effect APIs to 1.21 holders'
             git push origin HEAD:1.21.1-neoforge
           }
 
