@@ -1,4 +1,4 @@
-name: Tinkers Enchantment Component Migration
+name: Tinkers Block Interaction API Migration
 
 on:
   push:
@@ -23,132 +23,110 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port enchantment components and mining context
+      - name: Port ranged block interaction to 1.21 APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          root = Path('src/main/java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java')
+          text = path.read_text(encoding='utf-8')
 
-          def p(rel):
-              return root / rel
-
-          def replace(path, old, new, expected=1):
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != expected:
-                  raise RuntimeError(f'{path}: expected {expected} x {old!r}, found {count}')
-              path.write_text(text.replace(old, new), encoding='utf-8')
-
-          def add_import(path, anchor, imp):
-              text = path.read_text(encoding='utf-8')
+          def add_import(anchor, imp):
+              global text
               if imp not in text:
                   if anchor not in text:
-                      raise RuntimeError(f'Import anchor missing in {path}: {anchor!r}')
-                  path.write_text(text.replace(anchor, imp + anchor, 1), encoding='utf-8')
+                      raise RuntimeError(f'import anchor missing: {anchor!r}')
+                  text = text.replace(anchor, imp + anchor, 1)
 
-          # Fix the one missing import exposed by the attribute batch.
-          path = p('slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java')
-          add_import(path, 'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeUniqueField;\n',
-                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
+          add_import('import net.minecraft.server.level.ServerPlayer;\n', 'import net.minecraft.server.level.ServerLevel;\n')
+          add_import('import net.minecraft.world.InteractionResult;\n', 'import net.minecraft.world.ItemInteractionResult;\n')
 
-          # Keep the public modifier hook API on raw Enchantment values, but bridge stack data through 1.21 components.
-          path = p('slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java')
-          add_import(path, 'import net.minecraft.world.item.ItemStack;\n',
-                     'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.registries.Registries;\n')
-          add_import(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
-                     'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
-          add_import(path, 'import java.util.Collection;\n', 'import java.util.HashMap;\n')
-          replace(path,
-                  '''  static int getEnchantmentLevel(ItemStack stack, Enchantment enchantment) {\n    int level = EnchantmentHelper.getTagEnchantmentLevel(enchantment, stack);''',
-                  '''  static int getEnchantmentLevel(ItemStack stack, Enchantment enchantment) {\n    int level = 0;\n    for (var entry : stack.getEnchantments().entrySet()) {\n      if (entry.getKey().value() == enchantment) {\n        level = entry.getIntValue();\n        break;\n      }\n    }''')
-          replace(path,
-                  'Map<Enchantment,Integer> enchantments = EnchantmentHelper.getEnchantments(stack);',
-                  'Map<Enchantment,Integer> enchantments = getStoredEnchantments(stack);')
-          text = path.read_text(encoding='utf-8')
-          anchor = '''  /**\n   * Gets all enchantments on the given stack\n'''
-          helper = '''  /** Gets the stack enchantment component as the legacy raw-enchantment map used by modifier hooks. */\n  static Map<Enchantment,Integer> getStoredEnchantments(ItemStack stack) {\n    Map<Enchantment,Integer> enchantments = new HashMap<>();\n    for (var entry : stack.getEnchantments().entrySet()) {\n      enchantments.put(entry.getKey().value(), entry.getIntValue());\n    }\n    return enchantments;\n  }\n\n  /** Applies a legacy raw-enchantment map through the active dynamic enchantment registry. */\n  static void setEnchantments(ItemStack stack, RegistryAccess registryAccess, Map<Enchantment,Integer> enchantments) {\n    ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(stack.getEnchantments());\n    mutable.removeIf(holder -> true);\n    var registry = registryAccess.registryOrThrow(Registries.ENCHANTMENT);\n    enchantments.forEach((enchantment, level) -> {\n      if (level > 0) {\n        mutable.set(registry.wrapAsHolder(enchantment), level);\n      }\n    });\n    EnchantmentHelper.setEnchantments(stack, mutable.toImmutable());\n  }\n\n'''
-          if helper not in text:
-              if anchor not in text:
-                  raise RuntimeError('EnchantmentModifierHook helper anchor missing')
-              path.write_text(text.replace(anchor, helper + anchor, 1), encoding='utf-8')
+          old = '''    if (!level.isClientSide && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
+      // unable to call Forge damageItem as that needs entity access, but its just vanilla broken anyways, right?
+      stack.hurt(1, level.getRandom(), null);
+      // calling methods again instead of using return as return may be incorrect for custom broken stacks
+      if (stack.getDamageValue() >= stack.getMaxDamage()) {
+        // but that won't happen, right? will need to consider another workaround in that case.
+        stack.shrink(1);
+        stack.setDamageValue(0);
+        level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);
+      }
+    }'''
+          new = '''    if (level instanceof ServerLevel server && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
+      // Player-less item use does not damage vanilla tools itself. Use the 1.21 durability path so enchantments/components are honored.
+      stack.hurtAndBreak(1, server, null,
+        item -> level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F));
+    }'''
+          if text.count(old) != 1:
+              raise RuntimeError('legacy player-less durability block changed unexpectedly')
+          text = text.replace(old, new, 1)
 
-          # Harvest enchantment overrides now snapshot and restore ItemEnchantments instead of legacy NBT lists.
-          path = p('slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java')
-          replace(path, 'import net.minecraft.nbt.CompoundTag;\n', '')
-          replace(path, 'import net.minecraft.nbt.ListTag;\n', '')
-          add_import(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
-                     'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
-          replace(path,
-                  'static ListTag updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context)',
-                  'static ItemEnchantments updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context)')
-          replace(path, 'ListTag originalEnchants = null;', 'ItemEnchantments originalEnchants = null;')
-          replace(path,
-                  '''                originalEnchants = stack.getEnchantmentTags();\n                enchantments = EnchantmentHelper.deserializeEnchantments(originalEnchants);''',
-                  '''                originalEnchants = stack.getEnchantments();\n                enchantments = EnchantmentModifierHook.getStoredEnchantments(stack);''')
-          replace(path,
-                  'EnchantmentHelper.setEnchantments(enchantments, stack);',
-                  'EnchantmentModifierHook.setEnchantments(stack, context.getWorld().registryAccess(), enchantments);')
-          replace(path,
-                  '''  static void restoreEnchantments(ItemStack stack, ListTag originalTag) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null) {\n      if (originalTag.isEmpty()) {\n        nbt.remove(TAG_ENCHANTMENTS);\n      } else {\n        nbt.put(TAG_ENCHANTMENTS, originalTag);\n      }\n    }\n  }''',
-                  '''  static void restoreEnchantments(ItemStack stack, ItemEnchantments originalEnchantments) {\n    EnchantmentHelper.setEnchantments(stack, originalEnchantments);\n  }''')
-
-          # Caller local type follows the component snapshot.
-          path = p('slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java')
-          replace(path, 'import net.minecraft.nbt.ListTag;\n', 'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
-          replace(path,
-                  'ListTag originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);',
-                  'ItemEnchantments originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);')
-
-          # Fluid block breaker resolves configured raw enchantments through the active server registry.
-          path = p('slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java')
-          replace(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
-                  'import slimeknights.tconstruct.library.modifiers.hook.behavior.EnchantmentModifierHook;\n')
-          replace(path,
-                  'EnchantmentHelper.setEnchantments(enchantments, fakeTool);',
-                  'EnchantmentModifierHook.setEnchantments(fakeTool, server.registryAccess(), enchantments);')
-          replace(path,
-                  'MutableComponent component = Component.translatable(enchantment.getDescriptionId());',
-                  'MutableComponent component = enchantment.description().copy();')
-
-          # Vanilla 1.21 represents underwater mining slowdown through an attribute, including Aqua Affinity changes.
-          path = p('slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java')
-          replace(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
-                  'import net.minecraft.world.entity.ai.attributes.Attributes;\n')
-          replace(path,
-                  '''    if (entity.isEyeInFluid(FluidTags.WATER) && !EnchantmentHelper.hasAquaAffinity(entity)) {\n      modifier /= 5.0F;\n    }''',
-                  '''    if (entity.isEyeInFluid(FluidTags.WATER)) {\n      modifier *= (float)entity.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);\n    }''')
+          old = '''      // click the block
+      ItemStack original = heldItem.copy();
+      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
+        InteractionResult result = state.use(world, player, hand, hitResult);
+        if (result.consumesAction()) {
+          if (player instanceof ServerPlayer serverPlayer) {
+            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);
+          }
+          player.swing(hand, true);
+          return 1;
+        }
+      }'''
+          new = '''      // click the block. In 1.21 vanilla split item-on-block interaction from default empty-hand-style block interaction.
+      ItemStack original = heldItem.copy();
+      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
+        ItemInteractionResult itemResult = state.useItemOn(heldItem, world, player, hand, hitResult);
+        if (itemResult.consumesAction()) {
+          if (player instanceof ServerPlayer serverPlayer) {
+            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);
+          }
+          player.swing(hand, true);
+          return 1;
+        }
+        if (itemResult == ItemInteractionResult.FAIL) {
+          return 0;
+        }
+        if (itemResult == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION && hand == InteractionHand.MAIN_HAND) {
+          InteractionResult result = state.useWithoutItem(world, player, hitResult);
+          if (result.consumesAction()) {
+            if (player instanceof ServerPlayer serverPlayer) {
+              CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);
+            }
+            player.swing(hand, true);
+            return 1;
+          }
+          if (result == InteractionResult.FAIL) {
+            return 0;
+          }
+        }
+      }'''
+          if text.count(old) != 1:
+              raise RuntimeError('legacy BlockState.use block changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify enchantment component migration
+      - name: Verify block interaction migration
         shell: bash
         run: |
-          grep -Fq 'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java
-          grep -Fq 'static Map<Enchantment,Integer> getStoredEnchantments(ItemStack stack)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
-          grep -Fq 'registryAccess.registryOrThrow(Registries.ENCHANTMENT)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
-          grep -Fq 'static ItemEnchantments updateHarvestEnchantments' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
-          grep -Fq 'ItemEnchantments originalEnchantments' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
-          grep -Fq 'EnchantmentModifierHook.setEnchantments(fakeTool, server.registryAccess(), enchantments);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java
-          grep -Fq 'Attributes.SUBMERGED_MINING_SPEED' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java
-          ! grep -R -F 'getTagEnchantmentLevel' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
-          ! grep -R -F 'getEnchantmentTags()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
-          ! grep -R -F 'deserializeEnchantments' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
+          grep -Fq 'stack.hurtAndBreak(1, server, null,' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'state.useItemOn(heldItem, world, player, hand, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'state.useWithoutItem(world, player, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          grep -Fq 'CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          ! grep -Fq 'stack.hurt(1, level.getRandom(), null)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
+          ! grep -Fq 'state.use(world, player, hand, hitResult)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
           git diff --check
 
-      - name: Commit enchantment component migration
+      - name: Commit block interaction migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java
+          git add src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BlockInteractFluidEffect.java
           git diff --cached --quiet || {
-            git commit -m 'Port enchantment storage and mining context to 1.21 components'
+            git commit -m 'Port ranged block interaction to 1.21 APIs'
             git push origin HEAD:1.21.1-neoforge
           }
 
