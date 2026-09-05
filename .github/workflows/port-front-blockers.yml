@@ -1,4 +1,4 @@
-name: Tinkers Recipe Data Cleanup
+name: Tinkers Client Compatibility Cleanup
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port remaining recipe display data to 1.21 components
+      - name: Port FML and fluid model cache APIs
         shell: bash
         run: |
           python3 - <<'PY'
@@ -36,95 +36,83 @@ jobs:
                   raise RuntimeError(f'{label}: expected exactly one match, found {count}')
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Casting display tools still use Tinkers' TOOL_DATA component; migrate the old mutable NBT idiom.
-          path = Path('src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java')
+          # FancyModLoader 1.21 uses static error-state and event dispatch methods.
+          for name in (
+              'src/main/java/slimeknights/tconstruct/library/client/materials/MaterialRenderInfoLoader.java',
+              'src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelMapManager.java',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              if 'ModLoader.isLoadingStateValid()' in text:
+                  text = text.replace('ModLoader.isLoadingStateValid()', '!ModLoader.hasErrors()')
+              elif '!ModLoader.hasErrors()' not in text:
+                  raise RuntimeError(f'Unexpected ModLoader loading-state call in {name}')
+              path.write_text(text, encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelManager.java')
           text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
-              if anchor not in text:
-                  raise RuntimeError('PartSwapCastingRecipe import anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
-          old = '                  input.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);'
-          new = '                  ToolDataComponents.update(input, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));'
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'input.getOrCreateTag()' in text:
-              raise RuntimeError('Unexpected PartSwapCastingRecipe display tag shape')
+          if 'ModLoader.get().postEvent(new ModifierModelRegistrationEvent());' in text:
+              text = text.replace(
+                  'ModLoader.get().postEvent(new ModifierModelRegistrationEvent());',
+                  'ModLoader.postEvent(new ModifierModelRegistrationEvent());', 1)
+          elif 'ModLoader.postEvent(new ModifierModelRegistrationEvent());' not in text:
+              raise RuntimeError('Unexpected ModifierModelManager event dispatch')
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java')
+          # There is no registered Potions.EMPTY sentinel in 1.21; a registry lookup that succeeds is renderable.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java')
           text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              anchor = 'import slimeknights.tconstruct.library.tools.nbt.MaterialNBT;\n'
-              if anchor not in text:
-                  raise RuntimeError('ToolCastingRecipe import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n', 1)
-          old = '        partSwapDisplay.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);'
-          new = '        ToolDataComponents.update(partSwapDisplay, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));'
+          text = text.replace('import net.minecraft.world.item.alchemy.Potions;\n', '')
+          old = '''            PotionContents contents = new PotionContents(BuiltInRegistries.POTION.wrapAsHolder(potion));\n            if (!contents.is(Potions.EMPTY)) {\n              quadConsumer.accept(MantleItemLayerModel.getQuadsForSprite(0xFF000000 | contents.getColor(), -1, spriteGetter.apply(texture), transforms, 0, pixels));\n            }'''
+          new = '''            PotionContents contents = new PotionContents(BuiltInRegistries.POTION.wrapAsHolder(potion));\n            quadConsumer.accept(MantleItemLayerModel.getQuadsForSprite(0xFF000000 | contents.getColor(), -1, spriteGetter.apply(texture), transforms, 0, pixels));'''
           if old in text:
               text = text.replace(old, new, 1)
-          elif 'partSwapDisplay.getOrCreateTag()' in text:
-              raise RuntimeError('Unexpected ToolCastingRecipe display tag shape')
+          elif 'Potions.EMPTY' in text:
+              raise RuntimeError('Unexpected PotionModifierModel empty-potion check')
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.HolderLookup;' not in text:
-              anchor = 'import net.minecraft.core.RegistryAccess;\n'
-              if anchor not in text:
-                  raise RuntimeError('PartBuilderToolRecycle RegistryAccess import missing')
-              text = text.replace(anchor, 'import net.minecraft.core.HolderLookup;\n' + anchor, 1)
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
-              if anchor not in text:
-                  raise RuntimeError('PartBuilderToolRecycle ToolStack import missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
-          replacements = [
-              ('public ItemStack getResultItem(RegistryAccess access) {',
-               'public ItemStack getResultItem(HolderLookup.Provider access) {',
-               'Part Builder result provider'),
-              ('      part.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);',
-               '      ToolDataComponents.update(part, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));',
-               'Part Builder display marker'),
-              ('      json.add("pattern", pattern.toJson());',
-               '      json.add("pattern", IngredientLoadable.DISALLOW_EMPTY.serialize(pattern));',
-               'Part Builder ingredient serialization'),
-          ]
-          for old, new, label in replacements:
-              if old in text:
-                  text = text.replace(old, new, 1)
-              elif new not in text:
-                  raise RuntimeError(f'{label}: neither old nor new form found')
-          path.write_text(text, encoding='utf-8')
+          # FluidStack custom data is now represented by the component patch; preserve cache identity semantics.
+          for name in (
+              'src/main/java/slimeknights/tconstruct/library/client/modifiers/model/TankModifierModel.java',
+              'src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('import net.minecraft.nbt.CompoundTag;\n', 'import net.minecraft.core.component.DataComponentPatch;\n')
+              text = text.replace('@Nullable CompoundTag tag', 'DataComponentPatch components')
+              text = text.replace('fluid.getTag()', 'fluid.getComponentsPatch()')
+              if 'fluid.getTag()' in text or 'CompoundTag tag' in text:
+                  raise RuntimeError(f'Legacy fluid tag cache remains in {name}')
+              path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify recipe data cleanup
+      - name: Verify client compatibility cleanup
         shell: bash
         run: |
-          PART_SWAP=src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java
-          TOOL_CAST=src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java
-          RECYCLE=src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java
-          grep -Fq 'ToolDataComponents.update(input, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$PART_SWAP"
-          grep -Fq 'ToolDataComponents.update(partSwapDisplay, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$TOOL_CAST"
-          grep -Fq 'getResultItem(HolderLookup.Provider access)' "$RECYCLE"
-          grep -Fq 'ToolDataComponents.update(part, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$RECYCLE"
-          grep -Fq 'IngredientLoadable.DISALLOW_EMPTY.serialize(pattern)' "$RECYCLE"
-          ! grep -Fq 'getOrCreateTag()' "$PART_SWAP"
-          ! grep -Fq 'getOrCreateTag()' "$TOOL_CAST"
-          ! grep -Fq 'pattern.toJson()' "$RECYCLE"
+          grep -Fq '!ModLoader.hasErrors()' src/main/java/slimeknights/tconstruct/library/client/materials/MaterialRenderInfoLoader.java
+          grep -Fq '!ModLoader.hasErrors()' src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelMapManager.java
+          grep -Fq 'ModLoader.postEvent(new ModifierModelRegistrationEvent());' src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelManager.java
+          ! grep -Fq 'Potions.EMPTY' src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java
+          grep -Fq 'DataComponentPatch components' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/TankModifierModel.java
+          grep -Fq 'fluid.getComponentsPatch()' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/TankModifierModel.java
+          grep -Fq 'DataComponentPatch components' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
+          grep -Fq 'fluid.getComponentsPatch()' src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
           git diff --check
 
-      - name: Commit recipe data cleanup
+      - name: Commit client compatibility cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java \
-            src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java
+            src/main/java/slimeknights/tconstruct/library/client/materials/MaterialRenderInfoLoader.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelMapManager.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/ModifierModelManager.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/PotionModifierModel.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/TankModifierModel.java \
+            src/main/java/slimeknights/tconstruct/library/client/modifiers/model/FluidModifierModel.java
           git diff --cached --quiet || {
-            git commit -m 'Port remaining recipe display data to 1.21 components'
+            git commit -m 'Port client loading and fluid cache APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
