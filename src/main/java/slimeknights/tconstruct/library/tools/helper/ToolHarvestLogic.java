@@ -343,7 +343,11 @@ public class ToolHarvestLogic {
     if (!worldIn.isClientSide && worldIn instanceof ServerLevel) {
       // must not be broken, and the tool definition must be effective
       boolean isEffective = IsEffectiveToolHook.isEffective(tool, state);
-      return tool.getHook(ToolHooks.MINING_CONDITION).canMine(tool, state, isEffective);
+      ToolHarvestContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);
+      for (ModifierEntry entry : tool.getModifierList()) {
+        entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);
+      }
+      ToolDamageUtil.damageAnimated(tool, ToolHarvestLogic.getDamage(tool, worldIn, pos, state), entityLiving, EquipmentSlot.MAINHAND);
     }
     return true;
   }
