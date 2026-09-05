@@ -41,66 +41,74 @@ jobs:
           add_import('import net.minecraft.server.level.ServerPlayer;\n', 'import net.minecraft.server.level.ServerLevel;\n')
           add_import('import net.minecraft.world.InteractionResult;\n', 'import net.minecraft.world.ItemInteractionResult;\n')
 
-          old = '''    if (!level.isClientSide && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
-      // unable to call Forge damageItem as that needs entity access, but its just vanilla broken anyways, right?
-      stack.hurt(1, level.getRandom(), null);
-      // calling methods again instead of using return as return may be incorrect for custom broken stacks
-      if (stack.getDamageValue() >= stack.getMaxDamage()) {
-        // but that won't happen, right? will need to consider another workaround in that case.
-        stack.shrink(1);
-        stack.setDamageValue(0);
-        level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);
-      }
-    }'''
-          new = '''    if (level instanceof ServerLevel server && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {
-      // Player-less item use does not damage vanilla tools itself. Use the 1.21 durability path so enchantments/components are honored.
-      stack.hurtAndBreak(1, server, null,
-        item -> level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F));
-    }'''
+          old = (
+              '    if (!level.isClientSide && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {\n'
+              '      // unable to call Forge damageItem as that needs entity access, but its just vanilla broken anyways, right?\n'
+              '      stack.hurt(1, level.getRandom(), null);\n'
+              '      // calling methods again instead of using return as return may be incorrect for custom broken stacks\n'
+              '      if (stack.getDamageValue() >= stack.getMaxDamage()) {\n'
+              '        // but that won\'t happen, right? will need to consider another workaround in that case.\n'
+              '        stack.shrink(1);\n'
+              '        stack.setDamageValue(0);\n'
+              '        level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);\n'
+              '      }\n'
+              '    }'
+          )
+          new = (
+              '    if (level instanceof ServerLevel server && context.getPlayer() == null && stack.isDamageableItem() && !stack.is(TinkerTags.Items.MODIFIABLE)) {\n'
+              '      // Player-less item use does not damage vanilla tools itself. Use the 1.21 durability path so enchantments/components are honored.\n'
+              '      stack.hurtAndBreak(1, server, null,\n'
+              '        item -> level.playSound(null, context.getClickedPos(), SoundEvents.ITEM_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F));\n'
+              '    }'
+          )
           if text.count(old) != 1:
               raise RuntimeError('legacy player-less durability block changed unexpectedly')
           text = text.replace(old, new, 1)
 
-          old = '''      // click the block
-      ItemStack original = heldItem.copy();
-      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
-        InteractionResult result = state.use(world, player, hand, hitResult);
-        if (result.consumesAction()) {
-          if (player instanceof ServerPlayer serverPlayer) {
-            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);
-          }
-          player.swing(hand, true);
-          return 1;
-        }
-      }'''
-          new = '''      // click the block. In 1.21 vanilla split item-on-block interaction from default empty-hand-style block interaction.
-      ItemStack original = heldItem.copy();
-      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {
-        ItemInteractionResult itemResult = state.useItemOn(heldItem, world, player, hand, hitResult);
-        if (itemResult.consumesAction()) {
-          if (player instanceof ServerPlayer serverPlayer) {
-            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);
-          }
-          player.swing(hand, true);
-          return 1;
-        }
-        if (itemResult == ItemInteractionResult.FAIL) {
-          return 0;
-        }
-        if (itemResult == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION && hand == InteractionHand.MAIN_HAND) {
-          InteractionResult result = state.useWithoutItem(world, player, hitResult);
-          if (result.consumesAction()) {
-            if (player instanceof ServerPlayer serverPlayer) {
-              CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);
-            }
-            player.swing(hand, true);
-            return 1;
-          }
-          if (result == InteractionResult.FAIL) {
-            return 0;
-          }
-        }
-      }'''
+          old = (
+              '      // click the block\n'
+              '      ItemStack original = heldItem.copy();\n'
+              '      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {\n'
+              '        InteractionResult result = state.use(world, player, hand, hitResult);\n'
+              '        if (result.consumesAction()) {\n'
+              '          if (player instanceof ServerPlayer serverPlayer) {\n'
+              '            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);\n'
+              '          }\n'
+              '          player.swing(hand, true);\n'
+              '          return 1;\n'
+              '        }\n'
+              '      }'
+          )
+          new = (
+              '      // click the block. In 1.21 vanilla split item-on-block interaction from default empty-hand-style block interaction.\n'
+              '      ItemStack original = heldItem.copy();\n'
+              '      if (player != null && (useBlock == TriState.TRUE || (useItem == TriState.DEFAULT && !skipBlock))) {\n'
+              '        ItemInteractionResult itemResult = state.useItemOn(heldItem, world, player, hand, hitResult);\n'
+              '        if (itemResult.consumesAction()) {\n'
+              '          if (player instanceof ServerPlayer serverPlayer) {\n'
+              '            CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, original);\n'
+              '          }\n'
+              '          player.swing(hand, true);\n'
+              '          return 1;\n'
+              '        }\n'
+              '        if (itemResult == ItemInteractionResult.FAIL) {\n'
+              '          return 0;\n'
+              '        }\n'
+              '        if (itemResult == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION && hand == InteractionHand.MAIN_HAND) {\n'
+              '          InteractionResult result = state.useWithoutItem(world, player, hitResult);\n'
+              '          if (result.consumesAction()) {\n'
+              '            if (player instanceof ServerPlayer serverPlayer) {\n'
+              '              CriteriaTriggers.DEFAULT_BLOCK_USE.trigger(serverPlayer, pos);\n'
+              '            }\n'
+              '            player.swing(hand, true);\n'
+              '            return 1;\n'
+              '          }\n'
+              '          if (result == InteractionResult.FAIL) {\n'
+              '            return 0;\n'
+              '          }\n'
+              '        }\n'
+              '      }'
+          )
           if text.count(old) != 1:
               raise RuntimeError('legacy BlockState.use block changed unexpectedly')
           text = text.replace(old, new, 1)
