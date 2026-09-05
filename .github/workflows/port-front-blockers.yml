@@ -1,4 +1,4 @@
-name: Tinkers Loot Equipment Compatibility Migration
+name: Tinkers Thrown Tool and AT Migration
 
 on:
   push:
@@ -23,76 +23,134 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port loot context and equipment APIs to 1.21
+      - name: Refresh 1.21 access targets and thrown tool stack state
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # LootContextParamSets exposes its registered-set codec directly in 1.21.
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java')
+          # Refresh stale access-transformer names to Mojmap 1.21.1 members.
+          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import com.mojang.serialization.DataResult;\n', '')
-          text = text.replace('import net.minecraft.resources.ResourceLocation;\n', '')
-          text = text.replace('import java.util.Objects;\n', '')
-          old = '''  public static final MapCodec<HasLootContextSetCondition> CODEC = ResourceLocation.CODEC\n    .comapFlatMap(HasLootContextSetCondition::decode, condition ->\n      Objects.requireNonNull(LootContextParamSets.getKey(condition.set), "Unregistered LootContextParamSet"))\n    .fieldOf("set");\n\n  private static DataResult<HasLootContextSetCondition> decode(ResourceLocation key) {\n    LootContextParamSet set = LootContextParamSets.get(key);\n    if (set == null) {\n      return DataResult.error(() -> "Unknown LootContextParamSet " + key);\n    }\n    return DataResult.success(new HasLootContextSetCondition(set));\n  }'''
-          new = '''  public static final MapCodec<HasLootContextSetCondition> CODEC = LootContextParamSets.CODEC\n    .xmap(HasLootContextSetCondition::new, HasLootContextSetCondition::set)\n    .fieldOf("set");'''
+          replacements = {
+            'public net.minecraft.world.entity.LivingEntity m_21060_(Lnet/minecraft/world/item/ItemStack;I)V # spawnItemParticles':
+              'public net.minecraft.world.entity.LivingEntity spawnItemParticles(Lnet/minecraft/world/item/ItemStack;I)V # eating particles',
+            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37555_ # tridentItem\n': '',
+            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37556_ # dealtDamage':
+              'protected net.minecraft.world.entity.projectile.ThrownTrident dealtDamage',
+            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37558_ # ID_LOYALTY':
+              'protected net.minecraft.world.entity.projectile.ThrownTrident ID_LOYALTY',
+            'protected net.minecraft.world.entity.projectile.ThrownTrident f_37554_ # ID_FOIL':
+              'protected net.minecraft.world.entity.projectile.ThrownTrident ID_FOIL',
+            'protected net.minecraft.world.entity.projectile.AbstractArrow f_36697_ # life':
+              'protected net.minecraft.world.entity.projectile.AbstractArrow life',
+            'public net.minecraft.world.level.biome.Biome m_47505_(Lnet/minecraft/core/BlockPos;)F # getTemperature':
+              'public net.minecraft.world.level.biome.Biome getTemperature(Lnet/minecraft/core/BlockPos;)F # positional temperature',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise RuntimeError(f'access transformer target changed unexpectedly: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Public current-tick eye-fluid query replaces the removed protected previous-eye flag.
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import net.minecraft.tags.FluidTags;\n' not in text:
+              anchor = 'import net.minecraft.core.BlockPos;\n'
+              if anchor not in text:
+                  raise RuntimeError('EntityVariable BlockPos import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.minecraft.tags.FluidTags;\n', 1)
+          old = '    if (entity.isInWater() || entity.wasEyeInWater) {'
+          new = '    if (entity.isInWater() || entity.isEyeInFluid(FluidTags.WATER)) {'
           if text.count(old) != 1:
-              raise RuntimeError('HasLootContextSetCondition registry codec block changed unexpectedly')
+              raise RuntimeError('EntityVariable water check changed unexpectedly')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Holder#get was removed; Holder#value is the 1.21 accessor.
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java')
+          # ThrownTool can keep extending ThrownTrident. The old tridentItem field is gone in 1.21;
+          # use AbstractArrow's protected pickup stack setter and public origin accessor instead.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java')
           text = path.read_text(encoding='utf-8')
-          if text.count('.map(Holder::get)') != 1:
-              raise RuntimeError('MobEquipment holder accessor changed unexpectedly')
-          path.write_text(text.replace('.map(Holder::get)', '.map(Holder::value)', 1), encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' not in text:
-              anchor = 'import slimeknights.mantle.data.loadable.field.ContextKey;\n'
-              if anchor not in text:
-                  raise RuntimeError('MobEquipmentManager Mantle import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n', 1)
-          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
-          old = '        if (!CraftingHelper.processConditions(json, "conditions", context)) {'
-          new = '        if (!ConditionHelper.processConditions(json, "conditions", context)) {'
+          old = '    this.tridentItem = stack.copyWithCount(1);'
+          new = '    this.setPickupItemStack(stack.copyWithCount(1));'
           if text.count(old) != 1:
-              raise RuntimeError('MobEquipmentManager condition processing changed unexpectedly')
+              raise RuntimeError('ThrownTool legacy trident stack assignment changed unexpectedly')
           text = text.replace(old, new, 1)
-          if text.count('parsed.computeIfAbsent(holder.get(), ifAbsent).addAll(equipment);') != 1:
-              raise RuntimeError('MobEquipmentManager holder accessor changed unexpectedly')
-          text = text.replace('parsed.computeIfAbsent(holder.get(), ifAbsent).addAll(equipment);', 'parsed.computeIfAbsent(holder.value(), ifAbsent).addAll(equipment);', 1)
+
+          anchor = '  /** Sets any relevant properties from the stack */\n'
+          helper = '''  /** Gets the actual tool stack. Clients use the synced display stack as AbstractArrow does not sync its pickup origin. */\n  private ItemStack getToolItem() {\n    if (level().isClientSide) {\n      ItemStack synced = this.entityData.get(STACK);\n      if (!synced.isEmpty()) {\n        return synced;\n      }\n    }\n    return this.getPickupItemStackOrigin();\n  }\n\n'''
+          if anchor not in text or 'private ItemStack getToolItem()' in text:
+              raise RuntimeError('ThrownTool helper insertion shape changed unexpectedly')
+          text = text.replace(anchor, helper + anchor, 1)
+
+          # All remaining old tridentItem reads refer to the current tool stack.
+          if text.count('tridentItem') != 27:
+              raise RuntimeError(f'ThrownTool expected 27 remaining tridentItem references, found {text.count("tridentItem")}')
+          text = text.replace('tridentItem', 'getToolItem()')
+
+          # Avoid using the client-selected stack while refreshing authoritative server state.
+          old = '''  private void updateFromStack() {\n    this.entityData.set(STACK, getToolItem());\n    this.entityData.set(ID_LOYALTY, (byte) ModifierUtil.getVolatileInt(getToolItem(), LOYALTY));\n    this.entityData.set(ID_FOIL, ModifierUtil.checkVolatileFlag(getToolItem(), ModifiableItem.SHINY));\n    this.noDespawn = ModifierUtil.checkVolatileFlag(getToolItem(), IndestructibleItemEntity.INDESTRUCTIBLE_ENTITY);\n    if (!level().isClientSide) {\n      this.magnet = ModifierUtil.getVolatileInt(getToolItem(), MAGNET);\n    }\n  }'''
+          new = '''  private void updateFromStack() {\n    ItemStack stack = this.getPickupItemStackOrigin();\n    this.tool = null;\n    this.entityData.set(STACK, stack);\n    this.entityData.set(ID_LOYALTY, (byte) ModifierUtil.getVolatileInt(stack, LOYALTY));\n    this.entityData.set(ID_FOIL, ModifierUtil.checkVolatileFlag(stack, ModifiableItem.SHINY));\n    this.noDespawn = ModifierUtil.checkVolatileFlag(stack, IndestructibleItemEntity.INDESTRUCTIBLE_ENTITY);\n    if (!level().isClientSide) {\n      this.magnet = ModifierUtil.getVolatileInt(stack, MAGNET);\n    }\n  }'''
+          if text.count(old) != 1:
+              raise RuntimeError('ThrownTool updateFromStack block changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          old = '  @Override\n  public boolean isChanneling() {'
+          new = '  public boolean isChanneling() {'
+          if text.count(old) != 1:
+              raise RuntimeError('ThrownTool isChanneling override shape changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          if text.count('ItemStack.isSameItemSameTags(current, pickup)') != 1:
+              raise RuntimeError('ThrownTool legacy stack component comparison changed unexpectedly')
+          text = text.replace('ItemStack.isSameItemSameTags(current, pickup)', 'ItemStack.isSameItemSameComponents(current, pickup)', 1)
+
+          old = '''  @Override\n  protected void defineSynchedData() {\n    super.defineSynchedData();\n    this.entityData.define(STACK, ItemStack.EMPTY);\n    this.entityData.define(WATER_INERTIA, 0.6f);\n  }'''
+          new = '''  @Override\n  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n    super.defineSynchedData(builder);\n    builder.define(STACK, ItemStack.EMPTY);\n    builder.define(WATER_INERTIA, 0.6f);\n  }'''
+          if text.count(old) != 1:
+              raise RuntimeError('ThrownTool synced data definition changed unexpectedly')
+          text = text.replace(old, new, 1)
+
+          old = '''    super.readAdditionalSaveData(tag);\n    // update the tool to sync to client, if its set\n    if (tag.contains("Trident", CompoundTag.TAG_COMPOUND)) {\n      updateFromStack();\n    }'''
+          new = '''    super.readAdditionalSaveData(tag);\n    // AbstractArrow 1.21 restores the pickup stack from its "item" field before this point.\n    updateFromStack();'''
+          if text.count(old) != 1:
+              raise RuntimeError('ThrownTool legacy Trident NBT refresh changed unexpectedly')
+          text = text.replace(old, new, 1)
+
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify loot equipment compatibility migration
+      - name: Verify thrown tool and access target migration
         shell: bash
         run: |
-          grep -Fq 'LootContextParamSets.CODEC' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
-          grep -Fq '.xmap(HasLootContextSetCondition::new, HasLootContextSetCondition::set)' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
-          ! grep -Fq 'LootContextParamSets.getKey' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
-          ! grep -Fq 'LootContextParamSets.get(key)' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
-          grep -Fq '.map(Holder::value)' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
-          grep -Fq 'ConditionHelper.processConditions(json, "conditions", context)' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
-          grep -Fq 'parsed.computeIfAbsent(holder.value(), ifAbsent).addAll(equipment);' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
-          ! grep -R -F 'Holder::get' \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
+          grep -Fq 'public net.minecraft.world.entity.LivingEntity spawnItemParticles(Lnet/minecraft/world/item/ItemStack;I)V' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident dealtDamage' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident ID_LOYALTY' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'protected net.minecraft.world.entity.projectile.ThrownTrident ID_FOIL' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'protected net.minecraft.world.entity.projectile.AbstractArrow life' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'public net.minecraft.world.level.biome.Biome getTemperature(Lnet/minecraft/core/BlockPos;)F' src/main/resources/META-INF/accesstransformer.cfg
+          ! grep -Fq 'f_37555_ # tridentItem' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'entity.isEyeInFluid(FluidTags.WATER)' src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java
+          grep -Fq 'this.setPickupItemStack(stack.copyWithCount(1));' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          grep -Fq 'return this.getPickupItemStackOrigin();' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          grep -Fq 'protected void defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          grep -Fq 'ItemStack.isSameItemSameComponents(current, pickup)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          ! grep -Fq 'tridentItem' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
+          ! grep -Fq 'tag.contains("Trident"' src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
           git diff --check
 
-      - name: Commit loot equipment compatibility migration
+      - name: Commit thrown tool and access target migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
-            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
+            src/main/resources/META-INF/accesstransformer.cfg \
+            src/main/java/slimeknights/tconstruct/library/json/variable/entity/EntityVariable.java \
+            src/main/java/slimeknights/tconstruct/tools/entity/ThrownTool.java
           git diff --cached --quiet || {
-            git commit -m 'Port loot equipment APIs to 1.21'
+            git commit -m 'Port thrown tool state and access targets to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
