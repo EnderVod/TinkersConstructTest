@@ -34,6 +34,7 @@ import slimeknights.tconstruct.library.tools.helper.ToolBuildHandler;
 import slimeknights.tconstruct.library.tools.helper.TooltipUtil;
 import slimeknights.tconstruct.library.tools.item.IModifiable;
 import slimeknights.tconstruct.library.tools.nbt.MaterialNBT;
+import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;
 import slimeknights.tconstruct.library.tools.part.IMaterialItem;
 
 import java.util.ArrayList;
@@ -234,7 +235,7 @@ public class ToolCastingRecipe extends PartSwapCastingRecipe implements IMultiRe
         }
         // build part swap tool, mark as display so tooltip does not show useless stats
         ItemStack partSwapDisplay = ToolBuildHandler.buildItemFromMaterials(result, partSwapMaterials.build());
-        partSwapDisplay.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);
+        ToolDataComponents.update(partSwapDisplay, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));
 
         List<ItemStack> casts = List.of(getCast().getItems());
         // if the cast is consumed, add the tool to the list of cast items to show that part swapping is an option
