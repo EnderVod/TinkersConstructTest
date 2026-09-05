@@ -1,4 +1,4 @@
-name: Tinkers Slime Lifecycle Migration
+name: Tinkers Loot Equipment Compatibility Migration
 
 on:
   push:
@@ -23,104 +23,76 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port slime lifecycle and combat to 1.21
+      - name: Port loot context and equipment APIs to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def add_import(text, anchor, imp, label):
-              if imp in text:
-                  return text
-              if anchor not in text:
-                  raise RuntimeError(f'{label}: import anchor missing')
-              return text.replace(anchor, anchor + imp, 1)
-
-          # Armored slime: synced data builder, spawn signatures, equipment drops, and removed capability invalidation.
-          path = Path('src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java')
+          # LootContextParamSets exposes its registered-set codec directly in 1.21.
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java')
           text = path.read_text(encoding='utf-8')
-          text = add_import(text, 'import net.minecraft.network.syncher.SynchedEntityData;\n', 'import net.minecraft.server.level.ServerLevel;\n', 'ArmoredSlimeEntity ServerLevel')
-          text = add_import(text, 'import net.minecraft.world.entity.EquipmentSlot;\n', 'import net.minecraft.world.entity.LivingEntity;\n', 'ArmoredSlimeEntity LivingEntity')
-          text = add_import(text, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n', 'import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;\n', 'ArmoredSlimeEntity EnchantmentEffectComponents')
-
-          old = '''  @Override\n  protected void defineSynchedData() {\n    super.defineSynchedData();\n    this.entityData.define(METAL, false);\n  }'''
-          new = '''  @Override\n  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n    super.defineSynchedData(builder);\n    builder.define(METAL, false);\n  }'''
+          text = text.replace('import com.mojang.serialization.DataResult;\n', '')
+          text = text.replace('import net.minecraft.resources.ResourceLocation;\n', '')
+          text = text.replace('import java.util.Objects;\n', '')
+          old = '''  public static final MapCodec<HasLootContextSetCondition> CODEC = ResourceLocation.CODEC\n    .comapFlatMap(HasLootContextSetCondition::decode, condition ->\n      Objects.requireNonNull(LootContextParamSets.getKey(condition.set), "Unregistered LootContextParamSet"))\n    .fieldOf("set");\n\n  private static DataResult<HasLootContextSetCondition> decode(ResourceLocation key) {\n    LootContextParamSet set = LootContextParamSets.get(key);\n    if (set == null) {\n      return DataResult.error(() -> "Unknown LootContextParamSet " + key);\n    }\n    return DataResult.success(new HasLootContextSetCondition(set));\n  }'''
+          new = '''  public static final MapCodec<HasLootContextSetCondition> CODEC = LootContextParamSets.CODEC\n    .xmap(HasLootContextSetCondition::new, HasLootContextSetCondition::set)\n    .fieldOf("set");'''
           if text.count(old) != 1:
-              raise RuntimeError('ArmoredSlimeEntity legacy defineSynchedData changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '  public SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance difficulty, MobSpawnType pReason, @Nullable SpawnGroupData pSpawnData, @Nullable CompoundTag pDataTag) {\n    SpawnGroupData spawnData = super.finalizeSpawn(pLevel, difficulty, pReason, pSpawnData, pDataTag);'
-          new = '  public SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance difficulty, MobSpawnType pReason, @Nullable SpawnGroupData pSpawnData) {\n    SpawnGroupData spawnData = super.finalizeSpawn(pLevel, difficulty, pReason, pSpawnData);'
-          if text.count(old) != 1:
-              raise RuntimeError('ArmoredSlimeEntity finalizeSpawn signature changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '  protected void populateDefaultEquipmentEnchantments(RandomSource random, DifficultyInstance difficulty) {'
-          new = '  protected void populateDefaultEquipmentEnchantments(ServerLevelAccessor level, RandomSource random, DifficultyInstance difficulty) {'
-          if text.count(old) != 1:
-              raise RuntimeError('ArmoredSlimeEntity equipment enchantment signature changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '''  @Override\n  protected void dropCustomDeathLoot(DamageSource source, int looting, boolean recentlyHit) {\n    ItemStack stack = this.getItemBySlot(EquipmentSlot.HEAD);\n    float slotChance = this.getEquipmentDropChance(EquipmentSlot.HEAD);\n    // items do not always drop if a large slime, increases chance of inheritance\n    // small slimes always drop, no losing gear\n    if (slotChance > 0.25f && getSize() > 1) {\n      slotChance = 0.25f;\n    }\n    boolean alwaysDrop = slotChance > 1.0F;\n    if (!stack.isEmpty() && !EnchantmentHelper.hasVanishingCurse(stack) && (recentlyHit || alwaysDrop)) {\n      if ((this.random.nextFloat() - (looting * 0.01f)) < slotChance) {\n        if (!alwaysDrop && stack.isDamageableItem()) {\n          int max = stack.getMaxDamage();\n          stack.setDamageValue(max - this.random.nextInt(1 + this.random.nextInt(Math.max(max - 3, 1))));\n        }\n        this.spawnAtLocation(stack);\n        this.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);\n      }\n    }\n  }'''
-          new = '''  @Override\n  protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean recentlyHit) {\n    ItemStack stack = this.getItemBySlot(EquipmentSlot.HEAD);\n    float slotChance = this.getEquipmentDropChance(EquipmentSlot.HEAD);\n    // items do not always drop if a large slime, increases chance of inheritance\n    // small slimes always drop, no losing gear\n    if (slotChance > 0.25f && getSize() > 1) {\n      slotChance = 0.25f;\n    }\n    boolean alwaysDrop = slotChance > 1.0F;\n    Entity attacker = source.getEntity();\n    if (attacker instanceof LivingEntity living) {\n      slotChance = EnchantmentHelper.processEquipmentDropChance(level, living, source, slotChance);\n    }\n    if (!stack.isEmpty() && !EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_EQUIPMENT_DROP) && (recentlyHit || alwaysDrop)) {\n      if (this.random.nextFloat() < slotChance) {\n        if (!alwaysDrop && stack.isDamageableItem()) {\n          int max = stack.getMaxDamage();\n          stack.setDamageValue(max - this.random.nextInt(1 + this.random.nextInt(Math.max(max - 3, 1))));\n        }\n        this.spawnAtLocation(stack);\n        this.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY);\n      }\n    }\n  }'''
-          if text.count(old) != 1:
-              raise RuntimeError('ArmoredSlimeEntity legacy death loot block changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          if text.count('    this.invalidateCaps();\n') != 1:
-              raise RuntimeError('ArmoredSlimeEntity invalidateCaps call changed unexpectedly')
-          text = text.replace('    this.invalidateCaps();\n', '', 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Ender slime: 1.21 removed doEnchantDamageEffects; mirror current Slime#dealDamage and append teleport on a successful hit.
-          path = Path('src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.entity.Entity;\n', '')
-          if 'import net.minecraft.server.level.ServerLevel;\n' not in text:
-              anchor = 'import net.minecraft.core.particles.ParticleOptions;\n'
-              if anchor not in text:
-                  raise RuntimeError('EnderSlimeEntity particle import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.server.level.ServerLevel;\nimport net.minecraft.sounds.SoundEvents;\n', 1)
-          if 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n' not in text:
-              anchor = 'import net.minecraft.world.entity.LivingEntity;\n'
-              if anchor not in text:
-                  raise RuntimeError('EnderSlimeEntity LivingEntity import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n', 1)
-
-          old = '''  @Override\n  public void doEnchantDamageEffects(LivingEntity slime, Entity target) {\n    super.doEnchantDamageEffects(slime, target);\n    if (target instanceof LivingEntity) {\n      TeleportHelper.randomNearbyTeleport((LivingEntity) target, teleportPredicate);\n    }\n  }'''
-          new = '''  @Override\n  protected void dealDamage(LivingEntity target) {\n    if (this.isAlive() && this.isWithinMeleeAttackRange(target) && this.hasLineOfSight(target)) {\n      DamageSource source = this.damageSources().mobAttack(this);\n      if (target.hurt(source, this.getAttackDamage())) {\n        this.playSound(SoundEvents.SLIME_ATTACK, 1.0F, (this.random.nextFloat() - this.random.nextFloat()) * 0.2F + 1.0F);\n        if (this.level() instanceof ServerLevel server) {\n          EnchantmentHelper.doPostAttackEffects(server, target, source);\n        }\n        TeleportHelper.randomNearbyTeleport(target, teleportPredicate);\n      }\n    }\n  }'''
-          if text.count(old) != 1:
-              raise RuntimeError('EnderSlimeEntity legacy enchant-damage hook changed unexpectedly')
+              raise RuntimeError('HasLootContextSetCondition registry codec block changed unexpectedly')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Holder#get was removed; Holder#value is the 1.21 accessor.
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java')
+          text = path.read_text(encoding='utf-8')
+          if text.count('.map(Holder::get)') != 1:
+              raise RuntimeError('MobEquipment holder accessor changed unexpectedly')
+          path.write_text(text.replace('.map(Holder::get)', '.map(Holder::value)', 1), encoding='utf-8')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' not in text:
+              anchor = 'import slimeknights.mantle.data.loadable.field.ContextKey;\n'
+              if anchor not in text:
+                  raise RuntimeError('MobEquipmentManager Mantle import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n', 1)
+          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
+          old = '        if (!CraftingHelper.processConditions(json, "conditions", context)) {'
+          new = '        if (!ConditionHelper.processConditions(json, "conditions", context)) {'
+          if text.count(old) != 1:
+              raise RuntimeError('MobEquipmentManager condition processing changed unexpectedly')
+          text = text.replace(old, new, 1)
+          if text.count('parsed.computeIfAbsent(holder.get(), ifAbsent).addAll(equipment);') != 1:
+              raise RuntimeError('MobEquipmentManager holder accessor changed unexpectedly')
+          text = text.replace('parsed.computeIfAbsent(holder.get(), ifAbsent).addAll(equipment);', 'parsed.computeIfAbsent(holder.value(), ifAbsent).addAll(equipment);', 1)
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify slime lifecycle migration
+      - name: Verify loot equipment compatibility migration
         shell: bash
         run: |
-          grep -Fq 'protected void defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'builder.define(METAL, false);' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'super.finalizeSpawn(pLevel, difficulty, pReason, pSpawnData);' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'populateDefaultEquipmentEnchantments(ServerLevelAccessor level, RandomSource random, DifficultyInstance difficulty)' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean recentlyHit)' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'EnchantmentHelper.processEquipmentDropChance(level, living, source, slotChance)' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'EnchantmentEffectComponents.PREVENT_EQUIPMENT_DROP' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          ! grep -Fq 'invalidateCaps' src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java
-          grep -Fq 'protected void dealDamage(LivingEntity target)' src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java
-          grep -Fq 'EnchantmentHelper.doPostAttackEffects(server, target, source);' src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java
-          grep -Fq 'TeleportHelper.randomNearbyTeleport(target, teleportPredicate);' src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java
-          ! grep -Fq 'doEnchantDamageEffects' src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java
+          grep -Fq 'LootContextParamSets.CODEC' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
+          grep -Fq '.xmap(HasLootContextSetCondition::new, HasLootContextSetCondition::set)' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
+          ! grep -Fq 'LootContextParamSets.getKey' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
+          ! grep -Fq 'LootContextParamSets.get(key)' src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java
+          grep -Fq '.map(Holder::value)' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java
+          grep -Fq 'ConditionHelper.processConditions(json, "conditions", context)' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
+          grep -Fq 'parsed.computeIfAbsent(holder.value(), ifAbsent).addAll(equipment);' src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
+          ! grep -R -F 'Holder::get' \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
           git diff --check
 
-      - name: Commit slime lifecycle migration
+      - name: Commit loot equipment compatibility migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java \
-            src/main/java/slimeknights/tconstruct/world/entity/EnderSlimeEntity.java
+            src/main/java/slimeknights/tconstruct/library/json/loot/HasLootContextSetCondition.java \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipment.java \
+            src/main/java/slimeknights/tconstruct/library/json/loot/equipment/MobEquipmentManager.java
           git diff --cached --quiet || {
-            git commit -m 'Port armored slime lifecycle to 1.21'
+            git commit -m 'Port loot equipment APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
