@@ -23,21 +23,44 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply guarded advancement and interaction batch
-        run: python3 .github/scripts/port-smeltery-batch.py
+      - name: Apply current front blocker fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          inventory_import = 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;\n'
+          anchor = 'import slimeknights.tconstruct.library.tools.IndestructibleItemEntity;\n'
+          for name in (
+              'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java',
+              'src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              if inventory_import not in text:
+                  if anchor not in text:
+                      raise RuntimeError(f'Missing import anchor in {name}')
+                  text = text.replace(anchor, anchor + inventory_import, 1)
+                  path.write_text(text, encoding='utf-8')
+
+          harvest = Path('src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java')
+          text = harvest.read_text(encoding='utf-8')
+          stale = '      return tool.getHook(ToolHooks.MINING_CONDITION).canMine(tool, state, isEffective);'
+          replacement = '''      ToolHarvestContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);\n      for (ModifierEntry entry : tool.getModifierList()) {\n        entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);\n      }\n      ToolDamageUtil.damageAnimated(tool, ToolHarvestLogic.getDamage(tool, worldIn, pos, state), entityLiving, EquipmentSlot.MAINHAND);'''
+          if stale in text:
+              text = text.replace(stale, replacement, 1)
+              harvest.write_text(text, encoding='utf-8')
+          elif 'ToolHooks.MINING_CONDITION' in text:
+              raise RuntimeError('Unexpected MINING_CONDITION usage remains')
+          PY
 
       - name: Verify migration
         shell: bash
         run: |
-          grep -Fq 'AdvancementHolder advancement = server.getAdvancements().get' src/main/java/slimeknights/tconstruct/shared/AchievementEvents.java
-          grep -Fq 'this.changeOverTime(pState, pLevel, pPos, pRandom);' src/main/java/slimeknights/tconstruct/shared/block/WeatheringPlatformBlock.java
-          grep -Fq 'protected ItemInteractionResult useItemOn' src/main/java/slimeknights/tconstruct/shared/block/WeatheringPlatformBlock.java
-          grep -Fq 'Item.TooltipContext context' src/main/java/slimeknights/tconstruct/fluids/item/MagmaBottleItem.java
-          grep -Fq 'context.tickRate()' src/main/java/slimeknights/tconstruct/fluids/item/MagmaBottleItem.java
-          grep -Fq 'player.connection.getConnection().isMemoryConnection()' src/main/java/slimeknights/tconstruct/library/materials/MaterialRegistry.java
-          grep -Fq 'new BlockHitResult(context.getClickLocation(), context.getClickedFace(), context.getClickedPos(), context.isInside())' src/main/java/slimeknights/tconstruct/library/tools/definition/module/aoe/BoxAOEIterator.java
-          grep -Fq 'menu instanceof InventoryMenu' src/main/java/slimeknights/tconstruct/library/tools/capability/inventory/InventorySlotMenuModule.java
-          grep -Fq 'slot.getType() == EquipmentSlot.Type.ARMOR ? ARMOR : RIGHT_CLICK' src/main/java/slimeknights/tconstruct/library/modifiers/hook/interaction/InteractionSource.java
+          grep -Fq 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java
+          grep -Fq 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;' src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java
+          ! grep -Fq 'ToolHooks.MINING_CONDITION' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
+          grep -Fq 'entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
           git diff --check
 
       - name: Commit compatibility batch
@@ -47,7 +70,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/main/java
           git diff --cached --quiet || {
-            git commit -m 'Migrate advancement and interaction APIs to 1.21'
+            git commit -m 'Restore harvest callbacks and inventory capability imports'
             git push origin HEAD:1.21.1-neoforge
           }
 
