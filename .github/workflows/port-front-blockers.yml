@@ -1,224 +1,115 @@
-name: Tinkers Common Code 1.21 Migration
+name: Tinkers Client API Compatibility Migration
 
 on:
   push:
     branches:
       - 1.21.1-neoforge
     paths:
-      - .github/workflows/port-front-blockers.yml
+      - '.github/workflows/port-front-blockers.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   migrate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Checkout latest Tinkers port
+      - name: Checkout latest port
         uses: actions/checkout@v4
         with:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port menu and recipes to 1.21 components
+      - name: Port client and packet APIs
         shell: bash
         run: |
-          cat > /tmp/migrate.py <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
-          root=Path('src/main/java')
 
-          def rep(rel, old, new, count=1):
-              p=root/rel
-              s=p.read_text()
-              n=s.count(old)
-              if n!=count: raise SystemExit(f'{rel}: expected {count}, got {n} for {old[:100]!r}')
-              p.write_text(s.replace(old,new,count))
+          def rep(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != count:
+                  raise RuntimeError(f'{path}: expected {count} matches, got {actual}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, count), encoding='utf-8')
 
-          # ToolContainerMenu
-          rel='slimeknights/tconstruct/tools/menu/ToolContainerMenu.java'
-          rep(rel,'import net.minecraft.network.FriendlyByteBuf;\n','import net.minecraft.network.FriendlyByteBuf;\nimport net.minecraft.network.RegistryFriendlyByteBuf;\nimport net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;\nimport net.minecraft.server.level.ServerPlayer;\n')
-          rep(rel,'import net.minecraft.world.inventory.CraftingMenu;\n','')
-          rep(rel,'import net.minecraft.world.item.ItemStack;\n', 'import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.crafting.CraftingInput;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\nimport net.minecraft.world.item.crafting.RecipeType;\n')
-          rep(rel,'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n','import slimeknights.tconstruct.library.tools.nbt.ToolStack;\nimport slimeknights.tconstruct.library.utils.TagUtil;\n')
-          rep(rel,'import javax.annotation.Nullable;\n','import javax.annotation.Nullable;\nimport java.util.Optional;\n')
-          rep(rel,'      stack = buffer.readItem();','      stack = ItemStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer);')
-          rep(rel,'    if (stack.hasTag() && stack.is(TinkerTags.Items.MODIFIABLE)) {','    if (TagUtil.hasTag(stack) && stack.is(TinkerTags.Items.MODIFIABLE)) {')
-          rep(rel,'''    if (craftingContainer != null && resultContainer != null) {
-      CraftingMenu.slotChangedCraftingGrid(this, player.level(), player, craftingContainer, resultContainer);
-    }
-''','''    if (craftingContainer != null && resultContainer != null && !player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
-      CraftingInput input = craftingContainer.asCraftInput();
-      ItemStack result = ItemStack.EMPTY;
-      Optional<RecipeHolder<CraftingRecipe>> recipe = player.level().getServer().getRecipeManager()
-        .getRecipeFor(RecipeType.CRAFTING, input, player.level(), null);
-      if (recipe.isPresent()) {
-        RecipeHolder<CraftingRecipe> holder = recipe.get();
-        CraftingRecipe craftingRecipe = holder.value();
-        if (resultContainer.setRecipeUsed(player.level(), serverPlayer, holder)) {
-          ItemStack assembled = craftingRecipe.assemble(input, player.level().registryAccess());
-          if (assembled.isItemEnabled(player.level().enabledFeatures())) {
-            result = assembled;
-          }
-        }
-      }
-      resultContainer.setItem(0, result);
-      setRemoteSlot(0, result);
-      serverPlayer.connection.send(new ClientboundContainerSetSlotPacket(containerId, incrementStateId(), 0, result));
-    }
-''')
+          menu = 'src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java'
+          rep(menu,
+              '.getRecipeFor(RecipeType.CRAFTING, input, player.level(), null);',
+              '.getRecipeFor(RecipeType.CRAFTING, input, player.level(), (RecipeHolder<CraftingRecipe>) null);')
 
-          # EnchantmentConvertingRecipe
-          rel='slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java'
-          rep(rel,'import net.minecraft.core.registries.BuiltInRegistries;\n','import net.minecraft.core.component.DataComponents;\nimport net.minecraft.core.registries.BuiltInRegistries;\n')
-          rep(rel,'import net.minecraft.world.item.enchantment.Enchantment;\n','')
-          rep(rel,'import net.minecraft.world.item.enchantment.EnchantmentInstance;\n','import net.minecraft.world.item.enchantment.EnchantmentInstance;\nimport net.minecraft.world.item.enchantment.ItemEnchantments;\n')
-          rep(rel,'import java.util.Map;\n','')
-          rep(rel,'import java.util.Map.Entry;\n','')
-          rep(rel,'''  /** Gets the enchantment map from the given stack */
-  private Map<Enchantment,Integer> getEnchantments(ItemStack stack) {
-    return EnchantmentHelper.deserializeEnchantments(matchBook ? EnchantedBookItem.getEnchantments(stack) : stack.getEnchantmentTags());
-  }
-''','''  /** Gets the enchantments from the given stack, including stored enchantments on books. */
-  private ItemEnchantments getEnchantments(ItemStack stack) {
-    return EnchantmentHelper.getEnchantmentsForCrafting(stack);
-  }
-''')
-          rep(rel,'IntStream.rangeClosed(1, enchantment.getMaxLevel())','IntStream.rangeClosed(1, enchantment.value().getMaxLevel())',2)
-          rep(rel,'''      Map<Enchantment,Integer> enchantments = getEnchantments(current);
-      for (Entry<Enchantment,Integer> entry : enchantments.entrySet()) {
-        Enchantment enchantment = entry.getKey();
-        Modifier enchantmentModifier = ModifierManager.INSTANCE.get(enchantment);
-        if (enchantmentModifier != null && enchantmentModifier.getId().equals(modifier)) {
-          int newLevel = entry.getValue() - 1;
-          if (newLevel <= 0) {
-            enchantments.remove(enchantment);
-          } else {
-            enchantments.put(enchantment, newLevel);
-          }
-          break;
-        }
-      }
+          interaction = 'src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java'
+          rep(interaction, '    // not sure if anyone sets the result, but just in case listen to it so they can stop us running\n', '', 2)
+          rep(interaction, '    if (event.getCancellationResult() != InteractionResult.PASS) {\n      return;\n    }\n', '', 2)
+          rep(interaction, '        // set the result so later listeners see we did something\n', '', 2)
+          rep(interaction, '        event.setCancellationResult(result);\n', '', 2)
 
-      ItemStack unenchanted;
-      if (matchBook && enchantments.isEmpty()) {
-        unenchanted = new ItemStack(Items.BOOK);
-        if (current.hasCustomHoverName()) {
-          unenchanted.setHoverName(current.getHoverName());
-        }
-      } else {
-        unenchanted = current.copy();
-        if (matchBook) {
-          // for some dumb reason setEnchantments for a book just adds them instead of setting them
-          unenchanted.removeTagKey("StoredEnchantments");
-        }
-        EnchantmentHelper.setEnchantments(enchantments, unenchanted);
-      }
-''','''      ItemEnchantments enchantments = getEnchantments(current);
-      ItemEnchantments.Mutable updatedEnchantments = new ItemEnchantments.Mutable(enchantments);
-      for (var entry : enchantments.entrySet()) {
-        var enchantment = entry.getKey();
-        Modifier enchantmentModifier = ModifierManager.INSTANCE.get(enchantment);
-        if (enchantmentModifier != null && enchantmentModifier.getId().equals(modifier)) {
-          updatedEnchantments.set(enchantment, entry.getIntValue() - 1);
-          break;
-        }
-      }
-      ItemEnchantments updated = updatedEnchantments.toImmutable();
+          sprite = 'src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java'
+          rep(sprite, 'import com.mojang.serialization.Codec;\n', 'import com.mojang.serialization.Codec;\nimport com.mojang.serialization.MapCodec;\n')
+          rep(sprite, 'import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;\n', 'import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;\nimport net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;\n')
+          rep(sprite, 'import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;\n', '')
+          rep(sprite, 'import net.minecraft.server.packs.resources.ResourceManager;\n', 'import net.minecraft.server.packs.resources.ResourceManager;\nimport net.minecraft.server.packs.resources.ResourceMetadata;\n')
+          rep(sprite,
+              'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group(',
+              'public static final MapCodec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>mapCodec(inst -> inst.group(')
+          rep(sprite, '    public SpriteContents get() {', '    public SpriteContents apply(SpriteResourceLoader loader) {')
+          rep(sprite,
+              'return new SpriteContents(this.output, new FrameSize(generated.getWidth(), generated.getHeight()), generated, AnimationMetadataSection.EMPTY, null);',
+              'return new SpriteContents(this.output, new FrameSize(generated.getWidth(), generated.getHeight()), generated, ResourceMetadata.EMPTY);')
 
-      ItemStack unenchanted;
-      if (matchBook && updated.isEmpty()) {
-        unenchanted = new ItemStack(Items.BOOK);
-        Component customName = current.get(DataComponents.CUSTOM_NAME);
-        if (customName != null) {
-          unenchanted.set(DataComponents.CUSTOM_NAME, customName);
-        }
-      } else {
-        unenchanted = current.copy();
-        EnchantmentHelper.setEnchantments(unenchanted, updated);
-      }
-''')
+          movement = 'src/main/java/slimeknights/tconstruct/tools/network/EntityMovementChangePacket.java'
+          rep(movement, '  public void handleThreadsafe(IPayloadContext context) {\n    if (context.getSender() != null) {\n      HandleClient.handle(this);\n    }\n  }', '  public void handleThreadsafe(IPayloadContext context) {\n    HandleClient.handle(this);\n  }')
 
-          # Modifier removal copy helper
-          rel='slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java'
-          rep(rel,'import net.neoforged.neoforge.items.ItemHandlerHelper;\n','')
-          rep(rel,'          tool = ItemHandlerHelper.copyStackWithSize(tool, stack.getCount());','          tool = tool.copyWithCount(stack.getCount());')
+          fluid = 'src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java'
+          rep(fluid, 'import net.minecraft.network.FriendlyByteBuf;\n', 'import net.minecraft.network.FriendlyByteBuf;\nimport net.minecraft.network.RegistryFriendlyByteBuf;\n')
+          rep(fluid, '    this(buffer.readFluidStack());', '    this(FluidStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer));')
+          rep(fluid, '    buffer.writeFluidStack(fluid);', '    FluidStack.OPTIONAL_STREAM_CODEC.encode((RegistryFriendlyByteBuf) buffer, fluid);')
 
-          # Builders: new 4-arg constructor requires explicit id
-          for rel, old, new in [
-          ('slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java',
-           'new LoadableFinishedRecipe<>(constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId)',
-           'new LoadableFinishedRecipe<>(id, constructor.apply(id, name, tools, inputs, leftovers, modifierPredicate), ModifierRemovalRecipe.LOADER, advancementId)'),
-          ('slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java',
-           'new LoadableFinishedRecipe<>(new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId)',
-           'new LoadableFinishedRecipe<>(id, new ModifierSortingRecipe(id, inputs), ModifierSortingRecipe.LOADER, advancementId)'),
-          ('slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java',
-           'new LoadableFinishedRecipe<>(new EnchantmentConvertingRecipe(id, name, inputs, matchBook, returnInput, modifierPredicate), EnchantmentConvertingRecipe.LOADER, advancementId)',
-           'new LoadableFinishedRecipe<>(id, new EnchantmentConvertingRecipe(id, name, inputs, matchBook, returnInput, modifierPredicate), EnchantmentConvertingRecipe.LOADER, advancementId)'),
-          ('slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java',
-           'new LoadableFinishedRecipe<>(new ToggleInteractionWorktableRecipe(id, tools, inputs), ToggleInteractionWorktableRecipe.LOADER, advancementId)',
-           'new LoadableFinishedRecipe<>(id, new ToggleInteractionWorktableRecipe(id, tools, inputs), ToggleInteractionWorktableRecipe.LOADER, advancementId)'),
-          ]: rep(rel,old,new)
+          sprites = 'src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java'
+          rep(sprites, 'new ResourceLocation("block/blue_ice")', 'ResourceLocation.withDefaultNamespace("block/blue_ice")')
+          rep(sprites, 'new ResourceLocation("block/packed_ice")', 'ResourceLocation.withDefaultNamespace("block/packed_ice")')
+          rep(sprites, 'new ResourceLocation("block/ice")', 'ResourceLocation.withDefaultNamespace("block/ice")')
+          rep(sprites, 'new ResourceLocation("block/" + name + "_wool")', 'ResourceLocation.withDefaultNamespace("block/" + name + "_wool")')
 
-          # Player head profile component
-          rel='slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java'
-          rep(rel,'import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.NbtUtils;\n','import net.minecraft.core.component.DataComponents;\n')
-          rep(rel,'import net.minecraft.world.item.Items;\n','import net.minecraft.world.item.Items;\nimport net.minecraft.world.item.component.ResolvableProfile;\n')
-          rep(rel,'''      GameProfile gameprofile = ((Player)entity).getGameProfile();
-      stack.getOrCreateTag().put("SkullOwner", NbtUtils.writeGameProfile(new CompoundTag(), gameprofile));
-''','''      GameProfile gameprofile = ((Player)entity).getGameProfile();
-      stack.set(DataComponents.PROFILE, new ResolvableProfile(gameprofile));
-''')
-
-          # Dye color packed ARGB
-          rel='slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java'
-          rep(rel,'''          float[] color = dye.getTextureDiffuseColors();
-          int r = (int)(color[0] * 255);
-          int g = (int)(color[1] * 255);
-          int b = (int)(color[2] * 255);
-''','''          int color = dye.getTextureDiffuseColor();
-          int r = color >> 16 & 255;
-          int g = color >> 8 & 255;
-          int b = color & 255;
-''')
-
+          client = 'src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java'
+          rep(client, 'event.register("material", MaterialModel.LOADER);', 'event.register(getResource("material"), MaterialModel.LOADER);')
+          rep(client, 'event.register("tool", ToolModel.LOADER);', 'event.register(getResource("tool"), ToolModel.LOADER);')
+          rep(client, 'event.register("material_block", MaterialBlockModel.LOADER);', 'event.register(getResource("material_block"), MaterialBlockModel.LOADER);')
+          rep(client, 'player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED.get())', 'player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED)')
           PY
-          python3 /tmp/migrate.py
 
-      - name: Verify common-code migration
+      - name: Verify migration
         shell: bash
         run: |
           set -euxo pipefail
-          grep -Fq 'ItemStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer)' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
-          grep -Fq 'TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
-          grep -Fq 'CraftingInput input = craftingContainer.asCraftInput();' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
-          grep -Fq 'EnchantmentHelper.getEnchantmentsForCrafting(stack)' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
-          grep -Fq 'EnchantmentHelper.setEnchantments(unenchanted, updated);' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java
-          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java
-          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java
-          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java
-          grep -Fq 'new LoadableFinishedRecipe<>(id,' src/main/java/slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java
-          grep -Fq 'stack.set(DataComponents.PROFILE, new ResolvableProfile(gameprofile));' src/main/java/slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java
-          grep -Fq 'int color = dye.getTextureDiffuseColor();' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java
-          grep -Fq 'tool = tool.copyWithCount(stack.getCount());' src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java
+          ! grep -Fq 'getCancellationResult()' src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java
+          ! grep -Fq 'setCancellationResult(result)' src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java
+          grep -Fq 'MapCodec<ShieldBannerModifierSpriteSource>' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          grep -Fq 'apply(SpriteResourceLoader loader)' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          grep -Fq 'ResourceMetadata.EMPTY' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
+          grep -Fq 'FluidStack.OPTIONAL_STREAM_CODEC' src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java
+          grep -Fq '(RecipeHolder<CraftingRecipe>) null' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
+          grep -Fq 'ResourceLocation.withDefaultNamespace("block/blue_ice")' src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java
+          grep -Fq 'event.register(getResource("material"), MaterialModel.LOADER);' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
+          grep -Fq 'getAttributeValue(TinkerAttributes.USE_ITEM_SPEED)' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
           git diff --check
 
-      - name: Commit common-code migration
+      - name: Commit migration
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name 'tinkers-port-bot'
           git config user.email 'tinkers-port-bot@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipe.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipe.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierRemovalRecipeBuilder.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/ModifierSortingRecipeBuilder.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/EnchantmentConvertingRecipeBuilder.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/ToggleInteractionWorktableRecipeBuilder.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/severing/PlayerBeheadingRecipe.java \
-                  src/main/java/slimeknights/tconstruct/tools/recipe/ArmorDyeingRecipe.java
-          git commit -m 'Port tool menu and recipe components to 1.21'
+          git add \
+            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
+            src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java \
+            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java \
+            src/main/java/slimeknights/tconstruct/tools/network/EntityMovementChangePacket.java \
+            src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java \
+            src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java \
+            src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
+          git commit -m 'Port client interaction sprite and packet APIs to 1.21'
           git push origin HEAD:1.21.1-neoforge
