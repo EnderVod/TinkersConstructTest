@@ -42,4 +42,9 @@ public class DummyArmorMaterial implements IdAwareObject {
       0.0F,
       0.0F));
   }
+
+  /** Compatibility accessor retained for modifiable armor constructors during the 1.21 port. */
+  public Holder<ArmorMaterial> getArmorMaterial() {
+    return material;
+  }
 }
