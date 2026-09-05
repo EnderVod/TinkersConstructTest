@@ -2,6 +2,7 @@ package slimeknights.tconstruct.library.recipe.partbuilder.recycle;
 
 import lombok.Getter;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -34,16 +35,11 @@ import static slimeknights.tconstruct.tables.recipe.PartBuilderToolRecycle.NO_MO
 
 /** Recipe for recycling a vanilla tool or a tinkers tool with no materials in the part builder */
 public class PartBuilderRecycle implements IPartBuilderRecipe, IMultiRecipe<DisplayPartRecipe> {
-  /** Title for the screen */
   private static final Component RECYCLING = TConstruct.makeTranslation("recipe", "recycling");
-  /** General instructions for recycling */
   private static final List<Component> INSTRUCTIONS = List.of(TConstruct.makeTranslation("recipe", "recycling.info"));
-  /** Error when durability is too low */
   private static final List<Component> NOT_ENOUGH_DURABILITY = List.of(TConstruct.makeTranslation("recipe", "recycling.not_enough_durability").withStyle(ChatFormatting.RED));
-  /** Error for trying to recycle a tool with enchantments */
   private static final List<Component> NO_ENCHANTMENTS = List.of(TConstruct.makeTranslation("recipe", "recycling.no_enchantments").withStyle(ChatFormatting.RED));
 
-  /** Loader instance */
   public static final RecordLoadable<PartBuilderRecycle> LOADER = RecordLoadable.create(
     ContextKey.ID.requiredField(),
     IngredientLoadable.DISALLOW_EMPTY.requiredField("tool", r -> r.tool),
@@ -67,31 +63,20 @@ public class PartBuilderRecycle implements IPartBuilderRecipe, IMultiRecipe<Disp
   }
 
   @Override
-  public int getItemsUsed(IPartBuilderContainer inv) {
-    return 1;
-  }
+  public int getItemsUsed(IPartBuilderContainer inv) { return 1; }
 
   @Override
-  public Pattern getPattern() {
-    return MISSING;
-  }
+  public Pattern getPattern() { return MISSING; }
 
   @Override
-  public Stream<Pattern> getPatterns(IPartBuilderContainer inv) {
-    return results.keySet().stream();
-  }
+  public Stream<Pattern> getPatterns(IPartBuilderContainer inv) { return results.keySet().stream(); }
 
   @Override
-  public boolean partialMatch(IPartBuilderContainer inv) {
-    return pattern.test(inv.getPatternStack()) && tool.test(inv.getStack());
-  }
+  public boolean partialMatch(IPartBuilderContainer inv) { return pattern.test(inv.getPatternStack()) && tool.test(inv.getStack()); }
 
-  /** Scales the amount based on the tack damage */
   private static int getAmount(ItemStack stack, int max) {
     int maxDamage = stack.getMaxDamage();
-    if (maxDamage == 0) {
-      return max;
-    }
+    if (maxDamage == 0) return max;
     return max * (maxDamage - stack.getDamageValue()) / maxDamage;
   }
 
@@ -105,22 +90,15 @@ public class PartBuilderRecycle implements IPartBuilderRecipe, IMultiRecipe<Disp
   public ItemStack assemble(IPartBuilderContainer inv, RegistryAccess access, Pattern pattern) {
     int maxCount = getAmount(inv.getStack(), resultCount);
     ItemOutput result = results.get(pattern);
-    // should never happen
-    if (result == null) {
-      return ItemStack.EMPTY;
-    }
+    if (result == null) return ItemStack.EMPTY;
     return result.get().copyWithCount(Math.min(maxCount, result.getCount()));
   }
 
   @Override
   public ItemStack getLeftover(IPartBuilderContainer inv, Pattern pattern) {
-    // maximum items to return
     int maxCount = getAmount(inv.getStack(), resultCount);
     ItemOutput result = results.get(pattern);
-    if (result != null) {
-      maxCount -= result.getCount();
-    }
-    // if we have remaining items after removing the main choice, randomly choose a second
+    if (result != null) maxCount -= result.getCount();
     if (maxCount > 0 && results.size() > 1) {
       List<ItemOutput> alternatives = results.entrySet().stream().filter(p -> p.getKey() != pattern).map(Entry::getValue).toList();
       if (!alternatives.isEmpty()) {
@@ -132,52 +110,31 @@ public class PartBuilderRecycle implements IPartBuilderRecipe, IMultiRecipe<Disp
   }
 
   @Override
-  public RecipeSerializer<?> getSerializer() {
-    return TinkerTables.partBuilderDamageableRecycling.get();
-  }
-
-
-  /* Unused */
+  public RecipeSerializer<?> getSerializer() { return TinkerTables.partBuilderDamageableRecycling.get(); }
 
   @Override
-  public int getCost() {
-    return 0;
-  }
+  public int getCost() { return 0; }
 
-  /** @deprecated use {@link #assemble(IPartBuilderContainer, RegistryAccess, Pattern)} */
   @Deprecated
   @Override
-  public ItemStack getResultItem(RegistryAccess access) {
-    return ItemStack.EMPTY;
-  }
-
-
-  /* Display */
+  public ItemStack getResultItem(HolderLookup.Provider access) { return ItemStack.EMPTY; }
 
   @Nullable
   @Override
-  public Component getTitle() {
-    return RECYCLING;
-  }
+  public Component getTitle() { return RECYCLING; }
 
   @Override
   public List<Component> getText(IPartBuilderContainer inv) {
     ItemStack stack = inv.getStack();
-    if (getAmount(stack, resultCount) <= 0) {
-      return NOT_ENOUGH_DURABILITY;
-    }
+    if (getAmount(stack, resultCount) <= 0) return NOT_ENOUGH_DURABILITY;
     if (stack.is(TinkerTags.Items.MODIFIABLE)) {
-      if (ModifierUtil.hasUpgrades(stack)) {
-        return NO_MODIFIERS;
-      }
+      if (ModifierUtil.hasUpgrades(stack)) return NO_MODIFIERS;
     } else if (stack.isEnchanted()) {
       return NO_ENCHANTMENTS;
     }
     return INSTRUCTIONS;
   }
 
-
-  /* JEI */
   private List<DisplayPartRecipe> displayRecipes;
 
   @Override

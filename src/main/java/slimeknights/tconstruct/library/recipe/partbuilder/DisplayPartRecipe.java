@@ -2,6 +2,7 @@ package slimeknights.tconstruct.library.recipe.partbuilder;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -31,15 +32,11 @@ public class DisplayPartRecipe implements IDisplayPartBuilderRecipe {
   /** List of items to display for the result */
   private final List<ItemStack> resultItems;
 
-
-  /* Required part builder methods */
-
   @Override
   public boolean partialMatch(IPartBuilderContainer inv) {
     throw new UnsupportedOperationException();
   }
 
-  /** @deprecated needed to implement the interface, not meant to be used */
   @Override
   @Deprecated
   @Internal
@@ -48,7 +45,7 @@ public class DisplayPartRecipe implements IDisplayPartBuilderRecipe {
   }
 
   @Override
-  public ItemStack getResultItem(RegistryAccess pRegistryAccess) {
+  public ItemStack getResultItem(HolderLookup.Provider pRegistryAccess) {
     throw new UnsupportedOperationException();
   }
 

@@ -4,6 +4,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -82,14 +83,11 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
 
   @Override
   public boolean partialMatch(IPartBuilderContainer inv) {
-    // first, must have a pattern
     if (!patternItem.test(inv.getPatternStack())) {
       return false;
     }
-    // if there is a material item, it must have a valid material and be craftable
     ItemStack stack = inv.getStack();
     if (!stack.isEmpty()) {
-      // no sense allowing if there is no change
       if (stack.getItem() == output) {
         return false;
       }
@@ -100,22 +98,13 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
       MaterialVariant material = materialRecipe.getMaterial();
       return (allowUncraftable || material.get().isCraftable()) && output.canUseMaterial(material.getId());
     }
-    // no material item? return match in case we get one later
     return true;
   }
 
-  /**
-   * Checks if the recipe is valid for the given input. Assumes {@link #partialMatch(IPartBuilderContainer)} is true
-   * @param inv    Inventory instance
-   * @param world  World instance
-   * @return  True if this recipe matches
-   */
   @Override
   public boolean matches(IPartBuilderContainer inv, Level world) {
-    // must have a material
     IMaterialValue materialRecipe = inv.getMaterial();
     if (materialRecipe != null) {
-      // material must be craftable, usable in the item, and have a cost we can afford
       MaterialVariant material = materialRecipe.getMaterial();
       return (allowUncraftable || material.get().isCraftable()) && output.canUseMaterial(material.getId())
              && inv.getStack().getCount() >= materialRecipe.getItemsUsed(cost);
@@ -126,15 +115,10 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
   /** @deprecated use {@link #getRecipeOutput(MaterialVariantId)} */
   @Deprecated
   @Override
-  public ItemStack getResultItem(RegistryAccess access) {
+  public ItemStack getResultItem(HolderLookup.Provider access) {
     return new ItemStack(output);
   }
 
-  /**
-   * Gets the output of the recipe for display
-   * @param material  Material to use
-   * @return  Output of the recipe
-   */
   @SuppressWarnings("WeakerAccess")
   public ItemStack getRecipeOutput(MaterialVariantId material, int count) {
     ItemStack stack = output.withMaterial(material);
@@ -142,20 +126,18 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
     return stack;
   }
 
-  /** @deprecated use {@link #getRecipeOutput(MaterialVariantId, int)} */
   @Deprecated(forRemoval = true)
   public ItemStack getRecipeOutput(MaterialVariantId material) {
     return getRecipeOutput(material, outputCount);
   }
 
   @Override
-  public ItemStack assemble(IPartBuilderContainer inv, RegistryAccess access) {
+  public ItemStack assemble(IPartBuilderContainer inv, HolderLookup.Provider access) {
     MaterialVariant material = MaterialVariant.UNKNOWN;
     int count = outputCount;
     IMaterialValue materialRecipe = inv.getMaterial();
     if (materialRecipe != null) {
       material = materialRecipe.getMaterial();
-      // if no leftover, give them more parts provided we have the patterns for it
       int value = materialRecipe.getValue();
       if (!materialRecipe.hasLeftover() && value > cost) {
         count = outputCount * value / cost;
@@ -164,7 +146,6 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
     return this.getRecipeOutput(material.getVariant(), count);
   }
 
-  /** Cache of recipes for display in JEI */
   @Nullable
   private List<IDisplayPartBuilderRecipe> multiRecipes;
 
@@ -175,29 +156,22 @@ public class PartRecipe implements IPartBuilderRecipe, IMultiRecipe<IDisplayPart
         .getMaterials().stream()
         .filter(mat -> (allowUncraftable || mat.isCraftable()) && output.canUseMaterial(mat))
         .flatMap(mat -> {
-          // start by finding all variants to display
-          // if no variant has a part builder recipe, skip this recipe
           List<MaterialVariantId> variants = MaterialRecipeCache.getVariants(mat.getIdentifier()).stream()
             .filter(variant -> !MaterialRecipeCache.getRecipes(variant).isEmpty()).toList();
           if (variants.isEmpty()) {
             return Stream.empty();
           }
 
-          // now we need to determine what material contents to show
           MaterialVariant materialTitle;
           List<ItemStack> materialItems;
           List<ItemStack> resultItems;
-          // if we only have 1 variant, display that as our title and simplify the result listing
           if (variants.size() == 1) {
             MaterialVariantId variant = variants.get(0);
             materialTitle = MaterialVariant.of(variant);
             materialItems = MaterialRecipeCache.getItems(variant);
             resultItems = List.of(output.withMaterial(variant));
           } else {
-            // if we have multiple variants, title will be the variantless material
             materialTitle = MaterialVariant.of(mat);
-
-            // we have our material, now to build our item list; requires 1 copy of the result per input so the slots are same size
             materialItems = new ArrayList<>();
             resultItems = new ArrayList<>();
             for (MaterialVariantId variant : variants) {

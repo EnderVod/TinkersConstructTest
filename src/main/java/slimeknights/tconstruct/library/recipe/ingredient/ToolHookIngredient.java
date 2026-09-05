@@ -3,6 +3,7 @@ package slimeknights.tconstruct.library.recipe.ingredient;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -69,20 +70,18 @@ public class ToolHookIngredient implements ICustomIngredient {
       }
     }
     if (list.isEmpty()) {
-      list.add(new ItemStack(Blocks.BARRIER).setHoverName(Component.literal("Empty Tag: " + tag.location())));
+      ItemStack barrier = new ItemStack(Blocks.BARRIER);
+      barrier.set(DataComponents.CUSTOM_NAME, Component.literal("Empty Tag: " + tag.location()));
+      list.add(barrier);
     }
     return list.stream();
   }
 
   @Override
-  public boolean isSimple() {
-    return true;
-  }
+  public boolean isSimple() { return true; }
 
   @Override
-  public IngredientType<?> getType() {
-    return TinkerTools.toolHookIngredientType.get();
-  }
+  public IngredientType<?> getType() { return TinkerTools.toolHookIngredientType.get(); }
 
   @Override
   public boolean equals(Object obj) {
@@ -90,7 +89,5 @@ public class ToolHookIngredient implements ICustomIngredient {
   }
 
   @Override
-  public int hashCode() {
-    return Objects.hash(ID, tag, hook);
-  }
+  public int hashCode() { return Objects.hash(ID, tag, hook); }
 }

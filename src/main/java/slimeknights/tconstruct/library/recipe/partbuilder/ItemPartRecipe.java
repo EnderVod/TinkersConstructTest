@@ -1,6 +1,7 @@
 package slimeknights.tconstruct.library.recipe.partbuilder;
 
 import lombok.Getter;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -63,26 +64,21 @@ public class ItemPartRecipe implements IDisplayPartBuilderRecipe {
 
   @Override
   public boolean allowUncraftable() {
-    // if we have a recipe, we craft it
     return true;
   }
 
   @Override
   public boolean partialMatch(IPartBuilderContainer inv) {
-    // first, must have a pattern
     if (!patternItem.test(inv.getPatternStack())) {
       return false;
     }
-    // if there is a material item, it must have a valid material and be craftable
     if (!inv.getStack().isEmpty()) {
-      // no material means we expect no stack in the material slot
       if (material.isEmpty()) {
         return false;
       }
       IMaterialValue materialRecipe = inv.getMaterial();
       return materialRecipe != null && material.matchesVariant(materialRecipe.getMaterial());
     }
-    // no material item? return match in case we get one later
     return true;
   }
 
@@ -105,16 +101,15 @@ public class ItemPartRecipe implements IDisplayPartBuilderRecipe {
   }
 
   @Override
-  public ItemStack getResultItem(RegistryAccess access) {
+  public ItemStack getResultItem(HolderLookup.Provider access) {
     return result.get();
   }
 
   @Override
-  public ItemStack assemble(IPartBuilderContainer inv, RegistryAccess access) {
+  public ItemStack assemble(IPartBuilderContainer inv, HolderLookup.Provider access) {
     ItemStack result = getResultItem(access).copy();
     IMaterialValue materialRecipe = inv.getMaterial();
     if (materialRecipe != null) {
-      // if no leftover, give them more parts provided we have the patterns for it
       int value = materialRecipe.getValue();
       if (!materialRecipe.hasLeftover() && value > cost) {
         result.setCount(result.getCount() * value / cost);
@@ -128,9 +123,6 @@ public class ItemPartRecipe implements IDisplayPartBuilderRecipe {
     return TinkerTables.itemPartBuilderSerializer.get();
   }
 
-
-  /* JEI */
-
   private List<ItemStack> materialItems;
 
   @Override
@@ -141,16 +133,13 @@ public class ItemPartRecipe implements IDisplayPartBuilderRecipe {
   @Override
   public List<ItemStack> getMaterialItems() {
     if (materialItems == null) {
-      // if unknown, nothing to display. Used for no material input
       if (material.isUnknown()) {
         materialItems = List.of();
       } else {
         MaterialVariantId material = this.material.getVariant();
-        // if we have a variant, only need to fetch the one list
         if (!material.getVariant().isEmpty()) {
           materialItems = MaterialRecipeCache.getItems(material);
         } else {
-          // fetch the root and all variants
           List<ItemStack> items = new ArrayList<>(MaterialRecipeCache.getItems(material));
           for (MaterialVariantId variant : MaterialRecipeCache.getVariants(material.getId())) {
             items.addAll(MaterialRecipeCache.getItems(variant));
