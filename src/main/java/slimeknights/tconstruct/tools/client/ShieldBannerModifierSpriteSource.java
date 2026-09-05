@@ -5,7 +5,6 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import lombok.RequiredArgsConstructor;
-import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;
@@ -13,13 +12,10 @@ import net.minecraft.client.renderer.texture.atlas.SpriteSources;
 import net.minecraft.client.renderer.texture.atlas.sources.LazyLoadedImage;
 import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
-import net.minecraft.client.resources.model.Material;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.ExtraCodecs;
-import net.minecraft.world.level.block.entity.BannerPattern;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.client.materials.MaterialRenderInfo;
@@ -64,17 +60,18 @@ public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWid
 
   @Override
   public void run(ResourceManager manager, Output output) {
-    // TODO 1.21: will have to copy textures over using a folder search since these are datapack controlled
-    for (Entry<ResourceKey<BannerPattern>, Material> entry : Sheets.SHIELD_MATERIALS.entrySet()) {
-      ResourceLocation input = TEXTURE_ID_CONVERTER.idToFile(entry.getValue().texture());
-      Optional<Resource> resource = manager.getResource(input);
-      if (resource.isEmpty()) {
-        TConstruct.LOG.warn("Unable to find shield texture {} to create modifier sprite", input);
-      } else {
-        LazyLoadedImage image = new LazyLoadedImage(input, resource.get(), 1);
-        ResourceLocation destination = destinationPrefix.withSuffix(MaterialRenderInfo.getSuffix(entry.getKey().location()));
-        output.add(destination, new BannerModifierSpriteSupplier(image, input, destination));
+    String root = "textures/entity/shield/";
+    for (Entry<ResourceLocation,Resource> entry : manager.listResources("textures/entity/shield", id -> id.getPath().endsWith(".png")).entrySet()) {
+      ResourceLocation input = entry.getKey();
+      String path = input.getPath();
+      if (!path.startsWith(root) || !path.endsWith(".png")) {
+        continue;
       }
+      String assetPath = path.substring(root.length(), path.length() - 4);
+      ResourceLocation assetId = ResourceLocation.fromNamespaceAndPath(input.getNamespace(), assetPath);
+      LazyLoadedImage image = new LazyLoadedImage(input, entry.getValue(), 1);
+      ResourceLocation destination = destinationPrefix.withSuffix(MaterialRenderInfo.getSuffix(assetId));
+      output.add(destination, new BannerModifierSpriteSupplier(image, input, destination));
     }
   }
 

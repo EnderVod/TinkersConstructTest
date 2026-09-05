@@ -2,19 +2,17 @@ package slimeknights.tconstruct.tools.recipe;
 
 import lombok.Getter;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.BannerItem;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import slimeknights.mantle.recipe.IMultiRecipe;
 import slimeknights.mantle.util.RegistryHelper;
 import slimeknights.tconstruct.common.TinkerTags;
@@ -99,15 +97,11 @@ public class BannerModifierRecipe implements ITinkerStationRecipe, IMultiRecipe<
       return RecipeResult.pass();
     }
 
-    // get the banner data
-    CompoundTag bannerData = BlockItem.getBlockEntityData(banner);
-    ListTag patterns = new ListTag();
-    if (bannerData != null) {
-      patterns = bannerData.getList("Patterns", Tag.TAG_COMPOUND);
-    }
+    // banner patterns are a data component in 1.21
+    BannerPatternLayers patterns = banner.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY);
 
     // apply the pattern
-    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, patterns);
+    BannerModule.copyPatterns(tool.getPersistentData(), key, dye, access, patterns);
 
     // add the modifier if missing
     if (tool.getModifierLevel(key) == 0) {
@@ -176,9 +170,9 @@ public class BannerModifierRecipe implements ITinkerStationRecipe, IMultiRecipe<
       this.variant = Component.translatable("color.minecraft." + dye.getSerializedName());
 
       ModifierId key = RESULT.getId();
-      ListTag patterns = new ListTag();
+      BannerPatternLayers patterns = BannerPatternLayers.EMPTY;
       List<ModifierEntry> results = List.of(RESULT);
-      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, patterns))).toList();
+      toolWithModifier = tools.stream().map(stack -> IDisplayModifierRecipe.withModifiers(stack, DEFAULT_TOOL_STACK_SIZE, results, data -> BannerModule.copyPatterns(data, key, dye, access, patterns))).toList();
     }
 
     @Override
