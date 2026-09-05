@@ -23,54 +23,93 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply current front blocker fixes
+      - name: Port modifiable crossbow to 1.21 APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          inventory_import = 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;\n'
-          anchor = 'import slimeknights.tconstruct.library.tools.IndestructibleItemEntity;\n'
-          for name in (
-              'src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java',
-              'src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java',
-          ):
-              path = Path(name)
-              text = path.read_text(encoding='utf-8')
-              if inventory_import not in text:
-                  if anchor not in text:
-                      raise RuntimeError(f'Missing import anchor in {name}')
-                  text = text.replace(anchor, anchor + inventory_import, 1)
-                  path.write_text(text, encoding='utf-8')
+          path = Path('src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableCrossbowItem.java')
+          text = path.read_text(encoding='utf-8')
 
-          harvest = Path('src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java')
-          text = harvest.read_text(encoding='utf-8')
-          stale = '      return tool.getHook(ToolHooks.MINING_CONDITION).canMine(tool, state, isEffective);'
-          replacement = '''      ToolHarvestContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);\n      for (ModifierEntry entry : tool.getModifierList()) {\n        entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);\n      }\n      ToolDamageUtil.damageAnimated(tool, ToolHarvestLogic.getDamage(tool, worldIn, pos, state), entityLiving, EquipmentSlot.MAINHAND);'''
-          if stale in text:
-              text = text.replace(stale, replacement, 1)
-              harvest.write_text(text, encoding='utf-8')
-          elif 'ToolHooks.MINING_CONDITION' in text:
-              raise RuntimeError('Unexpected MINING_CONDITION usage remains')
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          safe_import = 'import slimeknights.mantle.client.SafeClientAccess;\n'
+          if safe_import not in text:
+              replace_once(
+                  'import slimeknights.mantle.client.TooltipKey;\n',
+                  safe_import + 'import slimeknights.mantle.client.TooltipKey;\n',
+                  'SafeClientAccess import')
+
+          replace_once(
+              'persistentData.put(KEY_DRAWBACK_AMMO, ammo.save(new CompoundTag()));',
+              'persistentData.put(KEY_DRAWBACK_AMMO, ammo.save(level.registryAccess()));',
+              'drawback ammo serialization')
+          replace_once(
+              'ItemStack ammo = ItemStack.of(heldAmmo);',
+              'ItemStack ammo = ItemStack.parseOptional(level.registryAccess(), heldAmmo);',
+              'loaded ammo parsing')
+          replace_once(
+              'arrow = arrowItem.createArrow(level, ammo, living);',
+              'arrow = arrowItem.createArrow(level, ammo, living, living.getItemInHand(hand));',
+              'arrow creation')
+          replace_once(
+              '          arrow.setShotFromCrossbow(true);\n',
+              '',
+              'removed crossbow arrow setter')
+          replace_once(
+              'int duration = getUseDuration(bow);',
+              'int duration = getUseDuration(bow, living);',
+              'release duration')
+          replace_once(
+              'getUseDuration(bow) - chargeRemaining',
+              'getUseDuration(bow, living) - chargeRemaining',
+              'charge duration')
+          replace_once(
+              'CompoundTag ammoNBT = ammo.save(new CompoundTag());',
+              '''Tag encodedAmmo = ammo.save(level.registryAccess());\n        if (!(encodedAmmo instanceof CompoundTag ammoNBT)) {\n          return;\n        }''',
+              'charged ammo serialization')
+          replace_once(
+              'ItemStack heldStack = ItemStack.of(heldAmmo);',
+              '''var registryAccess = player == null ? SafeClientAccess.getRegistryAccess() : player.level().registryAccess();\n      ItemStack heldStack = registryAccess == null ? ItemStack.EMPTY : ItemStack.parseOptional(registryAccess, heldAmmo);''',
+              'tooltip ammo parsing')
+          replace_once(
+              'heldStack.getItem().appendHoverText(heldStack, player.level(), nestedTooltip, tooltipFlag);',
+              'heldStack.getItem().appendHoverText(heldStack, net.minecraft.world.item.Item.TooltipContext.of(player.level()), nestedTooltip, tooltipFlag);',
+              'tooltip context')
+
+          path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify migration
+      - name: Verify crossbow migration
         shell: bash
         run: |
-          grep -Fq 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java
-          grep -Fq 'import slimeknights.tconstruct.library.tools.capability.inventory.ToolInventoryCapability;' src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableLauncherItem.java
-          ! grep -Fq 'ToolHooks.MINING_CONDITION' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
-          grep -Fq 'entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
+          FILE=src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableCrossbowItem.java
+          grep -Fq 'ammo.save(level.registryAccess())' "$FILE"
+          grep -Fq 'ItemStack.parseOptional(level.registryAccess(), heldAmmo)' "$FILE"
+          grep -Fq 'arrowItem.createArrow(level, ammo, living, living.getItemInHand(hand))' "$FILE"
+          grep -Fq 'getUseDuration(bow, living)' "$FILE"
+          grep -Fq 'SafeClientAccess.getRegistryAccess()' "$FILE"
+          grep -Fq 'Item.TooltipContext.of(player.level())' "$FILE"
+          ! grep -Fq 'ItemStack.of(heldAmmo)' "$FILE"
+          ! grep -Fq 'setShotFromCrossbow' "$FILE"
+          ! grep -Fq 'ammo.save(new CompoundTag())' "$FILE"
+          ! grep -Fq 'getUseDuration(bow)' "$FILE"
           git diff --check
 
-      - name: Commit compatibility batch
+      - name: Commit crossbow migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
+          git add src/main/java/slimeknights/tconstruct/library/tools/item/ranged/ModifiableCrossbowItem.java
           git diff --cached --quiet || {
-            git commit -m 'Restore harvest callbacks and inventory capability imports'
+            git commit -m 'Port modifiable crossbow to 1.21 item stack APIs'
             git push origin HEAD:1.21.1-neoforge
           }
 
