@@ -13,7 +13,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -205,7 +205,7 @@ public class ToolHarvestLogic {
    * Breaks a secondary block
    * @param tool      Tool instance
    * @param stack     Stack instance for vanilla functions
-   * @param context   Tool harvest context
+   * @param context   Harvest context
    * @return true if a block was broken.
    */
   public static boolean breakExtraBlock(IToolStackView tool, ItemStack stack, ToolHarvestContext context) {
@@ -298,7 +298,7 @@ public class ToolHarvestLogic {
     }
     // let armor change enchantments
     // TODO: should we have a hook for non-enchantment armor responses?
-    ItemEnchantments originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);
+    ListTag originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);
     // need to calculate the iterator before we break the block, as we need the reference hardness from the center
     UseOnContext useContext = new UseOnContext(world, player, InteractionHand.MAIN_HAND, stack, Util.createTraceResult(pos, sideHit, false));
     Iterable<BlockPos> extraBlocks = context.isEffective() ? tool.getHook(ToolHooks.AOE_ITERATOR).getBlocks(tool, useContext, state, AOEMatchType.BREAKING) : Collections.emptyList();
@@ -343,13 +343,8 @@ public class ToolHarvestLogic {
     if (!worldIn.isClientSide && worldIn instanceof ServerLevel) {
       // must not be broken, and the tool definition must be effective
       boolean isEffective = IsEffectiveToolHook.isEffective(tool, state);
-      ToolHarvestContext context = new ToolHarvestContext((ServerLevel) worldIn, entityLiving, state, pos, Direction.UP, true, isEffective);
-      for (ModifierEntry entry : tool.getModifierList()) {
-        entry.getHook(ModifierHooks.BLOCK_BREAK).afterBlockBreak(tool, entry, context);
-      }
-      ToolDamageUtil.damageAnimated(tool, ToolHarvestLogic.getDamage(tool, worldIn, pos, state), entityLiving, EquipmentSlot.MAINHAND);
+      return tool.getHook(ToolHooks.MINING_CONDITION).canMine(tool, state, isEffective);
     }
-
     return true;
   }
 }
