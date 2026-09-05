@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.library.client.book;
 
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import slimeknights.mantle.client.book.BookLoader;
@@ -68,7 +69,7 @@ public class TinkerBook extends BookData {
    * Initializes the books
    */
   public static void initBook() {
-    BookLoader.registerGsonTypeAdapter(Component.class, new Component.Serializer());
+    BookLoader.registerGsonTypeAdapter(Component.class, new Component.SerializerAdapter(RegistryAccess.EMPTY));
 
     // register page types
     BookLoader.registerPageType(ContentTool.ID, ContentTool.class);
