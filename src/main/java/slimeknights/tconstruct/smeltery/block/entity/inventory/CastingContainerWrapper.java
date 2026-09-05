@@ -42,6 +42,11 @@ public class CastingContainerWrapper implements ICastingContainer {
     return fluid == null ? Fluids.EMPTY : fluid.getFluid();
   }
 
+  @Override
+  public FluidStack getFluidStack() {
+    return fluid == null ? FluidStack.EMPTY : fluid;
+  }
+
   @Nullable
   @Override
   public CompoundTag getFluidTag() {

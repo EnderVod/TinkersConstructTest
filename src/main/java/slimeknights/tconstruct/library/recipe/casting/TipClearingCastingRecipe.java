@@ -6,10 +6,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
-import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.mantle.data.loadable.field.ContextKey;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.recipe.helper.LoadableRecipeSerializer;
@@ -66,10 +64,9 @@ public class TipClearingCastingRecipe extends PotionCastingRecipe {
         .map(stack -> IDisplayModifierRecipe.withModifiers(IModifiableDisplay.getDisplayStack(stack), List.of(new ModifierEntry(modifier, 1))))
         .toList();
       // list of tools with the potion set
-      List<ItemStack> toolWithPotion = BuiltInRegistries.POTION.stream()
-        .filter(potion -> potion != Potions.EMPTY)
+      List<ItemStack> toolWithPotion = BuiltInRegistries.POTION.holders()
         .flatMap(potion -> {
-          String id = Loadables.POTION.getString(potion);
+          String id = potion.key().location().toString();
           return tools.stream().map(stack -> {
             ToolStack tool = ToolStack.copyFrom(stack);
             tool.getPersistentData().putString(modifier, id);
@@ -77,8 +74,7 @@ public class TipClearingCastingRecipe extends PotionCastingRecipe {
           });
         }).toList();
       // list of tools without the potion set, want the sizes to match
-      List<ItemStack> toolWithoutPotion = BuiltInRegistries.POTION.stream()
-        .filter(potion -> potion != Potions.EMPTY)
+      List<ItemStack> toolWithoutPotion = BuiltInRegistries.POTION.holders()
         .flatMap(i -> tools.stream()).toList();
       displayRecipes = List.of(new DisplayCastingRecipe(getId(), getType(), toolWithPotion, fluid.getFluids(), toolWithoutPotion, coolingTime, true));
     }
