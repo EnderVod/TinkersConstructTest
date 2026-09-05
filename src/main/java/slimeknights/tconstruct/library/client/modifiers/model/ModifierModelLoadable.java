@@ -33,7 +33,7 @@ public enum ModifierModelLoadable implements Loadable<ModifierModel> {
       }
       // primitive? load as the texture for normal
       if (element.isJsonPrimitive()) {
-        return new NormalModifierModel(ModifierModel.blockAtlas(new ResourceLocation(element.getAsString())), null);
+        return new NormalModifierModel(ModifierModel.blockAtlas(ResourceLocation.parse(element.getAsString())), null);
       }
     }
     // if the object has no type, default to normal
