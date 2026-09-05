@@ -60,7 +60,7 @@ public record FluidPredicateAsCapacityModule(ToolTankHelper helper, IJsonPredica
     // only allow draining; growing the fluid is just going to cause exploits as this is a predicate; we don't know the type
     FluidStack fluid = helper.getFluid(tool);
     if (amount < fluid.getAmount() && this.fluid.matches(fluid.getFluid())) {
-      helper.setFluid(tool, new FluidStack(fluid, amount));
+      helper.setFluid(tool, fluid.copyWithAmount(amount));
     }
   }
 }

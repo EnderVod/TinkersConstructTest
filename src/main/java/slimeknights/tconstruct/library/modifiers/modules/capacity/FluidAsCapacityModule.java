@@ -58,7 +58,7 @@ public record FluidAsCapacityModule(ToolTankHelper helper, Fluid fluid) implemen
     // don't allow setting amount if another fluid is present
     FluidStack fluid = helper.getFluid(tool);
     if (fluid.isEmpty() || fluid.getFluid() == this.fluid) {
-      helper.setFluid(tool, new FluidStack(fluid, amount));
+      helper.setFluid(tool, fluid.copyWithAmount(amount));
     }
   }
 }
