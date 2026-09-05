@@ -1,4 +1,4 @@
-name: Tinkers Common API Followup
+name: Tinkers Effect Cure Migration
 
 on:
   push:
@@ -21,55 +21,117 @@ jobs:
         with:
           ref: 1.21.1-neoforge
 
-      - name: Apply guarded API followup
+      - name: Apply guarded 1.21 effect cure migration
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new):
-              text = path.read_text()
-              if text.count(old) != 1:
-                  raise SystemExit(f'Guard failed in {path}: expected exactly one occurrence of {old!r}, found {text.count(old)}')
-              path.write_text(text.replace(old, new))
-
           root = Path('src/main/java/slimeknights/tconstruct')
 
-          # Accept DeferredHolder<R,T> for any R/T subtype chain rooted at MobEffect.
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Guard failed in {path}: expected one {old!r}, found {count}')
+              path.write_text(text.replace(old, new))
+
+          # ModifierDeferredRegister exposes DeferredHolder<? super T,T>; the value is still a registered MobEffect.
           effects = root / 'shared/TinkerEffects.java'
           replace_once(
               effects,
-              'public static Holder<MobEffect> holder(DeferredHolder<MobEffect, ? extends MobEffect> effect) {',
-              'public static <R extends MobEffect, T extends R> Holder<MobEffect> holder(DeferredHolder<R, T> effect) {'
+              'public static <R extends MobEffect, T extends R> Holder<MobEffect> holder(DeferredHolder<R, T> effect) {',
+              'public static <T extends MobEffect> Holder<MobEffect> holder(DeferredHolder<? super T, T> effect) {'
           )
 
-          # Item tooltip context replaced the nullable Level parameter in 1.21.
-          repair = root / 'tools/item/RepairKitItem.java'
-          text = repair.read_text()
-          for old, new in [
-              ('import net.minecraft.world.item.ItemStack;\n', 'import net.minecraft.world.item.Item;\nimport net.minecraft.world.item.ItemStack;\n'),
-              ('import net.minecraft.world.level.Level;\n', ''),
-              ('import javax.annotation.Nullable;\n', ''),
-              ('public void appendHoverText(ItemStack stack, @Nullable Level world, List<Component> tooltip, TooltipFlag flag) {\n    super.appendHoverText(stack, world, tooltip, flag);',
-               'public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {\n    super.appendHoverText(stack, context, tooltip, flag);'),
-          ]:
+          # Revenge: retain the exact helmet-specific cure behavior using the 1.21 EffectCure bridge.
+          revenge = root / 'tools/modifiers/traits/skull/RevengeModifier.java'
+          text = revenge.read_text()
+          replacements = [
+              ('import net.minecraft.world.item.ItemStack;\n', ''),
+              ('import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n',
+               'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\nimport slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'),
+              ('import slimeknights.tconstruct.library.tools.nbt.IToolStackView;\n',
+               'import slimeknights.tconstruct.library.tools.nbt.IToolStackView;\n\nimport java.util.List;\n'),
+              ('      effect.getCurativeItems().clear();\n      effect.getCurativeItems().add(new ItemStack(living.getItemBySlot(slotType).getItem()));',
+               '      EffectCureHelper.replaceCurativeItems(effect, List.of(living.getItemBySlot(slotType).getItem()));'),
+              ('        context.getEntity().curePotionEffects(new ItemStack(tool.getItem()));',
+               '        context.getEntity().removeEffectsCuredBy(EffectCureHelper.fromItem(tool.getItem()));'),
+          ]
+          for old, new in replacements:
               if text.count(old) != 1:
-                  raise SystemExit(f'RepairKitItem guard failed for {old!r}: {text.count(old)}')
+                  raise SystemExit(f'RevengeModifier guard failed for {old!r}: {text.count(old)}')
               text = text.replace(old, new)
-          repair.write_text(text)
+          revenge.write_text(text)
 
-          # Enchantments are data-driven holders in 1.21. Resolve Looting through the level registry.
-          shears = root / 'tools/modules/interaction/ShearsModule.java'
-          text = shears.read_text()
-          for old, new in [
-              ('import net.minecraft.world.InteractionHand;\n', 'import net.minecraft.core.registries.Registries;\nimport net.minecraft.world.InteractionHand;\n'),
-              ('import net.minecraft.world.item.enchantment.Enchantments;\n', 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;\n'),
-              ('    LootingContext context = new LootingContext(player, target, null, Util.getSlotType(hand));\n    int looting = LootingModifierHook.getLooting(tool, context, player.getItemInHand(hand).getEnchantmentLevel(Enchantments.MOB_LOOTING));\n    looting = ArmorLootingModifierHook.getLooting(tool, context, looting);\n    Level world = player.getCommandSenderWorld();',
-               '    LootingContext context = new LootingContext(player, target, null, Util.getSlotType(hand));\n    Level world = player.getCommandSenderWorld();\n    int vanillaLooting = EnchantmentHelper.getItemEnchantmentLevel(\n      world.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.LOOTING),\n      player.getItemInHand(hand));\n    int looting = LootingModifierHook.getLooting(tool, context, vanillaLooting);\n    looting = ArmorLootingModifierHook.getLooting(tool, context, looting);'),
-          ]:
+          # Strong bones: resistance remains curable only by the worn helmet item cure.
+          strong = root / 'tools/modifiers/traits/skull/StrongBonesModifier.java'
+          text = strong.read_text()
+          replacements = [
+              ('import slimeknights.tconstruct.library.modifiers.fluid.FluidEffect;\n',
+               'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\nimport slimeknights.tconstruct.library.modifiers.fluid.FluidEffect;\n'),
+              ('import slimeknights.tconstruct.tools.TinkerModifiers;\n',
+               'import slimeknights.tconstruct.tools.TinkerModifiers;\n\nimport java.util.List;\n'),
+              ('      effect.getCurativeItems().clear();\n      effect.getCurativeItems().add(new ItemStack(helmet.getItem()));',
+               '      EffectCureHelper.replaceCurativeItems(effect, List.of(helmet.getItem()));'),
+          ]
+          for old, new in replacements:
               if text.count(old) != 1:
-                  raise SystemExit(f'ShearsModule guard failed for {old!r}: {text.count(old)}')
+                  raise SystemExit(f'StrongBonesModifier guard failed for {old!r}: {text.count(old)}')
               text = text.replace(old, new)
-          shears.write_text(text)
+          strong.write_text(text)
+
+          # Plague and unequip reduction now inspect Holder<MobEffect>.value() and the 1.21 cure set.
+          plague = root / 'tools/modifiers/traits/skull/PlagueModifier.java'
+          replace_once(
+              plague,
+              '        if (!effect.getEffect().isBeneficial() && !effect.getCurativeItems().isEmpty()) {',
+              '        if (!effect.getEffect().value().isBeneficial() && !effect.getCures().isEmpty()) {'
+          )
+
+          reduce = root / 'tools/modules/ReduceEffectOnUnequipModule.java'
+          replace_once(
+              reduce,
+              '          if (!instance.isInfiniteDuration() && instance.getEffect().getCategory() == this.category && !instance.getCurativeItems().isEmpty()) {',
+              '          if (!instance.isInfiniteDuration() && instance.getEffect().value().getCategory() == this.category && !instance.getCures().isEmpty()) {'
+          )
+
+          modifier_events = root / 'tools/logic/ModifierEvents.java'
+          replace_once(
+              modifier_events,
+              '    if (!newEffect.isInfiniteDuration() && !newEffect.getCurativeItems().isEmpty()) {',
+              '    if (!newEffect.isInfiniteDuration() && !newEffect.getCures().isEmpty()) {'
+          )
+
+          client_events = root / 'tools/client/ModifierClientEvents.java'
+          replace_once(
+              client_events,
+              '        if (instance.getEffect().isBeneficial()) {',
+              '        if (instance.getEffect().value().isBeneficial()) {'
+          )
+
+          # Helmet charging intentionally has no default cures, matching its old empty curative-item list.
+          helmet = root / 'tools/modifiers/effect/HelmetChargingEffect.java'
+          text = helmet.read_text()
+          replacements = [
+              ('import net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions;\n',
+               'import net.neoforged.neoforge.client.extensions.common.IClientMobEffectExtensions;\nimport net.neoforged.neoforge.common.EffectCure;\n'),
+              ('import java.util.ArrayList;\nimport java.util.List;\n', 'import java.util.Set;\n'),
+              ('  @Override\n  public List<ItemStack> getCurativeItems() {\n    return new ArrayList<>();\n  }',
+               '  @Override\n  public void fillEffectCures(Set<EffectCure> cures, MobEffectInstance effectInstance) {\n    // Helmet charging is an internal progress marker and intentionally cannot be cured.\n  }'),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'HelmetChargingEffect guard failed for {old!r}: {text.count(old)}')
+              text = text.replace(old, new)
+          helmet.write_text(text)
+
+          # The old SRG AT no longer matches 1.21 named mappings; duration is still the same private field.
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          replace_once(
+              at,
+              'public net.minecraft.world.effect.MobEffectInstance f_19503_ # duration',
+              'public net.minecraft.world.effect.MobEffectInstance duration # duration'
+          )
           PY
 
           git diff --check
@@ -79,9 +141,9 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
+          git add src/main/java src/main/resources/META-INF/accesstransformer.cfg
           git diff --cached --quiet && { echo 'No source changes produced'; exit 1; }
-          git commit -m 'Fix effect holders repair tooltip and looting lookup'
+          git commit -m 'Port effect cures and duration access to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Start fresh compile
