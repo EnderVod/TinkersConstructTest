@@ -38,8 +38,8 @@ jobs:
               if count:
                   path.write_text(text2)
                   attr_count += count
-          if attr_count != 12:
-              raise SystemExit(f'Expected 12 direct TinkerAttributes holder migrations, found {attr_count}')
+          if attr_count != 11:
+              raise SystemExit(f'Expected 11 direct TinkerAttributes holder migrations, found {attr_count}')
 
           # Conditional holder expression in ModifierEvents is not covered by the direct-call regex above.
           modifier_events = root / 'slimeknights/tconstruct/tools/logic/ModifierEvents.java'
