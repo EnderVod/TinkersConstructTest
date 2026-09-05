@@ -1,4 +1,4 @@
-name: Tinkers Casting Components Migration
+name: Tinkers Recipe Data Cleanup
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port potion casting to 1.21 data components
+      - name: Port remaining recipe display data to 1.21 components
         shell: bash
         run: |
           python3 - <<'PY'
@@ -36,115 +36,95 @@ jobs:
                   raise RuntimeError(f'{label}: expected exactly one match, found {count}')
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          casting = Path('src/main/java/slimeknights/tconstruct/library/recipe/casting')
-
-          # Expose the full FluidStack so casting recipes can read 1.21 data components.
-          path = casting / 'ICastingContainer.java'
+          # Casting display tools still use Tinkers' TOOL_DATA component; migrate the old mutable NBT idiom.
+          path = Path('src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.neoforged.neoforge.fluids.FluidStack;' not in text:
-              text = text.replace(
-                  'import net.minecraft.world.level.material.Fluid;\n',
-                  'import net.minecraft.world.level.material.Fluid;\nimport net.neoforged.neoforge.fluids.FluidStack;\n', 1)
-          if 'FluidStack getFluidStack();' not in text:
-              text = text.replace(
-                  '  Fluid getFluid();\n',
-                  '  Fluid getFluid();\n\n  /** Gets the full contained fluid stack, including 1.21 data components. */\n  FluidStack getFluidStack();\n', 1)
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
+              if anchor not in text:
+                  raise RuntimeError('PartSwapCastingRecipe import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
+          old = '                  input.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);'
+          new = '                  ToolDataComponents.update(input, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'input.getOrCreateTag()' in text:
+              raise RuntimeError('Unexpected PartSwapCastingRecipe display tag shape')
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/smeltery/block/entity/inventory/CastingContainerWrapper.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java')
           text = path.read_text(encoding='utf-8')
-          if 'public FluidStack getFluidStack()' not in text:
-              old = '''  @Override\n  public Fluid getFluid() {\n    return fluid == null ? Fluids.EMPTY : fluid.getFluid();\n  }\n'''
-              new = '''  @Override\n  public Fluid getFluid() {\n    return fluid == null ? Fluids.EMPTY : fluid.getFluid();\n  }\n\n  @Override\n  public FluidStack getFluidStack() {\n    return fluid == null ? FluidStack.EMPTY : fluid;\n  }\n'''
-              if text.count(old) != 1:
-                  raise RuntimeError('CastingContainerWrapper fluid accessor changed unexpectedly')
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              anchor = 'import slimeknights.tconstruct.library.tools.nbt.MaterialNBT;\n'
+              if anchor not in text:
+                  raise RuntimeError('ToolCastingRecipe import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n', 1)
+          old = '        partSwapDisplay.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);'
+          new = '        ToolDataComponents.update(partSwapDisplay, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));'
+          if old in text:
               text = text.replace(old, new, 1)
+          elif 'partSwapDisplay.getOrCreateTag()' in text:
+              raise RuntimeError('Unexpected ToolCastingRecipe display tag shape')
           path.write_text(text, encoding='utf-8')
 
-          # Base potion casting: copy POTION_CONTENTS to the result and to JEI display fluids.
-          path = casting / 'PotionCastingRecipe.java'
+          path = Path('src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.Holder;' not in text:
-              text = text.replace('import net.minecraft.core.NonNullList;\n', 'import net.minecraft.core.Holder;\nimport net.minecraft.core.NonNullList;\nimport net.minecraft.core.component.DataComponents;\n', 1)
-          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '')
-          if 'import net.minecraft.world.item.alchemy.Potion;' not in text:
-              text = text.replace('import net.minecraft.world.item.alchemy.PotionContents;\n', 'import net.minecraft.world.item.alchemy.Potion;\nimport net.minecraft.world.item.alchemy.PotionContents;\n', 1)
-          old = '''  @Override\n  public ItemStack assemble(ICastingContainer inv, HolderLookup.Provider access) {\n    ItemStack result = new ItemStack(this.result);\n    result.setTag(inv.getFluidTag());\n    return result;\n  }\n'''
-          new = '''  @Override\n  public ItemStack assemble(ICastingContainer inv, HolderLookup.Provider access) {\n    ItemStack result = new ItemStack(this.result);\n    PotionContents contents = inv.getFluidStack().get(DataComponents.POTION_CONTENTS);\n    if (contents != null) {\n      result.set(DataComponents.POTION_CONTENTS, contents);\n    }\n    return result;\n  }\n\n  /** Gets the registered potion ID carried by a potion fluid, or an empty string when absent. */\n  protected static String getPotionId(ICastingContainer inv) {\n    PotionContents contents = inv.getFluidStack().get(DataComponents.POTION_CONTENTS);\n    if (contents == null) {\n      return \"\";\n    }\n    return contents.potion().flatMap(Holder::unwrapKey).map(key -> key.location().toString()).orElse(\"\");\n  }\n\n  /** Copies a display fluid and assigns the potion component used by 1.21 potion fluids. */\n  protected static FluidStack withPotion(FluidStack stack, Holder<Potion> potion) {\n    FluidStack copy = stack.copy();\n    copy.set(DataComponents.POTION_CONTENTS, new PotionContents(potion));\n    return copy;\n  }\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'result.setTag(inv.getFluidTag())' in text:
-              raise RuntimeError('Unexpected PotionCastingRecipe assemble shape')
-          old = '''      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {\n          ItemStack result = PotionContents.createItemStack(this.result, potion);\n          CompoundTag fluidTag = new CompoundTag();\n          fluidTag.putString(\"Potion\", potion.key().location().toString());\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), fluidTag))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();\n'''
-          new = '''      displayRecipes = BuiltInRegistries.POTION.holders()\n        .map(potion -> {\n          ItemStack result = PotionContents.createItemStack(this.result, potion);\n          return new DisplayCastingRecipe(getId(), getType(), bottles, fluid.getFluids().stream()\n                                                              .map(stack -> withPotion(stack, potion))\n                                                              .toList(),\n                                          result, coolingTime, true);\n        }).toList();\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'BuiltInRegistries.POTION.listElements()' in text:
-              raise RuntimeError('Unexpected PotionCastingRecipe display shape')
-          path.write_text(text, encoding='utf-8')
-
-          # Tipping: read the potion component directly and carry it onto display fluids.
-          path = casting / 'TippingCastingRecipe.java'
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '').replace('import net.minecraft.nbt.Tag;\n', '')
-          text = text.replace('import net.neoforged.neoforge.fluids.FluidStack;\n', '')
-          old = '''      CompoundTag fluidTag = inv.getFluidTag();\n      return fluidTag != null && fluidTag.contains(\"Potion\", Tag.TAG_STRING)\n        && !ModifierUtil.getPersistentString(stack, modifier).equals(fluidTag.getString(\"Potion\"));\n'''
-          new = '''      String potion = getPotionId(inv);\n      return !potion.isEmpty() && !ModifierUtil.getPersistentString(stack, modifier).equals(potion);\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          old = '''    CompoundTag tag = inv.getFluidTag();\n    if (tag != null) {\n      ToolStack.from(result).getPersistentData().putString(modifier, tag.getString(\"Potion\"));\n    }\n'''
-          new = '''    String potion = getPotionId(inv);\n    if (!potion.isEmpty()) {\n      ToolStack.from(result).getPersistentData().putString(modifier, potion);\n    }\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          old = '''      displayRecipes = BuiltInRegistries.POTION.listElements()\n        .map(potion -> {\n          // add the potion to the tool list\n          String id = potion.key().location().toString();\n          List<ItemStack> results = tools.stream().map(stack -> {\n            ToolStack tool = ToolStack.copyFrom(stack);\n            tool.getPersistentData().putString(modifier, id);\n            return tool.copyStack(stack);\n          }).toList();\n          // add the potion to the fluid\n          CompoundTag fluidNBT = new CompoundTag();\n          fluidNBT.putString(\"Potion\", id);\n          // create the recipe\n          return new DisplayCastingRecipe(getId(), getType(), tools, fluid.getFluids().stream()\n            .map(fluid -> new FluidStack(fluid.getFluid(), fluid.getAmount(), fluidNBT))\n            .toList(),\n            results, coolingTime, true);\n        }).toList();\n'''
-          new = '''      displayRecipes = BuiltInRegistries.POTION.holders()\n        .map(potion -> {\n          // add the potion to the tool list\n          String id = potion.key().location().toString();\n          List<ItemStack> results = tools.stream().map(stack -> {\n            ToolStack tool = ToolStack.copyFrom(stack);\n            tool.getPersistentData().putString(modifier, id);\n            return tool.copyStack(stack);\n          }).toList();\n          // create the recipe with the same potion component on each display fluid\n          return new DisplayCastingRecipe(getId(), getType(), tools, fluid.getFluids().stream()\n            .map(stack -> withPotion(stack, potion))\n            .toList(),\n            results, coolingTime, true);\n        }).toList();\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'BuiltInRegistries.POTION.listElements()' in text:
-              raise RuntimeError('Unexpected TippingCastingRecipe display shape')
-          path.write_text(text, encoding='utf-8')
-
-          # Clearing recipe: 1.21 no longer has Potions.EMPTY; holders() contains only registered potions.
-          path = casting / 'TipClearingCastingRecipe.java'
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.item.alchemy.Potions;\n', '')
-          text = text.replace('import slimeknights.mantle.data.loadable.Loadables;\n', '')
-          old = '''      List<ItemStack> toolWithPotion = BuiltInRegistries.POTION.stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .flatMap(potion -> {\n          String id = Loadables.POTION.getString(potion);\n          return tools.stream().map(stack -> {\n            ToolStack tool = ToolStack.copyFrom(stack);\n            tool.getPersistentData().putString(modifier, id);\n            return tool.copyStack(stack);\n          });\n        }).toList();\n      // list of tools without the potion set, want the sizes to match\n      List<ItemStack> toolWithoutPotion = BuiltInRegistries.POTION.stream()\n        .filter(potion -> potion != Potions.EMPTY)\n        .flatMap(i -> tools.stream()).toList();\n'''
-          new = '''      List<ItemStack> toolWithPotion = BuiltInRegistries.POTION.holders()\n        .flatMap(potion -> {\n          String id = potion.key().location().toString();\n          return tools.stream().map(stack -> {\n            ToolStack tool = ToolStack.copyFrom(stack);\n            tool.getPersistentData().putString(modifier, id);\n            return tool.copyStack(stack);\n          });\n        }).toList();\n      // list of tools without the potion set, want the sizes to match\n      List<ItemStack> toolWithoutPotion = BuiltInRegistries.POTION.holders()\n        .flatMap(i -> tools.stream()).toList();\n'''
-          if old in text:
-              text = text.replace(old, new, 1)
-          elif 'Potions.EMPTY' in text:
-              raise RuntimeError('Unexpected TipClearingCastingRecipe potion iteration shape')
+          if 'import net.minecraft.core.HolderLookup;' not in text:
+              anchor = 'import net.minecraft.core.RegistryAccess;\n'
+              if anchor not in text:
+                  raise RuntimeError('PartBuilderToolRecycle RegistryAccess import missing')
+              text = text.replace(anchor, 'import net.minecraft.core.HolderLookup;\n' + anchor, 1)
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
+              if anchor not in text:
+                  raise RuntimeError('PartBuilderToolRecycle ToolStack import missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
+          replacements = [
+              ('public ItemStack getResultItem(RegistryAccess access) {',
+               'public ItemStack getResultItem(HolderLookup.Provider access) {',
+               'Part Builder result provider'),
+              ('      part.getOrCreateTag().putBoolean(TooltipUtil.KEY_DISPLAY, true);',
+               '      ToolDataComponents.update(part, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));',
+               'Part Builder display marker'),
+              ('      json.add("pattern", pattern.toJson());',
+               '      json.add("pattern", IngredientLoadable.DISALLOW_EMPTY.serialize(pattern));',
+               'Part Builder ingredient serialization'),
+          ]
+          for old, new, label in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+              elif new not in text:
+                  raise RuntimeError(f'{label}: neither old nor new form found')
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify casting component migration
+      - name: Verify recipe data cleanup
         shell: bash
         run: |
-          grep -Fq 'FluidStack getFluidStack();' src/main/java/slimeknights/tconstruct/library/recipe/casting/ICastingContainer.java
-          grep -Fq 'public FluidStack getFluidStack()' src/main/java/slimeknights/tconstruct/smeltery/block/entity/inventory/CastingContainerWrapper.java
-          grep -Fq 'DataComponents.POTION_CONTENTS' src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java
-          grep -Fq 'BuiltInRegistries.POTION.holders()' src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java
-          grep -Fq 'String potion = getPotionId(inv);' src/main/java/slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java
-          ! grep -Fq 'BuiltInRegistries.POTION.listElements()' src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java
-          ! grep -Fq 'BuiltInRegistries.POTION.listElements()' src/main/java/slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java
-          ! grep -Fq 'Potions.EMPTY' src/main/java/slimeknights/tconstruct/library/recipe/casting/TipClearingCastingRecipe.java
-          ! grep -Fq 'new FluidStack(fluid.getFluid(), fluid.getAmount(),' src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java
+          PART_SWAP=src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java
+          TOOL_CAST=src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java
+          RECYCLE=src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java
+          grep -Fq 'ToolDataComponents.update(input, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$PART_SWAP"
+          grep -Fq 'ToolDataComponents.update(partSwapDisplay, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$TOOL_CAST"
+          grep -Fq 'getResultItem(HolderLookup.Provider access)' "$RECYCLE"
+          grep -Fq 'ToolDataComponents.update(part, tag -> tag.putBoolean(TooltipUtil.KEY_DISPLAY, true));' "$RECYCLE"
+          grep -Fq 'IngredientLoadable.DISALLOW_EMPTY.serialize(pattern)' "$RECYCLE"
+          ! grep -Fq 'getOrCreateTag()' "$PART_SWAP"
+          ! grep -Fq 'getOrCreateTag()' "$TOOL_CAST"
+          ! grep -Fq 'pattern.toJson()' "$RECYCLE"
           git diff --check
 
-      - name: Commit casting component migration
+      - name: Commit recipe data cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/ICastingContainer.java \
-            src/main/java/slimeknights/tconstruct/smeltery/block/entity/inventory/CastingContainerWrapper.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/PotionCastingRecipe.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/TippingCastingRecipe.java \
-            src/main/java/slimeknights/tconstruct/library/recipe/casting/TipClearingCastingRecipe.java
+            src/main/java/slimeknights/tconstruct/library/recipe/casting/material/PartSwapCastingRecipe.java \
+            src/main/java/slimeknights/tconstruct/library/recipe/casting/material/ToolCastingRecipe.java \
+            src/main/java/slimeknights/tconstruct/tables/recipe/PartBuilderToolRecycle.java
           git diff --cached --quiet || {
-            git commit -m 'Port potion casting to 1.21 data components'
+            git commit -m 'Port remaining recipe display data to 1.21 components'
             git push origin HEAD:1.21.1-neoforge
           }
 
