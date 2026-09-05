@@ -25,21 +25,16 @@ import javax.annotation.Nullable;
 
 /** Common shared logic for material armor models */
 public abstract class AbstractArmorModel extends Model {
-  /** Base model instance for rendering */
   @Nullable
   protected HumanoidModel<?> base;
-  /** If true, applies the enchantment glint to extra layers */
   protected boolean hasGlint = false;
-  /** If true, uses the legs texture */
   protected TextureType textureType = TextureType.ARMOR;
-
   protected boolean hasWings = false;
 
   protected AbstractArmorModel() {
     super(RenderType::entityCutoutNoCull);
   }
 
-  /** Sets up the model given the passed arguments */
   protected void setup(LivingEntity living, ItemStack stack, EquipmentSlot slot, HumanoidModel<?> base) {
     this.base = base;
     this.hasGlint = stack.hasFoil();
@@ -56,6 +51,14 @@ public abstract class AbstractArmorModel extends Model {
     }
   }
 
+  /** Packs float RGBA channels into the ARGB color expected by 1.21 model rendering. */
+  public static int packColor(float red, float green, float blue, float alpha) {
+    return ((int)(alpha * 255.0F) & 255) << 24
+      | ((int)(red * 255.0F) & 255) << 16
+      | ((int)(green * 255.0F) & 255) << 8
+      | (int)(blue * 255.0F) & 255;
+  }
+
   /** Renders a colored model */
   public static void renderColored(Model model, PoseStack matrices, VertexConsumer buffer, int packedLightIn, int packedOverlayIn, int color, float red, float green, float blue, float alpha) {
     if (color != -1) {
@@ -64,10 +67,9 @@ public abstract class AbstractArmorModel extends Model {
       green *= (float)(color >> 8 & 255) / 255.0F;
       blue *= (float)(color & 255) / 255.0F;
     }
-    model.renderToBuffer(matrices, buffer, packedLightIn, packedOverlayIn, red, green, blue, alpha);
+    model.renderToBuffer(matrices, buffer, packedLightIn, packedOverlayIn, packColor(red, green, blue, alpha));
   }
 
-  /** Renders the wings layer */
   protected void renderWings(PoseStack matrices, int packedLightIn, int packedOverlayIn, ArmorTexture texture, float red, float green, float blue, float alpha, boolean hasGlint) {
     matrices.pushPose();
     matrices.translate(0.0D, 0.0D, 0.125D);
@@ -76,25 +78,17 @@ public abstract class AbstractArmorModel extends Model {
     matrices.popPose();
   }
 
-
-  /* Helpers */
-
-  /** Buffer from the render living event, stored as we lose access to it later */
   @Nullable
   public static MultiBufferSource buffer;
 
-  /** Initializes the wrapper */
   public static void init() {
-    // register listeners to set and clear the buffer
     NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, RenderLivingEvent.Pre.class, event -> buffer = event.getMultiBufferSource());
     NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, RenderLivingEvent.Post.class, event -> buffer = null);
   }
 
-  /** Wings model to render */
   @Nullable
   private static ElytraModel<LivingEntity> wingsModel;
 
-  /** Gets or creates the elytra model */
   private ElytraModel<LivingEntity> getWings() {
     if (wingsModel == null) {
       wingsModel = new ElytraModel<>(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.ELYTRA));
@@ -102,7 +96,6 @@ public abstract class AbstractArmorModel extends Model {
     return wingsModel;
   }
 
-  /** Handles the unchecked cast to copy entity model properties */
   @SuppressWarnings("unchecked")
   public static <T extends LivingEntity> void copyProperties(EntityModel<T> base, EntityModel<?> other) {
     base.copyPropertiesTo((EntityModel<T>)other);

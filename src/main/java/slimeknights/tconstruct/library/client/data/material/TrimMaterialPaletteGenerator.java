@@ -32,7 +32,6 @@ public class TrimMaterialPaletteGenerator extends GenericTextureGenerator {
     this.materials = materials;
   }
 
-  /** Gets the sprite transformer for the given material */
   protected ISpriteTransformer getTransformer(MaterialId material) {
     return Objects.requireNonNull(materialProvider.getMaterialInfo(material), "Missing material provider " + material).getTransformer();
   }
@@ -43,7 +42,6 @@ public class TrimMaterialPaletteGenerator extends GenericTextureGenerator {
     assert existingFileHelper != null;
     DataGenSpriteReader spriteReader = new DataGenSpriteReader(existingFileHelper, PALETTE_TEXTURES);
     try {
-      // create JSON of all materials for compat with trimmed
       JsonObject trimmedJson = new JsonObject();
       JsonObject values = new JsonObject();
       for (MaterialId material : materials) {
@@ -51,7 +49,7 @@ public class TrimMaterialPaletteGenerator extends GenericTextureGenerator {
       }
       trimmedJson.add("pairs", values);
 
-      NativeImage original = spriteReader.read(new ResourceLocation("trim_palette"));
+      NativeImage original = spriteReader.read(ResourceLocation.withDefaultNamespace("trim_palette"));
       return allOf(Stream.concat(
         Stream.of(saveJson(cache, new ResourceLocation("trimmed", "maps/unchecked/custom_trim_material_permutations"), trimmedJson)),
         Arrays.stream(materials).map(

@@ -3,10 +3,12 @@ package slimeknights.tconstruct.library.client.armor.texture;
 import lombok.RequiredArgsConstructor;
 import net.minecraft.Util;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.mantle.data.loadable.field.LoadableField;
 import slimeknights.mantle.data.loadable.primitive.IntLoadable;
@@ -23,10 +25,8 @@ import java.util.function.Function;
 /** Logic to create material texture variants for armor */
 @RequiredArgsConstructor
 public abstract class MaterialArmorTextureSupplier implements ArmorTextureSupplier {
-  /** Field for parsing the variant from JSON */
   private static final LoadableField<ResourceLocation,MaterialArmorTextureSupplier> PREFIX_FIELD = Loadables.RESOURCE_LOCATION.requiredField("prefix", m -> m.prefix);
 
-  /** Makes a texture for the given variant and material, returns null if its missing */
   private static ArmorTexture tryTexture(ResourceLocation name, int color, int luminosity, String material) {
     ResourceLocation texture = name.withSuffix(material);
     if (TEXTURE_VALIDATOR.test(texture)) {
@@ -35,13 +35,10 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
     return ArmorTexture.EMPTY;
   }
 
-  /** Makes a material getter for the given base and type */
   public static Function<String,ArmorTexture> materialGetter(ResourceLocation name) {
-    // if the base texture does not exist, means we decided to skip this piece. Notably used for skipping some layers of wings
     if (!TEXTURE_VALIDATOR.test(name)) {
       return material -> ArmorTexture.EMPTY;
     }
-    // TODO: consider memoizing these functions, as if the same name appears twice in different models we can reuse it
     return Util.memoize(materialStr -> {
       if (!materialStr.isEmpty()) {
         MaterialVariantId material = MaterialVariantId.tryParse(materialStr);
@@ -68,7 +65,6 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
             }
           }
         }
-        // base texture guaranteed to exist, else we would not be in this function
         return new TintedArmorTexture(ArmorTextureSupplier.getTexturePath(name), color, luminosity);
       }
       return ArmorTexture.EMPTY;
@@ -80,14 +76,13 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
   @SuppressWarnings("unchecked")
   public MaterialArmorTextureSupplier(ResourceLocation prefix) {
     this.prefix = prefix;
-      this.textures = new Function[] {
+    this.textures = new Function[] {
       materialGetter(prefix.withSuffix("armor")),
       materialGetter(prefix.withSuffix("leggings")),
       materialGetter(prefix.withSuffix("wings"))
     };
   }
 
-  /** Gets the material from a given stack */
   protected abstract String getMaterial(ItemStack stack);
 
   @Override
@@ -99,7 +94,6 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
     return ArmorTexture.EMPTY;
   }
 
-  /** Material supplier using persistent data */
   public static class PersistentData extends MaterialArmorTextureSupplier {
     public static final RecordLoadable<PersistentData> LOADER = RecordLoadable.create(
       PREFIX_FIELD,
@@ -128,7 +122,6 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
     }
   }
 
-  /** Material supplier using material data */
   public static class Material extends MaterialArmorTextureSupplier {
     public static final RecordLoadable<Material> LOADER = RecordLoadable.create(
       PREFIX_FIELD,
@@ -147,8 +140,8 @@ public abstract class MaterialArmorTextureSupplier implements ArmorTextureSuppli
 
     @Override
     protected String getMaterial(ItemStack stack) {
-      CompoundTag tag = stack.getTag();
-      if (tag != null && tag.contains(ToolStack.TAG_MATERIALS, Tag.TAG_LIST)) {
+      CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+      if (tag.contains(ToolStack.TAG_MATERIALS, Tag.TAG_LIST)) {
         return tag.getList(ToolStack.TAG_MATERIALS, Tag.TAG_STRING).getString(index);
       }
       return "";
