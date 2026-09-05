@@ -1,4 +1,4 @@
-name: Tinkers Model Data Component Cleanup
+name: Tinkers Item Client API Cleanup
 
 on:
   push:
@@ -23,123 +23,86 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port residual model data APIs to 1.21
+      - name: Port item client and fluid copy APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # MaterialBlockModel has two distinct data stores: TOOL_DATA for full tools, CUSTOM_DATA for parts/retextures.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java')
+          # Item properties read Tinkers TOOL_DATA rather than removed raw ItemStack NBT.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import slimeknights.tconstruct.library.tools.nbt.MaterialIdNBT;\n'
-          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
-              if anchor not in text: raise RuntimeError('MaterialBlockModel ToolData import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n', 1)
-          anchor = 'import slimeknights.tconstruct.library.tools.part.IMaterialItem;\n'
-          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
-              if anchor not in text: raise RuntimeError('MaterialBlockModel TagUtil import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
-          old = '      if (stack.isEmpty() || !stack.hasTag()) {'
-          if text.count(old) != 3:
-              raise RuntimeError(f'MaterialBlockModel expected 3 legacy tag guards, found {text.count(old)}')
-          text = text.replace(old, '      if (stack.isEmpty() || ToolDataComponents.getTag(stack) == null) {', 1)
-          text = text.replace(old, '        if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
-          text = text.replace(old, '        if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
-          path.write_text(text, encoding='utf-8')
-
-          # Tool model stored ammo is still legacy CompoundTag inside modifier data; parse via the 1.21 registry-aware helper.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.nbt.CompoundTag;\n', '')
           anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
-          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
-              if anchor not in text: raise RuntimeError('ToolModel TagUtil import anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
-          old = '''        ammo = ItemStack.of(persistentData.getCompound(ammoKey));\n        builder.add(ammo.getItem());\n        CompoundTag tag = ammo.getTag();\n        if (tag != null) {\n          builder.add(tag);\n        }'''
-          new = '''        ammo = TagUtil.readItem(persistentData.getCompound(ammoKey));\n        builder.add(ammo.getItem());\n        builder.add(ammo.getComponents());'''
-          if text.count(old) != 1:
-              raise RuntimeError('ToolModel stored-ammo block changed unexpectedly')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          # Fluid container model: retain legacy JSON NBT compatibility through Mantle NBTLoadable + Tinkers custom-data helper.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
-          anchor = 'import slimeknights.mantle.data.loadable.Loadables;\n'
-          if 'import slimeknights.mantle.data.loadable.common.NBTLoadable;' not in text:
-              if anchor not in text: raise RuntimeError('FluidContainerModel NBTLoadable anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.mantle.data.loadable.common.NBTLoadable;\n', 1)
-          anchor = 'import slimeknights.tconstruct.TConstruct;\n'
-          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
-              if anchor not in text: raise RuntimeError('FluidContainerModel TagUtil anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
-          text = text.replace('tag = CraftingHelper.getNBT(fluidObject.get("nbt"));', 'tag = NBTLoadable.ALLOW_STRING.convert(fluidObject.get("nbt"), "nbt");')
-          text = text.replace('fluidStack = new FluidStack(fluid, FluidType.BUCKET_VOLUME, tag);', 'fluidStack = TagUtil.createFluidStack(fluid, FluidType.BUCKET_VOLUME, tag);')
-          text = text.replace('UnbakedGeometryHelper.createUnbakedItemElements(0, baseSprite.contents())', 'UnbakedGeometryHelper.createUnbakedItemElements(0, baseSprite)')
-          text = text.replace('UnbakedGeometryHelper.createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")).contents())', 'UnbakedGeometryHelper.createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")))')
-          text = text.replace('        $ -> baseSprite, modelState, modelLocation\n', '        $ -> baseSprite, modelState\n')
-          text = text.replace('        new SimpleModelState(modelState.getRotation().compose(FLUID_TRANSFORM), modelState.isUvLocked()),\n        modelLocation\n', '        new SimpleModelState(modelState.getRotation().compose(FLUID_TRANSFORM), modelState.isUvLocked())\n')
-          if 'CraftingHelper.getNBT' in text or 'new FluidStack(fluid, FluidType.BUCKET_VOLUME, tag)' in text or '.contents()),\n        $ ->' in text:
-              raise RuntimeError('FluidContainerModel legacy APIs remain after migration')
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              if anchor not in text: raise RuntimeError('TinkerItemProperties ToolData import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
+          if text.count('CompoundTag nbt = stack.getTag();') != 1:
+              raise RuntimeError('TinkerItemProperties legacy stack tag access changed unexpectedly')
+          text = text.replace('CompoundTag nbt = stack.getTag();', 'CompoundTag nbt = ToolDataComponents.getTag(stack);', 1)
+          if text.count('stack.getUseDuration()') != 1:
+              raise RuntimeError('TinkerItemProperties use duration call changed unexpectedly')
+          text = text.replace('stack.getUseDuration()', 'stack.getUseDuration(holder)', 1)
           path.write_text(text, encoding='utf-8')
 
-          # Item overrides can query their component-backed helpers directly.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java')
+          # Crossbow arm pose uses the same component-backed tool data.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import slimeknights.tconstruct.smeltery.item.TankItem;\n'
-          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
-              if anchor not in text: raise RuntimeError('TankModel TagUtil anchor missing')
-              text = text.replace(anchor, 'import slimeknights.tconstruct.library.utils.TagUtil;\n' + anchor, 1)
-          if text.count('if (stack.isEmpty() || !stack.hasTag()) {') != 1:
-              raise RuntimeError('TankModel legacy tag guard changed unexpectedly')
-          text = text.replace('if (stack.isEmpty() || !stack.hasTag()) {', 'if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
+          anchor = 'import slimeknights.tconstruct.library.tools.nbt.ToolStack;\n'
+          if 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;' not in text:
+              if anchor not in text: raise RuntimeError('Crossbow client ToolData import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;\n' + anchor, 1)
+          if text.count('CompoundTag tag = stack.getTag();') != 1:
+              raise RuntimeError('Crossbow client legacy stack tag access changed unexpectedly')
+          text = text.replace('CompoundTag tag = stack.getTag();', 'CompoundTag tag = ToolDataComponents.getTag(stack);', 1)
           path.write_text(text, encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java')
+          # Minecraft 1.21 use duration is entity-aware.
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import slimeknights.tconstruct.library.client.model.ModelProperties;\n'
-          if 'import slimeknights.tconstruct.library.utils.TagUtil;' not in text:
-              if anchor not in text: raise RuntimeError('FluidTextureModel TagUtil anchor missing')
-              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.utils.TagUtil;\n', 1)
-          if text.count('if (stack.isEmpty() || !stack.hasTag()) {') != 1:
-              raise RuntimeError('FluidTextureModel legacy tag guard changed unexpectedly')
-          text = text.replace('if (stack.isEmpty() || !stack.hasTag()) {', 'if (stack.isEmpty() || !TagUtil.hasTag(stack)) {', 1)
+          count = text.count('stack.getUseDuration()')
+          if count != 3:
+              raise RuntimeError(f'ModifiableItemClientExtension expected 3 old duration calls, found {count}')
+          text = text.replace('stack.getUseDuration()', 'stack.getUseDuration(player)')
+          path.write_text(text, encoding='utf-8')
+
+          # FluidStack copy constructors were replaced by copyWithAmount(), preserving all data components.
+          path = Path('src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java')
+          text = path.read_text(encoding='utf-8')
+          if text.count('new FluidStack(resource, amount)') != 1:
+              raise RuntimeError('SimpleFluidTank fill copy changed unexpectedly')
+          if text.count('new FluidStack(fluid, drained)') != 1:
+              raise RuntimeError('SimpleFluidTank drain copy changed unexpectedly')
+          text = text.replace('new FluidStack(resource, amount)', 'resource.copyWithAmount(amount)', 1)
+          text = text.replace('new FluidStack(fluid, drained)', 'fluid.copyWithAmount(drained)', 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify model data cleanup
+      - name: Verify item client cleanup
         shell: bash
         run: |
-          grep -Fq 'ToolDataComponents.getTag(stack) == null' src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java
-          test "$(grep -F -c '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java)" -eq 2
-          grep -Fq 'ammo = TagUtil.readItem' src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java
-          grep -Fq 'builder.add(ammo.getComponents());' src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java
-          grep -Fq 'NBTLoadable.ALLOW_STRING.convert' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq 'TagUtil.createFluidStack' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq 'createUnbakedItemElements(0, baseSprite)' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq 'createUnbakedItemMaskElements(1, spriteGetter.apply(context.getMaterial("fluid")))' src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java
-          grep -Fq '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java
-          grep -Fq '!TagUtil.hasTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
-          ! grep -R -F 'stack.hasTag()' \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
+          grep -Fq 'ToolDataComponents.getTag(stack)' src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java
+          grep -Fq 'stack.getUseDuration(holder)' src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java
+          grep -Fq 'ToolDataComponents.getTag(stack)' src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java
+          test "$(grep -F -c 'stack.getUseDuration(player)' src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java)" -eq 3
+          grep -Fq 'resource.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
+          grep -Fq 'fluid.copyWithAmount(drained)' src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
+          ! grep -R -F 'stack.getUseDuration()' \
+            src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java \
+            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java
           git diff --check
 
-      - name: Commit model data cleanup
+      - name: Commit item client cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/MaterialBlockModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/tools/ToolModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/FluidContainerModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/TankModel.java \
-            src/main/java/slimeknights/tconstruct/library/client/model/block/FluidTextureModel.java
+            src/main/java/slimeknights/tconstruct/library/client/model/TinkerItemProperties.java \
+            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableCrossbowClientExtension.java \
+            src/main/java/slimeknights/tconstruct/library/client/item/ModifiableItemClientExtension.java \
+            src/main/java/slimeknights/tconstruct/library/fluid/SimpleFluidTank.java
           git diff --cached --quiet || {
-            git commit -m 'Port residual model data APIs to 1.21 components'
+            git commit -m 'Port item client duration and fluid copy APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
