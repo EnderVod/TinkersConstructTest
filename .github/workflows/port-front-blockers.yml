@@ -1,4 +1,4 @@
-name: Tinkers Port Compile Dispatch
+name: Tinkers Common Holder and Loot Migration
 
 on:
   push:
@@ -9,14 +9,111 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: write
   actions: write
-  contents: read
 
 jobs:
-  dispatch:
+  migrate:
     runs-on: ubuntu-24.04
     steps:
-      - name: Start Tinkers compile
+      - name: Checkout port branch
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Apply guarded 1.21 holder and loot API migration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('src/main/java')
+
+          # 1.21 attribute accessors consume Holder<Attribute>; our DeferredHolder is already a holder.
+          attr_pattern = re.compile(r'getAttributeValue\(TinkerAttributes\.([A-Z_]+)\.get\(\)\)')
+          attr_count = 0
+          for path in root.rglob('*.java'):
+              text = path.read_text()
+              text2, count = attr_pattern.subn(r'getAttributeValue(TinkerAttributes.\1)', text)
+              if count:
+                  path.write_text(text2)
+                  attr_count += count
+          if attr_count != 12:
+              raise SystemExit(f'Expected 12 direct TinkerAttributes holder migrations, found {attr_count}')
+
+          # Conditional holder expression in ModifierEvents is not covered by the direct-call regex above.
+          modifier_events = root / 'slimeknights/tconstruct/tools/logic/ModifierEvents.java'
+          text = modifier_events.read_text()
+          old = 'beneficial ? TinkerAttributes.GOOD_EFFECT_DURATION.get() : TinkerAttributes.BAD_EFFECT_DURATION.get()'
+          new = 'beneficial ? TinkerAttributes.GOOD_EFFECT_DURATION : TinkerAttributes.BAD_EFFECT_DURATION'
+          if text.count(old) != 1:
+              raise SystemExit('ModifierEvents effect-duration attribute guard failed')
+          modifier_events.write_text(text.replace(old, new))
+
+          # TinkerEffects has a compatibility helper that resolves DeferredHolder subclasses to Holder<MobEffect>.
+          effect_patterns = [
+              (re.compile(r'getEffect\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\)\)'), r'getEffect(TinkerEffects.holder(TinkerEffects.\1))', 2),
+              (re.compile(r'hasEffect\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\)\)'), r'hasEffect(TinkerEffects.holder(TinkerEffects.\1))', 3),
+              (re.compile(r'new MobEffectInstance\(TinkerEffects\.([A-Za-z0-9_]+)\.get\(\),'), r'new MobEffectInstance(TinkerEffects.holder(TinkerEffects.\1),', 2),
+          ]
+          for pattern, replacement, expected in effect_patterns:
+              found = 0
+              for path in root.rglob('*.java'):
+                  text = path.read_text()
+                  text2, count = pattern.subn(replacement, text)
+                  if count:
+                      path.write_text(text2)
+                      found += count
+              if found != expected:
+                  raise SystemExit(f'TinkerEffects holder guard failed: expected {expected}, found {found} for {pattern.pattern}')
+
+          # These TinkerModifiers fields are mob-effect DeferredHolders; use the same holder bridge without imports.
+          modifier_effect_patterns = [
+              (re.compile(r'hasEffect\(TinkerModifiers\.([A-Za-z0-9_]+)\.get\(\)\)'), r'hasEffect(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.\1))', 3),
+              (re.compile(r'new MobEffectInstance\(TinkerModifiers\.([A-Za-z0-9_]+)\.get\(\),'), r'new MobEffectInstance(slimeknights.tconstruct.shared.TinkerEffects.holder(TinkerModifiers.\1),', 3),
+          ]
+          for pattern, replacement, expected in modifier_effect_patterns:
+              found = 0
+              for path in root.rglob('*.java'):
+                  text = path.read_text()
+                  text2, count = pattern.subn(replacement, text)
+                  if count:
+                      path.write_text(text2)
+                      found += count
+              if found != expected:
+                  raise SystemExit(f'TinkerModifiers effect holder guard failed: expected {expected}, found {found} for {pattern.pattern}')
+
+          # NeoForge 1.21 global loot modifiers use MapCodec and renamed attacking-entity context params.
+          loot = root / 'slimeknights/tconstruct/tools/modifiers/ModifierLootModifier.java'
+          text = loot.read_text()
+          replacements = [
+              ('import com.mojang.serialization.Codec;', 'import com.mojang.serialization.MapCodec;'),
+              ('public static final Codec<ModifierLootModifier> CODEC = RecordCodecBuilder.create(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));',
+               'public static final MapCodec<ModifierLootModifier> CODEC = RecordCodecBuilder.mapCodec(inst -> codecStart(inst).apply(inst, ModifierLootModifier::new));'),
+              ('LootContextParams.DIRECT_KILLER_ENTITY', 'LootContextParams.DIRECT_ATTACKING_ENTITY'),
+              ('LootContextParams.KILLER_ENTITY', 'LootContextParams.ATTACKING_ENTITY'),
+              ('public Codec<? extends IGlobalLootModifier> codec()', 'public MapCodec<? extends IGlobalLootModifier> codec()'),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'ModifierLootModifier guard failed for: {old}')
+              text = text.replace(old, new)
+          loot.write_text(text)
+          PY
+
+          git diff --check
+          git diff --stat
+
+      - name: Commit migrated source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java
+          git diff --cached --quiet && { echo 'No source changes produced'; exit 1; }
+          git commit -m 'Port attribute effect holders and loot modifier API to 1.21'
+          git push origin HEAD:1.21.1-neoforge
+
+      - name: Start fresh compile
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run port-compile.yml --repo EnderVod/TinkersConstructTest --ref 1.21.1-neoforge
