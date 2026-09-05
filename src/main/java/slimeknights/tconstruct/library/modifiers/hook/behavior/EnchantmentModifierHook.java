@@ -1,7 +1,10 @@
 package slimeknights.tconstruct.library.modifiers.hook.behavior;
 
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
@@ -9,6 +12,7 @@ import slimeknights.tconstruct.library.modifiers.hook.mining.BlockHarvestModifie
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 import slimeknights.tconstruct.library.tools.nbt.ToolStack;
 
+import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -56,7 +60,13 @@ public interface EnchantmentModifierHook {
    * @return  Enchantment level
    */
   static int getEnchantmentLevel(ItemStack stack, Enchantment enchantment) {
-    int level = EnchantmentHelper.getTagEnchantmentLevel(enchantment, stack);
+    int level = 0;
+    for (var entry : stack.getEnchantments().entrySet()) {
+      if (entry.getKey().value() == enchantment) {
+        level = entry.getIntValue();
+        break;
+      }
+    }
     IToolStackView tool = ToolStack.from(stack);
     for (ModifierEntry entry : tool.getModifierList()) {
       level = entry.getHook(ModifierHooks.ENCHANTMENTS).updateEnchantmentLevel(tool, entry, enchantment, level);
@@ -65,13 +75,35 @@ public interface EnchantmentModifierHook {
     return Math.max(level, 0);
   }
 
+  /** Gets the stack enchantment component as the legacy raw-enchantment map used by modifier hooks. */
+  static Map<Enchantment,Integer> getStoredEnchantments(ItemStack stack) {
+    Map<Enchantment,Integer> enchantments = new HashMap<>();
+    for (var entry : stack.getEnchantments().entrySet()) {
+      enchantments.put(entry.getKey().value(), entry.getIntValue());
+    }
+    return enchantments;
+  }
+
+  /** Applies a legacy raw-enchantment map through the active dynamic enchantment registry. */
+  static void setEnchantments(ItemStack stack, RegistryAccess registryAccess, Map<Enchantment,Integer> enchantments) {
+    ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(stack.getEnchantments());
+    mutable.removeIf(holder -> true);
+    var registry = registryAccess.registryOrThrow(Registries.ENCHANTMENT);
+    enchantments.forEach((enchantment, level) -> {
+      if (level > 0) {
+        mutable.set(registry.wrapAsHolder(enchantment), level);
+      }
+    });
+    EnchantmentHelper.setEnchantments(stack, mutable.toImmutable());
+  }
+
   /**
    * Gets all enchantments on the given stack
    * @param stack  Stack instance
    * @return  All contained enchantments
    */
   static Map<Enchantment,Integer> getAllEnchantments(ItemStack stack) {
-    Map<Enchantment,Integer> enchantments = EnchantmentHelper.getEnchantments(stack);
+    Map<Enchantment,Integer> enchantments = getStoredEnchantments(stack);
     IToolStackView tool = ToolStack.from(stack);
     for (ModifierEntry entry : tool.getModifierList()) {
       entry.getHook(ModifierHooks.ENCHANTMENTS).updateEnchantments(tool, entry, enchantments);

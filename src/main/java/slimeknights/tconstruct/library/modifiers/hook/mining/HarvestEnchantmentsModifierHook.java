@@ -1,11 +1,10 @@
 package slimeknights.tconstruct.library.modifiers.hook.mining;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
@@ -57,13 +56,13 @@ public interface HarvestEnchantmentsModifierHook {
    * @return  Old tag if enchants were applied
    */
   @Nullable
-  static ListTag updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context) {
+  static ItemEnchantments updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context) {
     Player player = context.getPlayer();
     if (player == null || !player.isCreative()) {
       // assuming we have a modifiable tool, we iterate all tools other than the main hand (since the main hand is in charge of harvesting the blocks)
       EquipmentContext equipmentContext = EquipmentContext.withTool(context.getLiving(), tool, EquipmentSlot.MAINHAND);
       // lazily parse the enchantment map, wait until someone has a hook
-      ListTag originalEnchants = null;
+      ItemEnchantments originalEnchants = null;
       Map<Enchantment,Integer> enchantments = null;
       // run on all slots except main hand, to prevent double applying luck
       // TODO 1.21: take advantage of the enchantment slot filter to avoid that instead; not like armor can be in the main hand when this runs
@@ -78,8 +77,8 @@ public interface HarvestEnchantmentsModifierHook {
             if (hook != null) {
               // if we have not yet parsed the enchantments, time to do so
               if (enchantments == null) {
-                originalEnchants = stack.getEnchantmentTags();
-                enchantments = EnchantmentHelper.deserializeEnchantments(originalEnchants);
+                originalEnchants = stack.getEnchantments();
+                enchantments = EnchantmentModifierHook.getStoredEnchantments(stack);
               }
               hook.updateHarvestEnchantments(armor, entry, context, equipmentContext, slot, enchantments);
             }
@@ -90,7 +89,7 @@ public interface HarvestEnchantmentsModifierHook {
       if (enchantments != null) {
         // we allow 0 values for enchantments in the hook
         enchantments.values().removeIf(EnchantmentModifierHook.VALUE_REMOVER);
-        EnchantmentHelper.setEnchantments(enchantments, stack);
+        EnchantmentModifierHook.setEnchantments(stack, context.getWorld().registryAccess(), enchantments);
         return originalEnchants;
       }
     }
@@ -102,15 +101,8 @@ public interface HarvestEnchantmentsModifierHook {
    * @param stack        Stack to clear enchants
    * @param originalTag  Original list of enchantments. If empty, will remove the tag
    */
-  static void restoreEnchantments(ItemStack stack, ListTag originalTag) {
-    CompoundTag nbt = stack.getTag();
-    if (nbt != null) {
-      if (originalTag.isEmpty()) {
-        nbt.remove(TAG_ENCHANTMENTS);
-      } else {
-        nbt.put(TAG_ENCHANTMENTS, originalTag);
-      }
-    }
+  static void restoreEnchantments(ItemStack stack, ItemEnchantments originalEnchantments) {
+    EnchantmentHelper.setEnchantments(stack, originalEnchantments);
   }
 
 

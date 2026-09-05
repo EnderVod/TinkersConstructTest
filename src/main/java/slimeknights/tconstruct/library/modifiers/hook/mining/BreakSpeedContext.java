@@ -11,7 +11,7 @@ import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.BreakSpeed;
 import org.jetbrains.annotations.ApiStatus.Internal;
@@ -74,8 +74,8 @@ public sealed interface BreakSpeedContext {
       }
     }
     // water
-    if (entity.isEyeInFluid(FluidTags.WATER) && !EnchantmentHelper.hasAquaAffinity(entity)) {
-      modifier /= 5.0F;
+    if (entity.isEyeInFluid(FluidTags.WATER)) {
+      modifier *= (float)entity.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);
     }
     if (!entity.onGround()) {
       modifier /= 5.0F;
