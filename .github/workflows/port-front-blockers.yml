@@ -32,10 +32,16 @@ jobs:
           # Durability capability moved from Item to component-bearing ItemStack.
           path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java')
           text = path.read_text(encoding='utf-8')
-          count = text.count('stack.getItem().canBeDepleted()')
-          if count != 2:
-              raise RuntimeError(f'DurabilityDisplayModifierHook expected 2 canBeDepleted calls, found {count}')
-          text = text.replace('stack.getItem().canBeDepleted()', 'stack.isDamageableItem()')
+          old = 'if (!stack.getItem().canBeDepleted() || !stack.is(TinkerTags.Items.DURABILITY)) {'
+          new = 'if (!stack.isDamageableItem() || !stack.is(TinkerTags.Items.DURABILITY)) {'
+          if text.count(old) != 1:
+              raise RuntimeError('DurabilityDisplayModifierHook stack durability check changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = 'return tool.getItem().canBeDepleted() && tool.getDamage() > 0;'
+          new = 'return tool.getDamage() > 0;'
+          if text.count(old) != 1:
+              raise RuntimeError('DurabilityDisplayModifierHook fallback durability check changed unexpectedly')
+          text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
 
           # Adventure-mode placement predicate is still exposed directly on ItemStack under its 1.21 name.
@@ -78,7 +84,8 @@ jobs:
       - name: Verify small compatibility cleanup
         shell: bash
         run: |
-          test "$(grep -F -c 'stack.isDamageableItem()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java)" -ge 2
+          grep -Fq '!stack.isDamageableItem()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
+          grep -Fq 'return tool.getDamage() > 0;' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
           ! grep -Fq 'canBeDepleted()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
           grep -Fq 'stack.canPlaceOnBlockInAdventureMode(new BlockInWorld' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
           ! grep -Fq 'hasAdventureModePlaceTagForBlock' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
