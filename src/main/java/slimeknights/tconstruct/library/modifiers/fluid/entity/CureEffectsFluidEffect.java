@@ -7,6 +7,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import slimeknights.mantle.data.loadable.common.ItemStackLoadable;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
+import slimeknights.tconstruct.library.modifiers.EffectCureHelper;
 import slimeknights.tconstruct.library.modifiers.fluid.EffectLevel;
 import slimeknights.tconstruct.library.modifiers.fluid.FluidEffect;
 import slimeknights.tconstruct.library.modifiers.fluid.FluidEffectContext;
@@ -27,12 +28,13 @@ public record CureEffectsFluidEffect(ItemStack stack) implements FluidEffect<Flu
   public float apply(FluidStack fluid, EffectLevel level, Entity context, FluidAction action) {
     LivingEntity target = context.getLivingTarget();
     if (target != null && level.isFull()) {
-      // when simulating, search the effects list directly for curative effects
+      var cure = EffectCureHelper.fromStack(stack);
+      // when simulating, search the effects list directly for the selected cure
       // may still be wrong if the event cancels things though, no way to safely simulate it
       if (action.simulate()) {
-        return target.getActiveEffects().stream().anyMatch(effect -> effect.isCurativeItem(stack)) ? 1 : 0;
+        return target.getActiveEffects().stream().anyMatch(effect -> effect.getCures().contains(cure)) ? 1 : 0;
       }
-      return target.curePotionEffects(stack) ? 1 : 0;
+      return target.removeEffectsCuredBy(cure) ? 1 : 0;
     }
     return 0;
   }

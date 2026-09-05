@@ -9,6 +9,7 @@ import slimeknights.mantle.data.loadable.common.ItemStackLoadable;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.data.predicate.IJsonPredicate;
 import slimeknights.mantle.data.predicate.entity.LivingEntityPredicate;
+import slimeknights.tconstruct.library.modifiers.EffectCureHelper;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.EdibleEffectHook;
@@ -46,7 +47,7 @@ public record EdibleCureEffectsModule(ItemStack curativeItem, IJsonPredicate<Liv
   @Override
   public void onToolEaten(IToolStackView tool, ModifierEntry modifier, Player player, EquipmentSlot eatenSlot, int hunger, float saturation, List<ItemStack> representativeItems) {
     if (condition.matches(tool, modifier) && holder.matches(player)) {
-      player.curePotionEffects(curativeItem);
+      player.removeEffectsCuredBy(EffectCureHelper.fromStack(curativeItem));
     }
   }
 }
