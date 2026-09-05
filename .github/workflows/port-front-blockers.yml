@@ -1,4 +1,4 @@
-name: Tinkers Client API Compatibility Migration
+name: Tinkers Port Compile Dispatch
 
 on:
   push:
@@ -9,107 +9,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  actions: write
+  contents: read
 
 jobs:
-  migrate:
+  dispatch:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
-      - name: Checkout latest port
-        uses: actions/checkout@v4
-        with:
-          ref: 1.21.1-neoforge
-          fetch-depth: 0
-
-      - name: Port client and packet APIs
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def rep(path, old, new, count=1):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              actual = text.count(old)
-              if actual != count:
-                  raise RuntimeError(f'{path}: expected {count} matches, got {actual}: {old[:100]!r}')
-              p.write_text(text.replace(old, new, count), encoding='utf-8')
-
-          menu = 'src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java'
-          rep(menu,
-              '.getRecipeFor(RecipeType.CRAFTING, input, player.level(), null);',
-              '.getRecipeFor(RecipeType.CRAFTING, input, player.level(), (RecipeHolder<CraftingRecipe>) null);')
-
-          interaction = 'src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java'
-          rep(interaction, '    // not sure if anyone sets the result, but just in case listen to it so they can stop us running\n', '', 2)
-          rep(interaction, '    if (event.getCancellationResult() != InteractionResult.PASS) {\n      return;\n    }\n', '', 2)
-          rep(interaction, '        // set the result so later listeners see we did something\n', '', 2)
-          rep(interaction, '        event.setCancellationResult(result);\n', '', 2)
-
-          sprite = 'src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java'
-          rep(sprite, 'import com.mojang.serialization.Codec;\n', 'import com.mojang.serialization.Codec;\nimport com.mojang.serialization.MapCodec;\n')
-          rep(sprite, 'import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;\n', 'import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;\nimport net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;\n')
-          rep(sprite, 'import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;\n', '')
-          rep(sprite, 'import net.minecraft.server.packs.resources.ResourceManager;\n', 'import net.minecraft.server.packs.resources.ResourceManager;\nimport net.minecraft.server.packs.resources.ResourceMetadata;\n')
-          rep(sprite,
-              'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group(',
-              'public static final MapCodec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>mapCodec(inst -> inst.group(')
-          rep(sprite, '    public SpriteContents get() {', '    public SpriteContents apply(SpriteResourceLoader loader) {')
-          rep(sprite,
-              'return new SpriteContents(this.output, new FrameSize(generated.getWidth(), generated.getHeight()), generated, AnimationMetadataSection.EMPTY, null);',
-              'return new SpriteContents(this.output, new FrameSize(generated.getWidth(), generated.getHeight()), generated, ResourceMetadata.EMPTY);')
-
-          movement = 'src/main/java/slimeknights/tconstruct/tools/network/EntityMovementChangePacket.java'
-          rep(movement, '  public void handleThreadsafe(IPayloadContext context) {\n    if (context.getSender() != null) {\n      HandleClient.handle(this);\n    }\n  }', '  public void handleThreadsafe(IPayloadContext context) {\n    HandleClient.handle(this);\n  }')
-
-          fluid = 'src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java'
-          rep(fluid, 'import net.minecraft.network.FriendlyByteBuf;\n', 'import net.minecraft.network.FriendlyByteBuf;\nimport net.minecraft.network.RegistryFriendlyByteBuf;\n')
-          rep(fluid, '    this(buffer.readFluidStack());', '    this(FluidStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer));')
-          rep(fluid, '    buffer.writeFluidStack(fluid);', '    FluidStack.OPTIONAL_STREAM_CODEC.encode((RegistryFriendlyByteBuf) buffer, fluid);')
-
-          sprites = 'src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java'
-          rep(sprites, 'new ResourceLocation("block/blue_ice")', 'ResourceLocation.withDefaultNamespace("block/blue_ice")')
-          rep(sprites, 'new ResourceLocation("block/packed_ice")', 'ResourceLocation.withDefaultNamespace("block/packed_ice")')
-          rep(sprites, 'new ResourceLocation("block/ice")', 'ResourceLocation.withDefaultNamespace("block/ice")')
-          rep(sprites, 'new ResourceLocation("block/" + name + "_wool")', 'ResourceLocation.withDefaultNamespace("block/" + name + "_wool")')
-
-          client = 'src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java'
-          rep(client, 'event.register("material", MaterialModel.LOADER);', 'event.register(getResource("material"), MaterialModel.LOADER);')
-          rep(client, 'event.register("tool", ToolModel.LOADER);', 'event.register(getResource("tool"), ToolModel.LOADER);')
-          rep(client, 'event.register("material_block", MaterialBlockModel.LOADER);', 'event.register(getResource("material_block"), MaterialBlockModel.LOADER);')
-          rep(client, 'player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED.get())', 'player.getAttributeValue(TinkerAttributes.USE_ITEM_SPEED)')
-          PY
-
-      - name: Verify migration
-        shell: bash
-        run: |
-          set -euxo pipefail
-          ! grep -Fq 'getCancellationResult()' src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java
-          ! grep -Fq 'setCancellationResult(result)' src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java
-          grep -Fq 'MapCodec<ShieldBannerModifierSpriteSource>' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          grep -Fq 'apply(SpriteResourceLoader loader)' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          grep -Fq 'ResourceMetadata.EMPTY' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          grep -Fq 'FluidStack.OPTIONAL_STREAM_CODEC' src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java
-          grep -Fq '(RecipeHolder<CraftingRecipe>) null' src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java
-          grep -Fq 'ResourceLocation.withDefaultNamespace("block/blue_ice")' src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java
-          grep -Fq 'event.register(getResource("material"), MaterialModel.LOADER);' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
-          grep -Fq 'getAttributeValue(TinkerAttributes.USE_ITEM_SPEED)' src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
-          git diff --check
-
-      - name: Commit migration
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git config user.name 'tinkers-port-bot'
-          git config user.email 'tinkers-port-bot@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/tools/menu/ToolContainerMenu.java \
-            src/main/java/slimeknights/tconstruct/tools/client/ClientInteractionHandler.java \
-            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java \
-            src/main/java/slimeknights/tconstruct/tools/network/EntityMovementChangePacket.java \
-            src/main/java/slimeknights/tconstruct/tools/network/ToolContainerFluidUpdatePacket.java \
-            src/main/java/slimeknights/tconstruct/tools/data/sprite/TinkerMaterialSpriteProvider.java \
-            src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java
-          git commit -m 'Port client interaction sprite and packet APIs to 1.21'
-          git push origin HEAD:1.21.1-neoforge
+      - name: Start Tinkers compile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
