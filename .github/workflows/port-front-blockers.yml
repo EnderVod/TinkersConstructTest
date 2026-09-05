@@ -1,4 +1,4 @@
-name: Tinkers Mob Effect Holder Migration
+name: Tinkers GuiUtil Render API Migration
 
 on:
   push:
@@ -23,112 +23,61 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port mob effect callsites to 1.21 holders
+      - name: Port GuiUtil buffer builder calls to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # Raw effects still deserialize through Mantle; wrap at vanilla 1.21 holder callsites.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java')
+          path = Path('src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
-              anchor = 'import net.minecraft.core.RegistryAccess;\n'
-              if anchor not in text:
-                  raise RuntimeError('RemoveEffectFluidEffect import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.core.registries.BuiltInRegistries;\n', 1)
-          old = '''      if (action.simulate()) {\n        return living.hasEffect(effect) ? 1 : 0;\n      }\n      return living.removeEffect(effect) ? 1 : 0;'''
-          new = '''      var holder = BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);\n      if (action.simulate()) {\n        return living.hasEffect(holder) ? 1 : 0;\n      }\n      return living.removeEffect(holder) ? 1 : 0;'''
-          if text.count(old) != 1:
-              raise RuntimeError('RemoveEffectFluidEffect holder callsites changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
 
-          # PotionContents already provides Holder<MobEffect>; preserve that holder all the way through.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.Holder;\n' not in text:
-              anchor = 'import net.minecraft.core.component.DataComponents;\n'
-              if anchor not in text:
-                  raise RuntimeError('PotionFluidEffect component import anchor missing')
-              text = text.replace(anchor, 'import net.minecraft.core.Holder;\n' + anchor, 1)
-          text = text.replace('import net.minecraft.world.effect.MobEffect;\n', '')
-          old = '''        for (MobEffectInstance instance : effects) {\n          MobEffect effect = instance.getEffect();\n          if (effect.isInstantenous()) {'''
-          new = '''        for (MobEffectInstance instance : effects) {\n          Holder<net.minecraft.world.effect.MobEffect> effect = instance.getEffect();\n          if (effect.value().isInstantenous()) {'''
+          old = '''    BufferBuilder builder = Tesselator.getInstance().getBuilder();\n    builder.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);'''
+          new = '''    BufferBuilder builder = Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);'''
           if text.count(old) != 1:
-              raise RuntimeError('PotionFluidEffect effect holder declaration changed unexpectedly')
+              raise RuntimeError('GuiUtil Tesselator begin sequence changed unexpectedly')
           text = text.replace(old, new, 1)
-          old = 'effect.applyInstantenousEffect(directSource, attacker, target, instance.getAmplifier(), used * scale);'
-          new = 'effect.value().applyInstantenousEffect(directSource, attacker, target, instance.getAmplifier(), used * scale);'
-          if text.count(old) != 1:
-              raise RuntimeError('PotionFluidEffect instant application changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
 
-          # FluidMobEffect keeps its serialized raw MobEffect API but uses a holder with vanilla entities/instances.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
-              anchor = 'import net.minecraft.network.chat.Component;\n'
-              if anchor not in text:
-                  raise RuntimeError('FluidMobEffect import anchor missing')
-              text = text.replace(anchor, 'import net.minecraft.core.registries.BuiltInRegistries;\n' + anchor, 1)
-          old = 'MobEffectInstance instance = new MobEffectInstance(effect, time, this.level - 1);'
-          new = 'MobEffectInstance instance = new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), time, this.level - 1);'
+          old = 'BufferUploader.drawWithShader(builder.end());'
+          new = 'BufferUploader.drawWithShader(builder.buildOrThrow());'
           if text.count(old) != 1:
-              raise RuntimeError('FluidMobEffect constructor changed unexpectedly')
+              raise RuntimeError('GuiUtil buffer finish call changed unexpectedly')
           text = text.replace(old, new, 1)
-          old = 'MobEffectInstance existingInstance = target.getEffect(effect);'
-          new = 'MobEffectInstance existingInstance = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'
-          if text.count(old) != 1:
-              raise RuntimeError('FluidMobEffect existing effect lookup changed unexpectedly')
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
 
-          # Combat module follows the same serialized-raw/runtime-holder pattern.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java')
-          text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.registries.BuiltInRegistries;\n' not in text:
-              anchor = 'import net.minecraft.core.BlockPos;\n'
-              if anchor not in text:
-                  raise RuntimeError('MobEffectModule import anchor missing')
-              text = text.replace(anchor, anchor + 'import net.minecraft.core.registries.BuiltInRegistries;\n', 1)
-          old = 'MobEffectInstance instance = new MobEffectInstance(effect, (int)duration, level);'
-          new = 'MobEffectInstance instance = new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level);'
-          if text.count(old) != 1:
-              raise RuntimeError('MobEffectModule local instance constructor changed unexpectedly')
-          text = text.replace(old, new, 1)
-          old = 'target.addEffect(new MobEffectInstance(effect, (int)duration, level), cause);'
-          new = 'target.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level), cause);'
-          if text.count(old) != 1:
-              raise RuntimeError('MobEffectModule add effect constructor changed unexpectedly')
-          text = text.replace(old, new, 1)
+          replacements = {
+              'builder.vertex(matrix, x1, y2, z).uv(u1, v2).endVertex();': 'builder.addVertex(matrix, x1, y2, z).setUv(u1, v2);',
+              'builder.vertex(matrix, x2, y2, z).uv(u2, v2).endVertex();': 'builder.addVertex(matrix, x2, y2, z).setUv(u2, v2);',
+              'builder.vertex(matrix, x2, y1, z).uv(u2, v1).endVertex();': 'builder.addVertex(matrix, x2, y1, z).setUv(u2, v1);',
+              'builder.vertex(matrix, x1, y1, z).uv(u1, v1).endVertex();': 'builder.addVertex(matrix, x1, y1, z).setUv(u1, v1);',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise RuntimeError(f'GuiUtil vertex call changed unexpectedly: {old}')
+              text = text.replace(old, new, 1)
+
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify mob effect holder migration
+      - name: Verify GuiUtil render migration
         shell: bash
         run: |
-          grep -Fq 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java
-          grep -Fq 'Holder<net.minecraft.world.effect.MobEffect> effect = instance.getEffect();' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
-          grep -Fq 'effect.value().isInstantenous()' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
-          grep -Fq 'effect.value().applyInstantenousEffect' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java
-          test "$(grep -F -c 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java)" -eq 2
-          test "$(grep -F -c 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java)" -eq 2
+          grep -Fq 'Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX)' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          grep -Fq 'BufferUploader.drawWithShader(builder.buildOrThrow());' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          test "$(grep -F -c 'builder.addVertex(matrix' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java)" -eq 4
+          ! grep -Fq 'getBuilder()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          ! grep -Fq 'builder.begin(' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          ! grep -Fq 'builder.end()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          ! grep -Fq '.endVertex()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
           git diff --check
 
-      - name: Commit mob effect holder migration
+      - name: Commit GuiUtil render migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/RemoveEffectFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/PotionFluidEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
+          git add src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
           git diff --cached --quiet || {
-            git commit -m 'Port mob effect callsites to 1.21 holders'
+            git commit -m 'Port GuiUtil buffer rendering to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
