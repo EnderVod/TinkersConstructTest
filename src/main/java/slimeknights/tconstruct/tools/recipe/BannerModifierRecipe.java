@@ -137,7 +137,7 @@ public class BannerModifierRecipe implements ITinkerStationRecipe, IMultiRecipe<
         displayRecipes = RegistryHelper.getTagValueStream(BuiltInRegistries.ITEM, ItemTags.BANNERS)
           .flatMap(item -> {
             if (item instanceof BannerItem banner) {
-              return Stream.of(new DisplayRecipe(id, toolInputs, banner));
+              return Stream.of(new DisplayRecipe(id, toolInputs, banner, access));
             }
             return Stream.empty();
           }).collect(Collectors.toList());
@@ -162,7 +162,7 @@ public class BannerModifierRecipe implements ITinkerStationRecipe, IMultiRecipe<
     private final List<ItemStack> toolWithModifier;
     @Getter
     private final Component variant;
-    public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner) {
+    public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner, RegistryAccess access) {
       this.recipeId = recipeId;
       this.toolWithoutModifier = tools;
       this.banner = List.of(new ItemStack(banner));

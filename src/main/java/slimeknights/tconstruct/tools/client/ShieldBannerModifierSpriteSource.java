@@ -29,7 +29,7 @@ import java.util.Optional;
 public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWidth, int cropHeight, ResourceLocation destinationPrefix, int offsetX, int offsetY, int outSize) implements SpriteSource {
   private static final Codec<Integer> NON_NEGATIVE = ExtraCodecs.intRange(0, Integer.MAX_VALUE);
   private static final Codec<Integer> SHIELD_SIZE = ExtraCodecs.intRange(0, 64);
-  public static final Codec<ShieldBannerModifierSpriteSource> CODEC = ExtraCodecs.validate(RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group(
+  public static final Codec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group(
     SHIELD_SIZE.fieldOf("crop_x").forGetter(ShieldBannerModifierSpriteSource::cropX),
     SHIELD_SIZE.fieldOf("crop_y").forGetter(ShieldBannerModifierSpriteSource::cropY),
     SHIELD_SIZE.fieldOf("crop_width").forGetter(ShieldBannerModifierSpriteSource::cropWidth),
@@ -38,7 +38,7 @@ public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWid
     NON_NEGATIVE.fieldOf("offset_x").forGetter(ShieldBannerModifierSpriteSource::offsetX),
     NON_NEGATIVE.fieldOf("offset_y").forGetter(ShieldBannerModifierSpriteSource::offsetY),
     NON_NEGATIVE.fieldOf("output_size").forGetter(ShieldBannerModifierSpriteSource::outSize)
-  ).apply(inst, ShieldBannerModifierSpriteSource::new)), source -> {
+  ).apply(inst, ShieldBannerModifierSpriteSource::new)).validate(source -> {
     if (source.cropX + source.cropWidth >= 64 || source.cropY + source.cropHeight >= 64) {
       return DataResult.error(() -> "Invalid banner shield modifier sprite source: crop region must be within 64 by 64");
     } else if (source.offsetX + source.cropWidth >= source.outSize || source.offsetY + source.cropHeight >= source.outSize) {

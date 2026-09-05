@@ -7,12 +7,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.state.BlockState;
+import org.apache.commons.lang3.mutable.MutableFloat;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.mantle.data.loadable.field.LoadableField;
@@ -20,7 +22,6 @@ import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.data.predicate.IJsonPredicate;
 import slimeknights.mantle.data.predicate.block.BlockPredicate;
 import slimeknights.mantle.data.predicate.entity.LivingEntityPredicate;
-import slimeknights.mantle.util.LogicHelper;
 import slimeknights.tconstruct.library.json.LevelingInt;
 import slimeknights.tconstruct.library.json.TinkerLoadables;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
@@ -222,8 +223,11 @@ public interface EnchantmentModule extends ModifierModule, LevelingIntModule, Co
       if (condition().matches(tool, modifier)) {
         int subtractLevel = getLevel(modifier);
         Enchantment enchantment = enchantment();
-        if (subtractLevel > 0 && LogicHelper.isInList(enchantment.slots, slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)) {
-          modifierValue -= enchantment.getDamageProtection(subtractLevel, source);
+        if (subtractLevel > 0 && enchantment.matchingSlot(slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)
+            && context.getLevel() instanceof ServerLevel serverLevel) {
+          MutableFloat protection = new MutableFloat(0f);
+          enchantment.modifyDamageProtection(serverLevel, subtractLevel, context.getEntity().getItemBySlot(slotType), context.getEntity(), source, protection);
+          modifierValue -= protection.floatValue();
         }
       }
       return modifierValue;

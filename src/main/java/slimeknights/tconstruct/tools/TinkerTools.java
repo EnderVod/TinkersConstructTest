@@ -1,6 +1,7 @@
 package slimeknights.tconstruct.tools;
 
 import net.minecraft.advancements.critereon.ItemSubPredicate;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.DataGenerator;
@@ -167,7 +168,7 @@ public final class TinkerTools extends TinkerModule {
       .build());
 
   /** Loot function type for tool add data */
-  public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));
+  public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<AddToolDataFunction>> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));
 
   /** Custom ingredient matching tools that expose a given tool hook. */
   public static final DeferredHolder<IngredientType<?>, IngredientType<ToolHookIngredient>> toolHookIngredientType =
@@ -291,7 +292,7 @@ public final class TinkerTools extends TinkerModule {
       DispenserBlock.registerBehavior(TinkerTools.throwingAxe.get(), ModifiableShurikenDispenserBehavior.INSTANCE);
       ModifierUtil.registerShieldDisabler(entity -> {
         if (entity instanceof Player player && player.isBlocking()) {
-          player.disableShield(true);
+          player.disableShield();
         }
       }, EntityType.PLAYER);
     });
@@ -457,7 +458,7 @@ public final class TinkerTools extends TinkerModule {
           efln.addModifier(ModifierIds.redirected, 1);
         }
         ItemStack stack = efln.createStack();
-        stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));
+        stack.set(DataComponents.CUSTOM_NAME, TConstruct.makeTranslation("item", "efln_ball"));
         tab.accept(stack);
       }
     }
