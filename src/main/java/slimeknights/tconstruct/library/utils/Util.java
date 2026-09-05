@@ -176,8 +176,7 @@ public class Util {
 
   /** Calculates the given color */
   private static int calcColor(DyeColor color) {
-    float[] diffuse = color.getTextureDiffuseColors();
-    return FastColor.ARGB32.color(255, Math.round(255 * diffuse[0]), Math.round(255 * diffuse[1]), Math.round(255 * diffuse[2]));
+    return color.getTextureDiffuseColor();
   }
 
   /** Array of tints for each dye color */
@@ -243,7 +242,7 @@ public class Util {
     if (pos.equals(offset)) {
       return context;
     }
-    return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(context.getHitResult(), offset));
+    return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(new BlockHitResult(context.getClickLocation(), context.getClickedFace(), context.getClickedPos(), context.isInside()), offset));
   }
 
   /** Tests the given list of conditions using {@link DataLoadedConditionContext#INSTANCE} to see if all pass. */

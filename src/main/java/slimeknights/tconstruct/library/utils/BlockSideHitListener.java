@@ -7,6 +7,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.Action;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.BlockDropsEvent;
 import net.neoforged.bus.api.EventPriority;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.tconstruct.TConstruct;
@@ -53,10 +54,12 @@ public class BlockSideHitListener {
   }
 
   /** Called on block break to store the last break XP */
-  private static void breakBlock(BlockEvent.BreakEvent event) {
-    TinkerDataCapability.Holder data = TinkerDataCapability.getData(event.getPlayer());
-    if (data != null) {
-      data.put(LAST_XP, event.getExpToDrop());
+  private static void breakBlock(BlockDropsEvent event) {
+    if (event.getBreaker() instanceof Player player) {
+      TinkerDataCapability.Holder data = TinkerDataCapability.getData(player);
+      if (data != null) {
+        data.put(LAST_XP, event.getDroppedExperience());
+      }
     }
   }
 
