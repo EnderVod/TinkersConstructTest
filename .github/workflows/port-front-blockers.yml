@@ -36,7 +36,6 @@ jobs:
                   raise RuntimeError(f'{label}: expected exactly one match, found {text.count(old)}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # 1.21 enchantments expose slot matching and component-driven protection calculation.
           path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java')
           text = path.read_text(encoding='utf-8')
           text = text.replace('import slimeknights.mantle.util.LogicHelper;\n', '')
@@ -48,22 +47,21 @@ jobs:
           if text.count(anchor) != 1:
               raise RuntimeError('EnchantmentModule Internal import anchor changed')
           text = text.replace(anchor, 'import org.apache.commons.lang3.mutable.MutableFloat;\n' + anchor, 1)
-          old = '''        Enchantment enchantment = enchantment();
-        if (subtractLevel > 0 && LogicHelper.isInList(enchantment.slots, slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)) {
-          modifierValue -= enchantment.getDamageProtection(subtractLevel, source);
-        }'''
-          new = '''        Enchantment enchantment = enchantment();
-        if (subtractLevel > 0 && enchantment.matchingSlot(slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)
-            && context.getLevel() instanceof ServerLevel serverLevel) {
-          MutableFloat protection = new MutableFloat(0f);
-          enchantment.modifyDamageProtection(serverLevel, subtractLevel, context.getEntity().getItemBySlot(slotType), context.getEntity(), source, protection);
-          modifierValue -= protection.floatValue();
-        }'''
+          old = ('        Enchantment enchantment = enchantment();\n'
+                 '        if (subtractLevel > 0 && LogicHelper.isInList(enchantment.slots, slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)) {\n'
+                 '          modifierValue -= enchantment.getDamageProtection(subtractLevel, source);\n'
+                 '        }')
+          new = ('        Enchantment enchantment = enchantment();\n'
+                 '        if (subtractLevel > 0 && enchantment.matchingSlot(slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)\n'
+                 '            && context.getLevel() instanceof ServerLevel serverLevel) {\n'
+                 '          MutableFloat protection = new MutableFloat(0f);\n'
+                 '          enchantment.modifyDamageProtection(serverLevel, subtractLevel, context.getEntity().getItemBySlot(slotType), context.getEntity(), source, protection);\n'
+                 '          modifierValue -= protection.floatValue();\n'
+                 '        }')
           if text.count(old) != 1:
               raise RuntimeError('EnchantmentModule legacy protection block changed')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # This legacy Gson loot-entry loadable has no remaining consumers; 1.21 loot entries are codec-based.
           path = Path('src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java')
           text = path.read_text(encoding='utf-8')
           for imp in [
@@ -73,28 +71,16 @@ jobs:
               if text.count(imp) != 1:
                   raise RuntimeError(f'TinkerLoadables import changed: {imp.strip()}')
               text = text.replace(imp, '', 1)
-          old = '''  /* Loot tables */
-  /** Loadable for a loot entry instance */
-  public static final Loadable<LootPoolEntryContainer> LOOT_ENTRY = new GsonLoadable<>(LootModifierManager.GSON_INSTANCE, LootPoolEntryContainer.class);
-
-'''
+          old = ('  /* Loot tables */\n'
+                 '  /** Loadable for a loot entry instance */\n'
+                 '  public static final Loadable<LootPoolEntryContainer> LOOT_ENTRY = new GsonLoadable<>(LootModifierManager.GSON_INSTANCE, LootPoolEntryContainer.class);\n\n')
           if text.count(old) != 1:
               raise RuntimeError('TinkerLoadables legacy LOOT_ENTRY block changed')
           path.write_text(text.replace(old, '', 1), encoding='utf-8')
 
-          # Pass registry access into the banner display recipe as required by data-driven banner patterns.
-          replace_once(
-              'src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java',
-              'return Stream.of(new DisplayRecipe(id, toolInputs, banner));',
-              'return Stream.of(new DisplayRecipe(id, toolInputs, banner, access));',
-              'BannerModifierRecipe display call')
-          replace_once(
-              'src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java',
-              'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner) {',
-              'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner, RegistryAccess access) {',
-              'BannerModifierRecipe display constructor')
+          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java', 'return Stream.of(new DisplayRecipe(id, toolInputs, banner));', 'return Stream.of(new DisplayRecipe(id, toolInputs, banner, access));', 'BannerModifierRecipe display call')
+          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java', 'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner) {', 'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner, RegistryAccess access) {', 'BannerModifierRecipe display constructor')
 
-          # Codec itself owns validate() in current DFU; ExtraCodecs no longer provides the old wrapper.
           path = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
           text = path.read_text(encoding='utf-8')
           old = 'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = ExtraCodecs.validate(RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group('
@@ -108,19 +94,9 @@ jobs:
               raise RuntimeError('ShieldBanner codec validation join changed')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Holder.Reference and holder-valued trim ingredients use value() in 1.21.
-          replace_once(
-              'src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java',
-              'TrimMaterial material = holder.get();',
-              'TrimMaterial material = holder.value();',
-              'ArmorTrim holder value')
-          replace_once(
-              'src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java',
-              'this.material = List.of(new ItemStack(material.ingredient().get()));',
-              'this.material = List.of(new ItemStack(material.ingredient().value()));',
-              'ArmorTrim ingredient holder value')
+          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java', 'TrimMaterial material = holder.get();', 'TrimMaterial material = holder.value();', 'ArmorTrim holder value')
+          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java', 'this.material = List.of(new ItemStack(material.ingredient().get()));', 'this.material = List.of(new ItemStack(material.ingredient().value()));', 'ArmorTrim ingredient holder value')
 
-          # Small vanilla API moves in the main tools module.
           path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
           text = path.read_text(encoding='utf-8')
           anchor = 'import net.minecraft.core.particles.SimpleParticleType;\n'
@@ -141,16 +117,13 @@ jobs:
           text = text.replace('stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));', 'stack.set(DataComponents.CUSTOM_NAME, TConstruct.makeTranslation("item", "efln_ball"));', 1)
           path.write_text(text, encoding='utf-8')
 
-          # These record constructors are private in vanilla 1.21 but Tinkers datagen still constructs the formulas.
           path = Path('src/main/resources/META-INF/accesstransformer.cfg')
           text = path.read_text(encoding='utf-8')
           anchor = 'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount\n'
           if text.count(anchor) != 1:
               raise RuntimeError('ApplyBonus Uniform AT anchor changed')
-          additions = (
-              'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$BinomialWithBonusCount <init>(IF)V\n'
-              'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount <init>(I)V\n'
-          )
+          additions = ('public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$BinomialWithBonusCount <init>(IF)V\n'
+                       'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount <init>(I)V\n')
           if '<init>(IF)V' not in text:
               text = text.replace(anchor, anchor + additions, 1)
           path.write_text(text, encoding='utf-8')
@@ -177,14 +150,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java \
-            src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java \
-            src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java \
-            src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java \
-            src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java \
-            src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
-            src/main/resources/META-INF/accesstransformer.cfg
+          git add src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java src/main/java/slimeknights/tconstruct/tools/TinkerTools.java src/main/resources/META-INF/accesstransformer.cfg
           git commit -m 'Clear 1.21 compatibility frontier'
           git push origin HEAD:1.21.1-neoforge
 
