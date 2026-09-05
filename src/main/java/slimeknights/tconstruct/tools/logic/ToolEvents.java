@@ -84,6 +84,7 @@ import slimeknights.tconstruct.library.utils.BlockSideHitListener;
 import slimeknights.tconstruct.shared.TinkerAttributes;
 import slimeknights.tconstruct.shared.TinkerEffects;
 import slimeknights.tconstruct.tools.TinkerModifiers;
+import slimeknights.tconstruct.tools.modules.ranged.common.PunchModule;
 import slimeknights.tconstruct.tools.network.SyncProjectileModifiersPacket;
 
 import java.util.List;
@@ -260,6 +261,15 @@ public class ToolEvents {
       return 1;
     }
     return (int)damage;
+  }
+
+  /** Applies Tinkers punch to ordinary arrows after vanilla has accepted their damage. */
+  @SubscribeEvent
+  static void projectilePunch(LivingDamageEvent.Post event) {
+    Entity direct = event.getSource().getDirectEntity();
+    if (direct instanceof AbstractArrow arrow) {
+      PunchModule.applyArrowKnockback(arrow, event.getEntity());
+    }
   }
 
   /** Modifier ID used for the extra correction damage on armor. Needs to be a "real modifier" for the tag so we use protection as a reasonable enough source. */

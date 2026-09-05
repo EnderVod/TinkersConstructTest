@@ -61,7 +61,7 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
 
   @Override
   public AbstractArrow createArrow(Level level, ItemStack stack, LivingEntity shooter, @Nullable ItemStack weapon) {
-    ModifiableArrow arrow = new ModifiableArrow(level, shooter);
+    ModifiableArrow arrow = new ModifiableArrow(level, shooter, stack, weapon);
     arrow.onCreate(stack, shooter);
     return arrow;
   }
@@ -82,7 +82,7 @@ public class ModifiableArrowItem extends ArrowItem implements IModifiableDisplay
       level.playSound(null, player.getX(), player.getY(), player.getZ(), Sounds.SHURIKEN_THROW.getSound(), SoundSource.NEUTRAL, 0.5F, 0.4F / (level.getRandom().nextFloat() * 0.4F + 0.8F));
       player.getCooldowns().addCooldown(stack.getItem(), 10);
       if (!level.isClientSide()) {
-        ModifiableArrow arrow = new ModifiableArrow(level, player);
+        ModifiableArrow arrow = new ModifiableArrow(level, player, stack, null);
         IToolStackView tool = arrow.onCreate(stack, player);
         float velocity = ConditionalStatModifierHook.getModifiedStat(tool, player, ToolStats.VELOCITY);
         arrow.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, velocity, 1.0F);
