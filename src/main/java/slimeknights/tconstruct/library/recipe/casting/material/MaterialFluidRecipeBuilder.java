@@ -75,6 +75,6 @@ public class MaterialFluidRecipeBuilder extends AbstractRecipeBuilder<MaterialFl
       throw new IllegalStateException("Temperature is too low, must be at least 0");
     }
     ResourceLocation advancementId = this.buildOptionalAdvancement(id, "materials");
-    consumer.accept(new LoadableFinishedRecipe<>(new MaterialFluidRecipe(id, fluid, temperature, inputId, outputId, hideInBook), MaterialFluidRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new MaterialFluidRecipe(id, fluid, temperature, inputId, outputId, hideInBook), MaterialFluidRecipe.LOADER, advancementId));
   }
 }

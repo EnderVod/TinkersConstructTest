@@ -68,6 +68,6 @@ public class ModifierSetWorktableRecipeBuilder extends AbstractSizedIngredientRe
       throw new IllegalStateException("Tools cannot be empty");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "modifiers");
-    consumer.accept(new LoadableFinishedRecipe<>(new ModifierSetWorktableRecipe(id, dataKey, inputs, tools, modifierPredicate, addToSet, allowTraits), ModifierSetWorktableRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new ModifierSetWorktableRecipe(id, dataKey, inputs, tools, modifierPredicate, addToSet, allowTraits), ModifierSetWorktableRecipe.LOADER, advancementId));
   }
 }
