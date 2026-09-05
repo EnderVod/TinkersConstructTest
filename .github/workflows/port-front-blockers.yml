@@ -1,4 +1,4 @@
-name: Tinkers 1.21 Compatibility Cleanup
+name: Tinkers Projectile Compatibility Migration
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply 1.21 compatibility cleanup
+      - name: Port fireball and shuriken projectiles to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
@@ -36,122 +36,148 @@ jobs:
                   raise RuntimeError(f'{label}: expected exactly one match, found {text.count(old)}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java')
+          # CustomFireball: 1.21 projectile constructors accept a Vec3 acceleration and enchantment post-hit moved to EnchantmentHelper.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import slimeknights.mantle.util.LogicHelper;\n', '')
           anchor = 'import net.minecraft.resources.ResourceLocation;\n'
           if text.count(anchor) != 1:
-              raise RuntimeError('EnchantmentModule ResourceLocation import anchor changed')
-          text = text.replace(anchor, anchor + 'import net.minecraft.server.level.ServerLevel;\n', 1)
-          anchor = 'import org.jetbrains.annotations.ApiStatus.Internal;\n'
+              raise RuntimeError('CustomFireball ResourceLocation import anchor changed')
+          if 'import net.minecraft.server.level.ServerLevel;\n' not in text:
+              text = text.replace(anchor, anchor + 'import net.minecraft.server.level.ServerLevel;\n', 1)
+          anchor = 'import net.minecraft.world.item.ItemStack;\n'
           if text.count(anchor) != 1:
-              raise RuntimeError('EnchantmentModule Internal import anchor changed')
-          text = text.replace(anchor, 'import org.apache.commons.lang3.mutable.MutableFloat;\n' + anchor, 1)
-          old = ('        Enchantment enchantment = enchantment();\n'
-                 '        if (subtractLevel > 0 && LogicHelper.isInList(enchantment.slots, slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)) {\n'
-                 '          modifierValue -= enchantment.getDamageProtection(subtractLevel, source);\n'
-                 '        }')
-          new = ('        Enchantment enchantment = enchantment();\n'
-                 '        if (subtractLevel > 0 && enchantment.matchingSlot(slotType) && !source.is(DamageTypeTags.BYPASSES_ENCHANTMENTS)\n'
-                 '            && context.getLevel() instanceof ServerLevel serverLevel) {\n'
-                 '          MutableFloat protection = new MutableFloat(0f);\n'
-                 '          enchantment.modifyDamageProtection(serverLevel, subtractLevel, context.getEntity().getItemBySlot(slotType), context.getEntity(), source, protection);\n'
-                 '          modifierValue -= protection.floatValue();\n'
-                 '        }')
+              raise RuntimeError('CustomFireball ItemStack import anchor changed')
+          if 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n' not in text:
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n', 1)
+          anchor = 'import net.minecraft.world.phys.HitResult;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('CustomFireball HitResult import anchor changed')
+          if 'import net.minecraft.world.phys.Vec3;\n' not in text:
+              text = text.replace(anchor, anchor + 'import net.minecraft.world.phys.Vec3;\n', 1)
+          old = '    super(TinkerModifiers.fireball.get(), shooter, xOffset, yOffset, zOffset, level);'
+          new = '    super(TinkerModifiers.fireball.get(), shooter, new Vec3(xOffset, yOffset, zOffset), level);'
           if text.count(old) != 1:
-              raise RuntimeError('EnchantmentModule legacy protection block changed')
+              raise RuntimeError('CustomFireball living constructor changed')
+          text = text.replace(old, new, 1)
+          old = '    super(TinkerModifiers.fireball.get(), x, y, z, xOffset, yOffset, zOffset, pLevel);'
+          new = '    super(TinkerModifiers.fireball.get(), x, y, z, new Vec3(xOffset, yOffset, zOffset), pLevel);'
+          if text.count(old) != 1:
+              raise RuntimeError('CustomFireball positional constructor changed')
+          text = text.replace(old, new, 1)
+          if text.count('ItemStack stack = getItemRaw();') != 1:
+              raise RuntimeError('CustomFireball getItemRaw call changed')
+          text = text.replace('ItemStack stack = getItemRaw();', 'ItemStack stack = getItem();', 1)
+          old = ('      Entity target = hit.getEntity();\n'
+                 '      Entity owner = this.getOwner();\n'
+                 '      if (target.hurt(CombatHelper.damageSource(TinkerEffects.needsEnderferenceOverride(target) ? enderferenceType : damageType, this, owner), getDamage()) && owner instanceof LivingEntity livingOwner) {\n'
+                 '        this.doEnchantDamageEffects(livingOwner, target);\n'
+                 '      }')
+          new = ('      Entity target = hit.getEntity();\n'
+                 '      Entity owner = this.getOwner();\n'
+                 '      DamageSource source = CombatHelper.damageSource(TinkerEffects.needsEnderferenceOverride(target) ? enderferenceType : damageType, this, owner);\n'
+                 '      if (target.hurt(source, getDamage()) && owner instanceof LivingEntity && this.level() instanceof ServerLevel serverLevel) {\n'
+                 '        EnchantmentHelper.doPostAttackEffects(serverLevel, target, source);\n'
+                 '      }')
+          if text.count(old) != 1:
+              raise RuntimeError('CustomFireball legacy enchant damage block changed')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java')
+          # ThrownShuriken: use the 1.21 projectile hit/portal lifecycle while preserving custom water inertia.
+          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java')
           text = path.read_text(encoding='utf-8')
           for imp in [
-              'import net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer;\n',
-              'import net.neoforged.neoforge.common.loot.LootModifierManager;\n',
-              'import slimeknights.tconstruct.library.utils.GsonLoadable;\n']:
-              if text.count(imp) != 1:
-                  raise RuntimeError(f'TinkerLoadables import changed: {imp.strip()}')
-              text = text.replace(imp, '', 1)
-          old = ('  /* Loot tables */\n'
-                 '  /** Loadable for a loot entry instance */\n'
-                 '  public static final Loadable<LootPoolEntryContainer> LOOT_ENTRY = new GsonLoadable<>(LootModifierManager.GSON_INSTANCE, LootPoolEntryContainer.class);\n\n')
+              'import net.minecraft.core.BlockPos;\n',
+              'import net.minecraft.world.level.block.Blocks;\n',
+              'import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;\n',
+              'import net.minecraft.world.level.block.state.BlockState;\n']:
+              text = text.replace(imp, '')
+          old = ('  @Override\n'
+                 '  public boolean isReusable() {\n'
+                 '    return reclaim;\n'
+                 '  }')
+          new = ('  @Override\n'
+                 '  public boolean isReusable() {\n'
+                 '    return reclaim;\n'
+                 '  }\n\n'
+                 '  @Override\n'
+                 '  public boolean canUsePortal(boolean allowPassengers) {\n'
+                 '    return true;\n'
+                 '  }')
           if text.count(old) != 1:
-              raise RuntimeError('TinkerLoadables legacy LOOT_ENTRY block changed')
-          path.write_text(text.replace(old, '', 1), encoding='utf-8')
-
-          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java', 'return Stream.of(new DisplayRecipe(id, toolInputs, banner));', 'return Stream.of(new DisplayRecipe(id, toolInputs, banner, access));', 'BannerModifierRecipe display call')
-          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java', 'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner) {', 'public DisplayRecipe(ResourceLocation recipeId, List<ItemStack> tools, BannerItem banner, RegistryAccess access) {', 'BannerModifierRecipe display constructor')
-
-          path = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
-          text = path.read_text(encoding='utf-8')
-          old = 'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = ExtraCodecs.validate(RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group('
-          new = 'public static final Codec<ShieldBannerModifierSpriteSource> CODEC = RecordCodecBuilder.<ShieldBannerModifierSpriteSource>create(inst -> inst.group('
-          if text.count(old) != 1:
-              raise RuntimeError('ShieldBanner codec opening changed')
+              raise RuntimeError('ThrownShuriken reusable method changed')
           text = text.replace(old, new, 1)
-          old = '  ).apply(inst, ShieldBannerModifierSpriteSource::new)), source -> {'
-          new = '  ).apply(inst, ShieldBannerModifierSpriteSource::new)).validate(source -> {'
+          old = ('    boolean teleported = false;\n'
+                 '    if (hit.getType() == HitResult.Type.BLOCK) {\n'
+                 '      BlockPos pos = ((BlockHitResult)hit).getBlockPos();\n'
+                 '      BlockState state = this.level().getBlockState(pos);\n'
+                 '      if (state.is(Blocks.NETHER_PORTAL)) {\n'
+                 '        this.handleInsidePortal(pos);\n'
+                 '        teleported = true;\n'
+                 '      } else if (state.is(Blocks.END_GATEWAY)) {\n'
+                 '        if (this.level().getBlockEntity(pos) instanceof TheEndGatewayBlockEntity gateway && TheEndGatewayBlockEntity.canEntityTeleport(this)) {\n'
+                 '          TheEndGatewayBlockEntity.teleportEntity(this.level(), pos, state, this, gateway);\n'
+                 '        }\n'
+                 '        teleported = true;\n'
+                 '      }\n'
+                 '    }\n\n')
           if text.count(old) != 1:
-              raise RuntimeError('ShieldBanner codec validation join changed')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java', 'TrimMaterial material = holder.get();', 'TrimMaterial material = holder.value();', 'ArmorTrim holder value')
-          replace_once('src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java', 'this.material = List.of(new ItemStack(material.ingredient().get()));', 'this.material = List.of(new ItemStack(material.ingredient().value()));', 'ArmorTrim ingredient holder value')
-
-          path = Path('src/main/java/slimeknights/tconstruct/tools/TinkerTools.java')
-          text = path.read_text(encoding='utf-8')
-          anchor = 'import net.minecraft.core.particles.SimpleParticleType;\n'
-          if text.count(anchor) != 1:
-              raise RuntimeError('TinkerTools particle import anchor changed')
-          if 'import net.minecraft.core.component.DataComponents;\n' not in text:
-              text = text.replace(anchor, 'import net.minecraft.core.component.DataComponents;\n' + anchor, 1)
-          old = 'public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));'
-          new = 'public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<AddToolDataFunction>> lootAddToolData = LOOT_FUNCTIONS.register("add_tool_data", () -> new LootItemFunctionType<>(AddToolDataFunction.CODEC));'
+              raise RuntimeError('ThrownShuriken legacy portal block changed')
+          text = text.replace(old, '', 1)
+          old = '    if (type != HitResult.Type.MISS && !teleported) {'
+          new = '    if (type != HitResult.Type.MISS) {'
           if text.count(old) != 1:
-              raise RuntimeError('TinkerTools loot function holder declaration changed')
+              raise RuntimeError('ThrownShuriken impact condition changed')
           text = text.replace(old, new, 1)
-          if text.count('player.disableShield(true);') != 1:
-              raise RuntimeError('TinkerTools disableShield call changed')
-          text = text.replace('player.disableShield(true);', 'player.disableShield();', 1)
-          if text.count('stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));') != 1:
-              raise RuntimeError('TinkerTools EFLN name call changed')
-          text = text.replace('stack.setHoverName(TConstruct.makeTranslation("item", "efln_ball"));', 'stack.set(DataComponents.CUSTOM_NAME, TConstruct.makeTranslation("item", "efln_ball"));', 1)
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
-          text = path.read_text(encoding='utf-8')
-          anchor = 'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount\n'
-          if text.count(anchor) != 1:
-              raise RuntimeError('ApplyBonus Uniform AT anchor changed')
-          additions = ('public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$BinomialWithBonusCount <init>(IF)V\n'
-                       'public net.minecraft.world.level.storage.loot.functions.ApplyBonusCount$UniformBonusCount <init>(I)V\n')
-          if '<init>(IF)V' not in text:
-              text = text.replace(anchor, anchor + additions, 1)
+          if text.count('if (!ForgeEventFactory.onProjectileImpact(this, hit)) {') != 1:
+              raise RuntimeError('ThrownShuriken old projectile hook changed')
+          text = text.replace('if (!ForgeEventFactory.onProjectileImpact(this, hit)) {', 'if (!EventHooks.onProjectileImpact(this, hit)) {', 1)
+          if text.count('        this.onHit(hit);') != 1:
+              raise RuntimeError('ThrownShuriken direct onHit call changed')
+          text = text.replace('        this.onHit(hit);', '        this.hitTargetOrDeflectSelf(hit);', 1)
+          old = ('  @Override\n'
+                 '  protected void defineSynchedData() {\n'
+                 '    this.entityData.define(STACK, ItemStack.EMPTY);\n'
+                 '    this.entityData.define(WATER_INERTIA, 0.8f);\n'
+                 '  }')
+          new = ('  @Override\n'
+                 '  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n'
+                 '    builder.define(STACK, ItemStack.EMPTY);\n'
+                 '    builder.define(WATER_INERTIA, 0.8f);\n'
+                 '  }')
+          if text.count(old) != 1:
+              raise RuntimeError('ThrownShuriken synced data block changed')
+          text = text.replace(old, new, 1)
+          if text.count('tag.put(KEY_STACK, this.stack.save(new CompoundTag()));') != 1:
+              raise RuntimeError('ThrownShuriken stack save changed')
+          text = text.replace('tag.put(KEY_STACK, this.stack.save(new CompoundTag()));', 'tag.put(KEY_STACK, this.stack.save(this.registryAccess()));', 1)
+          if text.count('setStack(ItemStack.of(tag.getCompound(KEY_STACK)));') != 1:
+              raise RuntimeError('ThrownShuriken stack load changed')
+          text = text.replace('setStack(ItemStack.of(tag.getCompound(KEY_STACK)));', 'setStack(ItemStack.parse(this.registryAccess(), tag.getCompound(KEY_STACK)).orElse(ItemStack.EMPTY));', 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify compatibility cleanup
+      - name: Verify projectile migration
         shell: bash
         run: |
-          grep -Fq 'enchantment.matchingSlot(slotType)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java
-          grep -Fq 'enchantment.modifyDamageProtection(serverLevel' src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java
-          ! grep -Fq 'LOOT_ENTRY' src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java
-          grep -Fq 'new DisplayRecipe(id, toolInputs, banner, access)' src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java
-          grep -Fq ').validate(source -> {' src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java
-          grep -Fq 'TrimMaterial material = holder.value();' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java
-          grep -Fq 'material.ingredient().value()' src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java
-          grep -Fq 'player.disableShield();' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -Fq 'DataComponents.CUSTOM_NAME' src/main/java/slimeknights/tconstruct/tools/TinkerTools.java
-          grep -Fq 'ApplyBonusCount$BinomialWithBonusCount <init>(IF)V' src/main/resources/META-INF/accesstransformer.cfg
-          grep -Fq 'ApplyBonusCount$UniformBonusCount <init>(I)V' src/main/resources/META-INF/accesstransformer.cfg
+          grep -Fq 'new Vec3(xOffset, yOffset, zOffset)' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
+          grep -Fq 'EnchantmentHelper.doPostAttackEffects(serverLevel, target, source);' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
+          ! grep -Fq 'getItemRaw()' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
+          grep -Fq 'public boolean canUsePortal(boolean allowPassengers)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          grep -Fq 'EventHooks.onProjectileImpact(this, hit)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          grep -Fq 'this.hitTargetOrDeflectSelf(hit);' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          grep -Fq 'ItemStack.parse(this.registryAccess()' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          ! grep -Fq 'ForgeEventFactory.onProjectileImpact' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          ! grep -Fq 'handleInsidePortal' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
           git diff --check
 
-      - name: Commit compatibility cleanup
+      - name: Commit projectile migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/modifiers/modules/build/EnchantmentModule.java src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java src/main/java/slimeknights/tconstruct/tools/recipe/BannerModifierRecipe.java src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java src/main/java/slimeknights/tconstruct/tools/recipe/ArmorTrimRecipe.java src/main/java/slimeknights/tconstruct/tools/TinkerTools.java src/main/resources/META-INF/accesstransformer.cfg
-          git commit -m 'Clear 1.21 compatibility frontier'
+          git add src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          git commit -m 'Port fireball and shuriken projectiles to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
