@@ -1,6 +1,7 @@
 package slimeknights.tconstruct.library.modifiers.fluid;
 
 import com.google.common.collect.ImmutableList;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -53,7 +54,7 @@ public record FluidMobEffect(MobEffect effect, int time, int level, @Nullable Li
 
   /** Creates the final effect */
   public MobEffectInstance effectWithTime(int time) {
-    MobEffectInstance instance = new MobEffectInstance(effect, time, this.level - 1);
+    MobEffectInstance instance = new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), time, this.level - 1);
     if (curativeItems != null) {
       instance.setCurativeItems(curativeItems.stream().map(ItemStack::new).collect(Collectors.toList()));
     }
@@ -84,7 +85,7 @@ public record FluidMobEffect(MobEffect effect, int time, int level, @Nullable Li
       used = 1;
     } else {
       // add and set both have distinct behavior under an existing effect, same otherwise
-      MobEffectInstance existingInstance = target.getEffect(effect);
+      MobEffectInstance existingInstance = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
       int amplifier = amplifier();
       if (existingInstance != null && existingInstance.getAmplifier() >= amplifier) {
         // if the existing level is larger, just skip, would be a cheese to increase said level
