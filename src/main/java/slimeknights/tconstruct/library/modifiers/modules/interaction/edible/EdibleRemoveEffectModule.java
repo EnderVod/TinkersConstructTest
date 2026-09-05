@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.library.modifiers.modules.interaction.edible;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -46,7 +47,7 @@ public record EdibleRemoveEffectModule(MobEffect effect, IJsonPredicate<LivingEn
   @Override
   public void onToolEaten(IToolStackView tool, ModifierEntry modifier, Player player, EquipmentSlot eatenSlot, int hunger, float saturation, List<ItemStack> representativeItems) {
     if (condition.matches(tool, modifier) && holder.matches(player)) {
-      player.removeEffect(effect);
+      player.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
     }
   }
 }

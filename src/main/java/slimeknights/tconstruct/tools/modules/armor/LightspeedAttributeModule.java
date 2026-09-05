@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.tools.modules.armor;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -27,6 +28,7 @@ import slimeknights.tconstruct.library.modifiers.ModifierHooks;
 import slimeknights.tconstruct.library.modifiers.hook.armor.ArmorWalkModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.armor.EquipmentChangeModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.display.TooltipModifierHook;
+import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;
 import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;
 import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeUniqueField;
 import slimeknights.tconstruct.library.module.HookProvider;
@@ -79,13 +81,13 @@ public record LightspeedAttributeModule(String unique, UUID uuid, Attribute attr
       return;
     }
     // must have speed
-    AttributeInstance attribute = living.getAttribute(this.attribute);
+    AttributeInstance attribute = living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute));
     if (attribute == null) {
       return;
     }
     // start by removing the attribute, we are likely going to give it a new number
-    if (attribute.getModifier(uuid) != null) {
-      attribute.removeModifier(uuid);
+    if (attribute.getModifier(AttributeModule.idFromUUID(uuid)) != null) {
+      attribute.removeModifier(AttributeModule.idFromUUID(uuid));
     }
 
     // not above air
@@ -94,7 +96,7 @@ public record LightspeedAttributeModule(String unique, UUID uuid, Attribute attr
     int light = getLight(level, pos);
     if (light > minLight) {
       int scaledLight = light - minLight;
-      attribute.addTransientModifier(new AttributeModifier(uuid, unique, scaledLight * amount * modifier.getEffectiveLevel(), operation));
+      attribute.addTransientModifier(new AttributeModifier(AttributeModule.idFromUUID(uuid), scaledLight * amount * modifier.getEffectiveLevel(), operation));
 
       // damage boots
       if (level.random.nextFloat() < (damageChance * scaledLight)) {
@@ -111,9 +113,9 @@ public record LightspeedAttributeModule(String unique, UUID uuid, Attribute attr
       IToolStackView newTool = context.getReplacementTool();
       // damaging the tool will trigger this hook, so ensure the new tool has the same level
       if (newTool == null || newTool.isBroken() || newTool.getModifier(modifier.getId()).getEffectiveLevel() != modifier.getEffectiveLevel()) {
-        AttributeInstance attribute = livingEntity.getAttribute(this.attribute);
-        if (attribute != null && attribute.getModifier(uuid) != null) {
-          attribute.removeModifier(uuid);
+        AttributeInstance attribute = livingEntity.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute));
+        if (attribute != null && attribute.getModifier(AttributeModule.idFromUUID(uuid)) != null) {
+          attribute.removeModifier(AttributeModule.idFromUUID(uuid));
         }
       }
     }
@@ -130,7 +132,7 @@ public record LightspeedAttributeModule(String unique, UUID uuid, Attribute attr
     }
     float boost = amount * (light - minLight) * entry.getEffectiveLevel();
     if (boost > 0) {
-      if (operation == Operation.ADDITION) {
+      if (operation == Operation.ADD_VALUE) {
         // multiplies addition boost by 10 and displays as a percent as the players base movement speed is 0.1 and is in unknown units
         // percentages make sense
         boost *= 10;

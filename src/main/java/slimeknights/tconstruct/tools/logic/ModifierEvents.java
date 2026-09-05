@@ -3,6 +3,7 @@ package slimeknights.tconstruct.tools.logic;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multiset;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.resources.ResourceLocation;
@@ -282,7 +283,7 @@ public class ModifierEvents {
 
     // critical boost is defined where the base value is 150%; the 1.21 event directly exposes critical state and multiplier.
     Attribute attribute = TinkerAttributes.CRITICAL_DAMAGE.get();
-    double criticalBoost = living.getAttributeValue(attribute) - attribute.getDefaultValue() + ArmorStatModule.getStat(living, TinkerDataKeys.CRITICAL_DAMAGE);
+    double criticalBoost = living.getAttributeValue(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute)) - attribute.getDefaultValue() + ArmorStatModule.getStat(living, TinkerDataKeys.CRITICAL_DAMAGE);
     if (criticalBoost > 0) {
       boolean isCritical = event.isCriticalHit();
       if (!isCritical && TinkerPredicate.AIRBORNE.matches(living)) {

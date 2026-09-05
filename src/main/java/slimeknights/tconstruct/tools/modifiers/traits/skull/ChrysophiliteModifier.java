@@ -24,7 +24,7 @@ public class ChrysophiliteModifier extends NoLevelsModifier {
 
   @Override
   protected void registerHooks(Builder hookBuilder) {
-    hookBuilder.addModule(GoldenAttributeModule.builder(TinkerAttributes.CHRYSOPHILITE, Operation.ADDITION).amount(1, 1));
+    hookBuilder.addModule(GoldenAttributeModule.builder(TinkerAttributes.CHRYSOPHILITE, Operation.ADD_VALUE).amount(1, 1));
   }
 
   /** @deprecated use {@link GoldenAttributeModule#hasGold(EquipmentChangeContext, EquipmentSlot)} */

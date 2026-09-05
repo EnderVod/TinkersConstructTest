@@ -11,6 +11,6 @@ import slimeknights.tconstruct.tools.modules.armor.GoldenAttributeModule;
 public class GoldGuardModifier extends NoLevelsModifier {
   @Override
   protected void registerHooks(Builder hookBuilder) {
-    hookBuilder.addModule(GoldenAttributeModule.builder(Attributes.MAX_HEALTH, Operation.ADDITION).amount(4, 4));
+    hookBuilder.addModule(GoldenAttributeModule.builder(Attributes.MAX_HEALTH.value(), Operation.ADD_VALUE).amount(4, 4));
   }
 }

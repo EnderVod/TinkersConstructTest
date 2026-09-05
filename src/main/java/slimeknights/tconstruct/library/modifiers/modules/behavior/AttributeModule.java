@@ -2,6 +2,7 @@ package slimeknights.tconstruct.library.modifiers.modules.behavior;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -13,6 +14,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import org.jetbrains.annotations.Nullable;
+import slimeknights.tconstruct.TConstruct;
 import slimeknights.mantle.client.TooltipKey;
 import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.mantle.data.loadable.primitive.EnumLoadable;
@@ -70,6 +72,11 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
     ModifierCondition.TOOL_FIELD,
     (unique, attribute, operation, amount, slots, tooltipStyle, condition) -> new AttributeModule(unique, attribute, operation, amount, slotsToUUIDs(unique, slots), tooltipStyle, condition));
 
+  /** Converts a legacy UUID attribute modifier key into a stable 1.21 ResourceLocation ID. */
+public static ResourceLocation idFromUUID(UUID uuid) {
+  return TConstruct.getResource("attribute/" + uuid);
+}
+
   /** Gets the UUID from a name */
   public static UUID getUUID(String name, EquipmentSlot slot) {
     return UUID.nameUUIDFromBytes((name + "." + slot.getName()).getBytes());
@@ -110,7 +117,7 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
   private AttributeModifier createModifier(IToolStackView tool, ModifierEntry modifier, EquipmentSlot slot) {
     UUID uuid = getUUID(slot);
     if (uuid != null) {
-      return new AttributeModifier(uuid, unique + "." + slot.getName(), formula.apply(tool, modifier), operation);
+      return new AttributeModifier(idFromUUID(uuid), formula.apply(tool, modifier), operation);
     }
     return null;
   }
@@ -130,12 +137,12 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
   @Override
   public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
     if (condition.matches(tool, modifier)) {
-      AttributeInstance instance = context.getEntity().getAttribute(attribute);
+      AttributeInstance instance = context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
       if (instance != null) {
         AttributeModifier attributeModifier = createModifier(tool, modifier, context.getChangedSlot());
         if (attributeModifier != null) {
           // for safety, remove it already there
-          instance.removeModifier(attributeModifier.getId());
+          instance.removeModifier(attributeModifier.id());
           instance.addTransientModifier(attributeModifier);
         }
       }
@@ -147,9 +154,9 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
     if (condition.matches(tool, modifier)) {
       UUID uuid = getUUID(context.getChangedSlot());
       if (uuid != null) {
-        AttributeInstance instance = context.getEntity().getAttribute(attribute);
+        AttributeInstance instance = context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
         if (instance != null) {
-          instance.removeModifier(uuid);
+          instance.removeModifier(idFromUUID(uuid));
         }
       }
     }
@@ -158,7 +165,7 @@ public record AttributeModule(String unique, Attribute attribute, Operation oper
   /** Adds the tooltip for the given attribute */
   public static void addTooltip(Modifier modifier, Attribute attribute, Operation operation, TooltipStyle tooltipStyle, float amount, @Nullable UUID uuid, @Nullable Player player, List<Component> tooltip) {
     switch (tooltipStyle) {
-      case ATTRIBUTE -> TooltipUtil.addAttribute(attribute, operation, amount, uuid, player, tooltip);
+      case ATTRIBUTE -> TooltipUtil.addAttribute(attribute, operation, amount, uuid == null ? null : idFromUUID(uuid), player, tooltip);
       case BOOST -> TooltipModifierHook.addFlatBoost(modifier, Component.translatable(attribute.getDescriptionId()), amount, tooltip);
       case PERCENT -> TooltipModifierHook.addPercentBoost(modifier, Component.translatable(attribute.getDescriptionId()), amount, tooltip);
     }

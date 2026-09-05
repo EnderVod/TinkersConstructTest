@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -27,6 +28,7 @@ import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
 import slimeknights.tconstruct.library.modifiers.hook.armor.EquipmentChangeModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.display.TooltipModifierHook;
+import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;
 import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;
 import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeUniqueField;
 import slimeknights.tconstruct.library.modifiers.modules.util.ModifierCondition;
@@ -80,7 +82,7 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
 
   /** Checks that health is not over max */
   private void checkHealth(LivingEntity living, AttributeInstance instance) {
-    if (attribute == Attributes.MAX_HEALTH) {
+    if (attribute == Attributes.MAX_HEALTH.value()) {
       float newMax = (float) instance.getValue();
       if (living.getHealth() > newMax) {
         living.setHealth(newMax);
@@ -91,12 +93,12 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   /** Updates the attribute on the given entity */
   private void updateAttribute(LivingEntity living, int totalGold) {
     // update attribute
-    AttributeInstance instance = living.getAttribute(attribute);
+    AttributeInstance instance = living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
     if (instance != null) {
-      if (instance.getModifier(uuid) != null) {
-        instance.removeModifier(uuid);
+      if (instance.getModifier(AttributeModule.idFromUUID(uuid)) != null) {
+        instance.removeModifier(AttributeModule.idFromUUID(uuid));
       }
-      instance.addTransientModifier(new AttributeModifier(uuid, unique, amount.compute(totalGold), operation));
+      instance.addTransientModifier(new AttributeModifier(AttributeModule.idFromUUID(uuid), amount.compute(totalGold), operation));
       checkHealth(living, instance);
     }
   }
@@ -132,9 +134,9 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
           data.remove(dataKey);
         }
         LivingEntity living = context.getEntity();
-        AttributeInstance instance = living.getAttribute(attribute);
+        AttributeInstance instance = living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
         if (instance != null) {
-          instance.removeModifier(uuid);
+          instance.removeModifier(AttributeModule.idFromUUID(uuid));
           checkHealth(living, instance);
         }
       }
@@ -160,11 +162,11 @@ public record GoldenAttributeModule(String unique, TinkerDataKey<TotalGold> data
   public void addTooltip(IToolStackView tool, ModifierEntry entry, @Nullable Player player, List<Component> tooltip, TooltipKey tooltipKey, TooltipFlag tooltipFlag) {
     double amount = this.amount.compute(tool.getVolatileData().getBoolean(ModifiableArmorItem.PIGLIN_NEUTRAL) ? 1 : 0);
     if (player != null && tooltipKey == TooltipKey.SHIFT) {
-      AttributeInstance instance = player.getAttribute(attribute);
+      AttributeInstance instance = player.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute));
       if (instance != null) {
-        AttributeModifier modifier = instance.getModifier(uuid);
+        AttributeModifier modifier = instance.getModifier(AttributeModule.idFromUUID(uuid));
         if (modifier != null) {
-          amount = (float) modifier.getAmount();
+          amount = (float) modifier.amount();
         }
       }
     }
