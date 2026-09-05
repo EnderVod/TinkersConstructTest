@@ -40,7 +40,7 @@ public class CrystalshotItem extends ArrowItem {
   }
 
   @Override
-  public AbstractArrow createArrow(Level pLevel, ItemStack pStack, LivingEntity pShooter, javax.annotation.Nullable ItemStack weapon) {
+  public AbstractArrow createArrow(Level pLevel, ItemStack pStack, LivingEntity pShooter, @javax.annotation.Nullable ItemStack weapon) {
     CrystalshotEntity arrow = new CrystalshotEntity(pLevel, pShooter, pStack, weapon);
     String variant = "random";
     CompoundTag tag = TagUtil.getTag(pStack);
@@ -72,7 +72,7 @@ public class CrystalshotItem extends ArrowItem {
       setSoundEvent(Sounds.CRYSTALSHOT.getSound());
     }
 
-    public CrystalshotEntity(Level level, LivingEntity shooter, ItemStack ammo, javax.annotation.Nullable ItemStack weapon) {
+    public CrystalshotEntity(Level level, LivingEntity shooter, ItemStack ammo, @javax.annotation.Nullable ItemStack weapon) {
       super(TinkerTools.crystalshotEntity.get(), shooter, level, ammo.copyWithCount(1), weapon);
       setSoundEvent(Sounds.CRYSTALSHOT.getSound());
     }
