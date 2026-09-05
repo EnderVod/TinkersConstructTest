@@ -76,7 +76,7 @@ public interface SimpleFluidTank extends IFluidTank, IFluidHandler {
     if (fluid.isEmpty()) {
       int amount = Math.min(getCapacity(), resource.getAmount());
       if (action.execute()) {
-        updateFluid(new FluidStack(resource, amount), amount);
+        updateFluid(resource.copyWithAmount(amount), amount);
       }
       return amount;
     }
@@ -104,7 +104,7 @@ public interface SimpleFluidTank extends IFluidTank, IFluidHandler {
       drained = fluid.getAmount();
     }
     // build the result
-    FluidStack result = new FluidStack(fluid, drained);
+    FluidStack result = fluid.copyWithAmount(drained);
     if (action.execute()) {
       fluid.shrink(drained);
       updateFluid(fluid, -drained);
