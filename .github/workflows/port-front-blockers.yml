@@ -1,4 +1,4 @@
-name: Tinkers GuiUtil Render API Migration
+name: Tinkers Effect Cure Compatibility Migration
 
 on:
   push:
@@ -23,61 +23,129 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port GuiUtil buffer builder calls to 1.21
+      - name: Port curative item behavior to NeoForge effect cures
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java')
+          helper = Path('src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java')
+          if helper.exists():
+              raise RuntimeError('EffectCureHelper already exists; inspect before replacing')
+          helper.write_text('''package slimeknights.tconstruct.library.modifiers;\n\nimport lombok.AccessLevel;\nimport lombok.NoArgsConstructor;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.world.effect.MobEffectInstance;\nimport net.minecraft.world.item.Item;\nimport net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.Items;\nimport net.neoforged.neoforge.common.EffectCure;\nimport net.neoforged.neoforge.common.EffectCures;\n\nimport javax.annotation.Nullable;\nimport java.util.List;\n\n/** Compatibility helpers for the 1.21 NeoForge effect-cure system. */\n@NoArgsConstructor(access = AccessLevel.PRIVATE)\npublic final class EffectCureHelper {\n  /** Gets the cure selector corresponding to the given item. */\n  public static EffectCure fromItem(Item item) {\n    if (item == Items.MILK_BUCKET) {\n      return EffectCures.MILK;\n    }\n    if (item == Items.HONEY_BOTTLE) {\n      return EffectCures.HONEY;\n    }\n    if (item == Items.TOTEM_OF_UNDYING) {\n      return EffectCures.PROTECTED_BY_TOTEM;\n    }\n    return EffectCure.get(BuiltInRegistries.ITEM.getKey(item).toString());\n  }\n\n  /** Gets the cure selector corresponding to the given stack's item. */\n  public static EffectCure fromStack(ItemStack stack) {\n    return fromItem(stack.getItem());\n  }\n\n  /** Replaces the instance cure set with the cures represented by the legacy curative item list. */\n  public static void replaceCurativeItems(MobEffectInstance instance, @Nullable List<Item> items) {\n    if (items != null) {\n      var cures = instance.getCures();\n      cures.clear();\n      for (Item item : items) {\n        cures.add(fromItem(item));\n      }\n    }\n  }\n}\n''', encoding='utf-8')
+
+          # Fluid cure effect: select and remove effects through the deterministic EffectCure.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java')
           text = path.read_text(encoding='utf-8')
-
-          old = '''    BufferBuilder builder = Tesselator.getInstance().getBuilder();\n    builder.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);'''
-          new = '''    BufferBuilder builder = Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);'''
+          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.library.modifiers.fluid.EffectLevel;\n'
+              if anchor not in text:
+                  raise RuntimeError('CureEffectsFluidEffect import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
+          old = '''      // when simulating, search the effects list directly for curative effects\n      // may still be wrong if the event cancels things though, no way to safely simulate it\n      if (action.simulate()) {\n        return target.getActiveEffects().stream().anyMatch(effect -> effect.isCurativeItem(stack)) ? 1 : 0;\n      }\n      return target.curePotionEffects(stack) ? 1 : 0;'''
+          new = '''      var cure = EffectCureHelper.fromStack(stack);\n      // when simulating, search the effects list directly for the selected cure\n      // may still be wrong if the event cancels things though, no way to safely simulate it\n      if (action.simulate()) {\n        return target.getActiveEffects().stream().anyMatch(effect -> effect.getCures().contains(cure)) ? 1 : 0;\n      }\n      return target.removeEffectsCuredBy(cure) ? 1 : 0;'''
           if text.count(old) != 1:
-              raise RuntimeError('GuiUtil Tesselator begin sequence changed unexpectedly')
+              raise RuntimeError('CureEffectsFluidEffect legacy cure block changed unexpectedly')
           text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
 
-          old = 'BufferUploader.drawWithShader(builder.end());'
-          new = 'BufferUploader.drawWithShader(builder.buildOrThrow());'
+          # Unequipping a curative armor piece uses that item's deterministic cure selector.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
+              if anchor not in text:
+                  raise RuntimeError('CureOnRemovalModule import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
+          old = 'context.getEntity().curePotionEffects(new ItemStack(tool.getItem()));'
+          new = 'context.getEntity().removeEffectsCuredBy(EffectCureHelper.fromItem(tool.getItem()));'
           if text.count(old) != 1:
-              raise RuntimeError('GuiUtil buffer finish call changed unexpectedly')
+              raise RuntimeError('CureOnRemovalModule cure call changed unexpectedly')
           text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
 
-          replacements = {
-              'builder.vertex(matrix, x1, y2, z).uv(u1, v2).endVertex();': 'builder.addVertex(matrix, x1, y2, z).setUv(u1, v2);',
-              'builder.vertex(matrix, x2, y2, z).uv(u2, v2).endVertex();': 'builder.addVertex(matrix, x2, y2, z).setUv(u2, v2);',
-              'builder.vertex(matrix, x2, y1, z).uv(u2, v1).endVertex();': 'builder.addVertex(matrix, x2, y1, z).setUv(u2, v1);',
-              'builder.vertex(matrix, x1, y1, z).uv(u1, v1).endVertex();': 'builder.addVertex(matrix, x1, y1, z).setUv(u1, v1);',
-          }
-          for old, new in replacements.items():
-              if text.count(old) != 1:
-                  raise RuntimeError(f'GuiUtil vertex call changed unexpectedly: {old}')
-              text = text.replace(old, new, 1)
+          # Edible cure module uses the same configured curative item selector.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
+              if anchor not in text:
+                  raise RuntimeError('EdibleCureEffectsModule import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
+          old = 'player.curePotionEffects(curativeItem);'
+          new = 'player.removeEffectsCuredBy(EffectCureHelper.fromStack(curativeItem));'
+          if text.count(old) != 1:
+              raise RuntimeError('EdibleCureEffectsModule cure call changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
 
+          # Legacy curative_items now replaces the NeoForge cure set on the instance.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.TConstruct;\n'
+              if anchor not in text:
+                  raise RuntimeError('FluidMobEffect import anchor missing')
+              text = text.replace(anchor, anchor + 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n', 1)
+          old = '''    if (curativeItems != null) {\n      instance.setCurativeItems(curativeItems.stream().map(ItemStack::new).collect(Collectors.toList()));\n    }'''
+          new = '    EffectCureHelper.replaceCurativeItems(instance, curativeItems);'
+          if text.count(old) != 1:
+              raise RuntimeError('FluidMobEffect curative item block changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Combat effect module must add the configured instance itself so its cure set is preserved.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java')
+          text = path.read_text(encoding='utf-8')
+          if 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' not in text:
+              anchor = 'import slimeknights.tconstruct.library.modifiers.ModifierEntry;\n'
+              if anchor not in text:
+                  raise RuntimeError('MobEffectModule import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.tconstruct.library.modifiers.EffectCureHelper;\n' + anchor, 1)
+          old = '''        if (curativeItems != null) {\n          instance.setCurativeItems(curativeItems.stream().map(ItemStack::new).collect(Collectors.toList()));\n        }\n        target.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), (int)duration, level), cause);'''
+          new = '''        EffectCureHelper.replaceCurativeItems(instance, curativeItems);\n        target.addEffect(instance, cause);'''
+          if text.count(old) != 1:
+              raise RuntimeError('MobEffectModule curative/add block changed unexpectedly')
+          text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify GuiUtil render migration
+      - name: Verify effect cure compatibility migration
         shell: bash
         run: |
-          grep -Fq 'Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX)' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
-          grep -Fq 'BufferUploader.drawWithShader(builder.buildOrThrow());' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
-          test "$(grep -F -c 'builder.addVertex(matrix' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java)" -eq 4
-          ! grep -Fq 'getBuilder()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
-          ! grep -Fq 'builder.begin(' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
-          ! grep -Fq 'builder.end()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
-          ! grep -Fq '.endVertex()' src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          grep -Fq 'return EffectCures.MILK;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
+          grep -Fq 'return EffectCures.HONEY;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
+          grep -Fq 'return EffectCures.PROTECTED_BY_TOTEM;' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
+          grep -Fq 'EffectCure.get(BuiltInRegistries.ITEM.getKey(item).toString())' src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java
+          grep -Fq 'effect.getCures().contains(cure)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java
+          grep -Fq 'target.removeEffectsCuredBy(cure)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java
+          grep -Fq 'EffectCureHelper.fromItem(tool.getItem())' src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java
+          grep -Fq 'EffectCureHelper.fromStack(curativeItem)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java
+          grep -Fq 'EffectCureHelper.replaceCurativeItems(instance, curativeItems);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java
+          grep -Fq 'target.addEffect(instance, cause);' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
+          ! grep -R -F 'setCurativeItems' \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
+          ! grep -R -F 'curePotionEffects' \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java
           git diff --check
 
-      - name: Commit GuiUtil render migration
+      - name: Commit effect cure compatibility migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/library/client/GuiUtil.java
+          git add \
+            src/main/java/slimeknights/tconstruct/library/modifiers/EffectCureHelper.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/CureEffectsFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/CureOnRemovalModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleCureEffectsModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidMobEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MobEffectModule.java
           git diff --cached --quiet || {
-            git commit -m 'Port GuiUtil buffer rendering to 1.21'
+            git commit -m 'Port curative item behavior to NeoForge effect cures'
             git push origin HEAD:1.21.1-neoforge
           }
 
