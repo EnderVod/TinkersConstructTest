@@ -11,23 +11,20 @@ import com.google.gson.JsonSerializer;
 import com.google.gson.JsonSyntaxException;
 import io.netty.handler.codec.DecoderException;
 import lombok.RequiredArgsConstructor;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.common.crafting.CraftingHelper;
-import slimeknights.mantle.data.loadable.Loadables;
+import slimeknights.mantle.data.loadable.common.ItemStackLoadable;
 import slimeknights.mantle.util.JsonHelper;
+import slimeknights.mantle.util.typed.TypedMap;
 import slimeknights.tconstruct.library.recipe.partbuilder.Pattern;
 
 import javax.annotation.Nullable;
 
 /** Data holder for a button icon, currently supports item stack icons and pattern icons */
 public abstract class LayoutIcon {
-  /** JSON serializer for a layout button icon */
   public static final Serializer SERIALIZER = new Serializer();
 
-  /** Empty icon, used primarily as a fallback */
   public static final LayoutIcon EMPTY = new LayoutIcon() {
     @Nullable
     @Override
@@ -46,27 +43,23 @@ public abstract class LayoutIcon {
     }
   };
 
-  /** Creates a stack icon */
   public static LayoutIcon ofItem(ItemStack stack) {
     return new ItemStackIcon(stack);
   }
 
-  /** Creates an icon from a pattern */
   public static LayoutIcon ofPattern(Pattern pattern) {
     return new PatternIcon(pattern);
   }
 
-  /** Gets the value of this icon, done this way to separate the drawing logic out */
   @Nullable
   public abstract <T> T getValue(Class<T> clazz);
 
-  /** Reads the button icon from the buffer */
   public static LayoutIcon read(FriendlyByteBuf buffer) {
     Type type = buffer.readEnum(Type.class);
     switch (type) {
       case EMPTY: return EMPTY;
       case ITEM: {
-        ItemStack stack = buffer.readItem();
+        ItemStack stack = ItemStackLoadable.REQUIRED_STACK_NBT.decode(buffer, TypedMap.EMPTY);
         return new ItemStackIcon(stack);
       }
       case PATTERN: {
@@ -77,13 +70,10 @@ public abstract class LayoutIcon {
     throw new DecoderException("Invalid LayoutButtonIcon " + type);
   }
 
-  /** Writes this to the packet buffer */
   public abstract void write(FriendlyByteBuf buffer);
 
-  /** Writes this object to json */
   public abstract JsonObject toJson();
 
-  /** Icon drawing an item stack */
   @RequiredArgsConstructor @VisibleForTesting
   protected static class ItemStackIcon extends LayoutIcon {
     private final ItemStack stack;
@@ -100,22 +90,15 @@ public abstract class LayoutIcon {
     @Override
     public void write(FriendlyByteBuf buffer) {
       buffer.writeEnum(Type.ITEM);
-      buffer.writeItem(stack);
+      ItemStackLoadable.REQUIRED_STACK_NBT.encode(buffer, stack);
     }
 
     @Override
     public JsonObject toJson() {
-      JsonObject json = new JsonObject();
-      json.add("item", Loadables.ITEM.serialize(stack.getItem()));
-      CompoundTag tag = stack.getTag();
-      if (tag != null) {
-        json.addProperty("nbt", tag.toString());
-      }
-      return json;
+      return ItemStackLoadable.REQUIRED_STACK_NBT.serialize(stack).getAsJsonObject();
     }
   }
 
-  /** Icon drawing a static patttern sprite */
   @RequiredArgsConstructor @VisibleForTesting
   protected static class PatternIcon extends LayoutIcon {
     private final Pattern pattern;
@@ -143,14 +126,12 @@ public abstract class LayoutIcon {
     }
   }
 
-  /** enum of icon types for serialization */
   private enum Type {
     EMPTY,
     ITEM,
     PATTERN
   }
 
-  /** Serializer class */
   protected static class Serializer implements JsonSerializer<LayoutIcon>, JsonDeserializer<LayoutIcon> {
     @Override
     public LayoutIcon deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
@@ -160,10 +141,9 @@ public abstract class LayoutIcon {
         return new PatternIcon(pattern);
       }
       if (object.has("item")) {
-        ItemStack stack = CraftingHelper.getItemStack(object, true);
+        ItemStack stack = ItemStackLoadable.REQUIRED_STACK_NBT.convert(object, "button_icon");
         return new ItemStackIcon(stack);
       }
-      // not sure why this would be needed, but might as well
       if (object.entrySet().isEmpty()) {
         return EMPTY;
       }

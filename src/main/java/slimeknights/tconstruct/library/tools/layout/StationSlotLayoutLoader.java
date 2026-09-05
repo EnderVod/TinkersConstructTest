@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.mojang.serialization.JsonOps;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.minecraft.resources.ResourceLocation;
@@ -19,10 +20,12 @@ import net.minecraft.util.GsonHelper;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.common.crafting.CraftingHelper;
+import net.neoforged.neoforge.common.conditions.ConditionalOps;
+import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.conditions.ICondition.IContext;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
+import slimeknights.mantle.data.loadable.common.IngredientLoadable;
 import slimeknights.tconstruct.common.network.TinkerNetwork;
 import slimeknights.tconstruct.library.recipe.partbuilder.Pattern;
 
@@ -37,9 +40,7 @@ import java.util.Map.Entry;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Loader for tinker station slot layouts, loaded serverside as that makes it eaiser to modify with recipes and the filters are needed both sides
- */
+/** Loader for tinker station slot layouts. */
 @Log4j2
 public class StationSlotLayoutLoader extends SimpleJsonResourceReloadListener {
   public static final String FOLDER = "tinkering/station_layouts";
@@ -52,34 +53,39 @@ public class StationSlotLayoutLoader extends SimpleJsonResourceReloadListener {
     .create();
   private static final StationSlotLayoutLoader INSTANCE = new StationSlotLayoutLoader();
 
-  /** Map of name to slot layout */
   private Map<ResourceLocation, StationSlotLayout> layoutMap = Collections.emptyMap();
-  /** List of layouts that must be loaded for the game to work properly */
   private final List<ResourceLocation> requiredLayouts = new ArrayList<>();
 
-  /** List of all slots in order */
   @Getter
   private List<StationSlotLayout> sortedSlots = Collections.emptyList();
 
-  /** Context for parsing conditions */
   private IContext conditionContext = IContext.EMPTY;
 
   private StationSlotLayoutLoader() {
     super(GSON, FOLDER);
   }
 
-  /** Sets the slots to the given collection from the packet */
   public void setSlots(Collection<StationSlotLayout> slots) {
     setSlots(slots.stream().collect(Collectors.toMap(StationSlotLayout::getName, Function.identity())));
   }
 
-  /** Updates the slot layouts */
   private void setSlots(Map<ResourceLocation, StationSlotLayout> map) {
     this.layoutMap = map;
     this.sortedSlots = map.values().stream()
                           .filter(layout -> !layout.isMain())
                           .sorted(Comparator.comparingInt(StationSlotLayout::getSortIndex))
                           .collect(Collectors.toList());
+  }
+
+  /** Tests NeoForge conditions while preserving the reload event's tag-aware condition context. */
+  private boolean conditionsMatch(JsonObject object) {
+    JsonElement conditions = object.get(ConditionalOps.DEFAULT_CONDITIONS_KEY);
+    if (conditions == null) {
+      return true;
+    }
+    return ICondition.LIST_CODEC.parse(JsonOps.INSTANCE, conditions)
+      .getOrThrow(JsonParseException::new)
+      .stream().allMatch(condition -> condition.test(conditionContext));
   }
 
   @Override
@@ -90,10 +96,8 @@ public class StationSlotLayoutLoader extends SimpleJsonResourceReloadListener {
       ResourceLocation key = entry.getKey();
       JsonElement value = entry.getValue();
       try {
-        // skip empty objects, allows disabling a slot at a lower datapack
         JsonObject object = GsonHelper.convertToJsonObject(value, "station_layout");
-        if (!object.entrySet().isEmpty() && CraftingHelper.processConditions(object, "conditions", conditionContext)) {
-          // just need a valid slot information
+        if (!object.entrySet().isEmpty() && conditionsMatch(object)) {
           StationSlotLayout layout = GSON.fromJson(object, StationSlotLayout.class);
           int size = layout.getInputSlots().size() + (layout.getToolSlot().isHidden() ? 0 : 1);
           if (size < 2) {
@@ -114,55 +118,42 @@ public class StationSlotLayoutLoader extends SimpleJsonResourceReloadListener {
     }
   }
 
-  /** Gets a layout by name */
   public StationSlotLayout get(ResourceLocation name) {
     return layoutMap.getOrDefault(name, StationSlotLayout.EMPTY);
   }
 
-
-  /** Registers the name of a layout that should be loaded, if its missing that causes an error */
   public void registerRequiredLayout(ResourceLocation name) {
     requiredLayouts.add(name);
   }
 
-  /* Events */
-
-  /** Called on datapack sync to send the tool data to all players */
   private void onDatapackSync(OnDatapackSyncEvent event) {
     UpdateTinkerSlotLayoutsPacket packet = new UpdateTinkerSlotLayoutsPacket(layoutMap.values());
     TinkerNetwork.getInstance().sendToPlayerList(event.getPlayer(), event.getPlayerList(), packet);
   }
 
-  /** Adds the managers as datapack listeners */
   private void addDataPackListeners(final AddReloadListenerEvent event) {
     event.addListener(this);
     conditionContext = event.getConditionContext();
   }
 
-
-  /* Static */
-
-  /** Gets the singleton instance of the loader */
   public static StationSlotLayoutLoader getInstance() {
     return INSTANCE;
   }
 
-  /** Initializes the tool definition loader */
   public static void init() {
     NeoForge.EVENT_BUS.addListener(INSTANCE::addDataPackListeners);
     NeoForge.EVENT_BUS.addListener(INSTANCE::onDatapackSync);
   }
 
-  /** GSON serializer for ingredients */
   private static class IngredientSerializer implements JsonSerializer<Ingredient>, JsonDeserializer<Ingredient> {
     @Override
     public Ingredient deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
-      return Ingredient.fromJson(json);
+      return IngredientLoadable.DISALLOW_EMPTY.convert(json, "ingredient");
     }
 
     @Override
     public JsonElement serialize(Ingredient ingredient, Type typeOfSrc, JsonSerializationContext context) {
-      return ingredient.toJson();
+      return IngredientLoadable.DISALLOW_EMPTY.serialize(ingredient);
     }
   }
 }
