@@ -1,4 +1,4 @@
-name: Tinkers Book Recipe API Migration
+name: Tinkers Small 1.21 Compatibility Cleanup
 
 on:
   push:
@@ -23,74 +23,82 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port book recipe and component APIs
+      - name: Port remaining small 1.21 APIs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # ContentTool: RecipeManager 1.21 exposes RecipeHolder lists through getAllRecipesFor().
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java')
+          # Durability capability moved from Item to component-bearing ItemStack.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java')
           text = path.read_text(encoding='utf-8')
-          text = text.replace('import net.minecraft.world.inventory.CraftingContainer;\n', '')
-          text = text.replace('import net.minecraft.world.item.crafting.Recipe;\n', '')
-          if 'import net.minecraft.world.item.crafting.CraftingRecipe;\n' not in text:
-              anchor = 'import net.minecraft.world.item.crafting.Ingredient;\n'
-              if anchor not in text:
-                  raise RuntimeError('ContentTool Ingredient import anchor missing')
-              text = text.replace(anchor, 'import net.minecraft.world.item.crafting.CraftingRecipe;\n' + anchor, 1)
+          count = text.count('stack.getItem().canBeDepleted()')
+          if count != 2:
+              raise RuntimeError(f'DurabilityDisplayModifierHook expected 2 canBeDepleted calls, found {count}')
+          text = text.replace('stack.getItem().canBeDepleted()', 'stack.isDamageableItem()')
+          path.write_text(text, encoding='utf-8')
 
-          old = '''      Recipe<CraftingContainer> recipe = Optional.ofNullable(Minecraft.getInstance().level)\n                                                 .flatMap(world -> {\n                                                   RegistryAccess access = world.registryAccess();\n                                                   return world.getRecipeManager().byType(RecipeType.CRAFTING).values().stream()\n                                                        .filter(r -> r.getResultItem(access).getItem() == tool.asItem())\n                                                        .findFirst();\n                                                 })\n                                                 .orElse(null);'''
-          new = '''      CraftingRecipe recipe = Optional.ofNullable(Minecraft.getInstance().level)\n                                                 .flatMap(world -> {\n                                                   RegistryAccess access = world.registryAccess();\n                                                   return world.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()\n                                                        .map(holder -> holder.value())\n                                                        .filter(r -> r.getResultItem(access).getItem() == tool.asItem())\n                                                        .findFirst();\n                                                 })\n                                                 .orElse(null);'''
+          # Adventure-mode placement predicate is still exposed directly on ItemStack under its 1.21 name.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java')
+          text = path.read_text(encoding='utf-8')
+          old = 'stack.hasAdventureModePlaceTagForBlock(level.registryAccess().registryOrThrow(Registries.BLOCK), new BlockInWorld(level, getBlockPos(), false))'
+          new = 'stack.canPlaceOnBlockInAdventureMode(new BlockInWorld(level, getBlockPos(), false))'
           if text.count(old) != 1:
-              raise RuntimeError('ContentTool crafting recipe lookup changed unexpectedly')
-          text = text.replace(old, new, 1)
-
-          old = '''        List<Ingredient> extraRequirements = Optional.ofNullable(Minecraft.getInstance().level)\n                                                     .flatMap(world -> world.getRecipeManager().byType(TinkerRecipeTypes.TINKER_STATION.get()).values().stream()\n                                                                            .filter(r -> r instanceof ToolBuildingRecipe toolRecipe && toolRecipe.getOutput() == tool)\n                                                                            .map(r -> ((ToolBuildingRecipe)r).getExtraRequirements())\n                                                                            .findFirst()).orElse(List.of());'''
-          new = '''        List<Ingredient> extraRequirements = Optional.ofNullable(Minecraft.getInstance().level)\n                                                     .flatMap(world -> world.getRecipeManager().getAllRecipesFor(TinkerRecipeTypes.TINKER_STATION.get()).stream()\n                                                                            .map(holder -> holder.value())\n                                                                            .filter(r -> r instanceof ToolBuildingRecipe toolRecipe && toolRecipe.getOutput() == tool)\n                                                                            .map(r -> ((ToolBuildingRecipe)r).getExtraRequirements())\n                                                                            .findFirst()).orElse(List.of());'''
-          if text.count(old) != 1:
-              raise RuntimeError('ContentTool tinker station recipe lookup changed unexpectedly')
+              raise RuntimeError('FluidEffectContext adventure placement call changed unexpectedly')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
 
-          # Component.Serializer is static-only in 1.21; SerializerAdapter is the Gson adapter.
-          path = Path('src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java')
+          # ChangeOverTimeBlock renamed applyChangeOverTime to changeOverTime in vanilla 1.21.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java')
           text = path.read_text(encoding='utf-8')
-          if 'import net.minecraft.core.RegistryAccess;\n' not in text:
-              anchor = 'import net.minecraft.network.chat.Component;\n'
-              if anchor not in text:
-                  raise RuntimeError('TinkerBook Component import anchor missing')
-              text = text.replace(anchor, 'import net.minecraft.core.RegistryAccess;\n' + anchor, 1)
-          old = 'BookLoader.registerGsonTypeAdapter(Component.class, new Component.Serializer());'
-          new = 'BookLoader.registerGsonTypeAdapter(Component.class, new Component.SerializerAdapter(RegistryAccess.EMPTY));'
+          old = 'copper.applyChangeOverTime(state, world, context.getBlockPos(), world.getRandom());'
+          new = 'copper.changeOverTime(state, world, context.getBlockPos(), world.getRandom());'
           if text.count(old) != 1:
-              raise RuntimeError('TinkerBook component adapter call changed unexpectedly')
+              raise RuntimeError('FluidEffect copper weathering call changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Mantle owns the compatibility wrapper for NeoForge condition codecs.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('import net.neoforged.neoforge.common.crafting.CraftingHelper;\n', '')
+          if 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' not in text:
+              anchor = 'import slimeknights.mantle.recipe.ingredient.FluidIngredient;\n'
+              if anchor not in text:
+                  raise RuntimeError('FluidEffectManager Mantle import anchor missing')
+              text = text.replace(anchor, 'import slimeknights.mantle.recipe.condition.ConditionHelper;\n' + anchor, 1)
+          old = 'if (!CraftingHelper.processConditions(json, "conditions", conditionContext)) {'
+          new = 'if (!ConditionHelper.processConditions(json, "conditions", conditionContext)) {'
+          if text.count(old) != 1:
+              raise RuntimeError('FluidEffectManager condition call changed unexpectedly')
           text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify book API migration
+      - name: Verify small compatibility cleanup
         shell: bash
         run: |
-          grep -Fq 'CraftingRecipe recipe = Optional.ofNullable' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
-          test "$(grep -F -c 'getAllRecipesFor(' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java)" -eq 2
-          test "$(grep -F -c '.map(holder -> holder.value())' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java)" -eq 2
-          ! grep -Fq '.byType(' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
-          ! grep -Fq 'CraftingContainer' src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java
-          grep -Fq 'new Component.SerializerAdapter(RegistryAccess.EMPTY)' src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
-          ! grep -Fq 'new Component.Serializer()' src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
+          test "$(grep -F -c 'stack.isDamageableItem()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java)" -ge 2
+          ! grep -Fq 'canBeDepleted()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java
+          grep -Fq 'stack.canPlaceOnBlockInAdventureMode(new BlockInWorld' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
+          ! grep -Fq 'hasAdventureModePlaceTagForBlock' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java
+          grep -Fq 'copper.changeOverTime(state, world, context.getBlockPos(), world.getRandom());' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java
+          grep -Fq 'ConditionHelper.processConditions(json, "conditions", conditionContext)' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
+          ! grep -Fq 'CraftingHelper.processConditions' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
           git diff --check
 
-      - name: Commit book API migration
+      - name: Commit small compatibility cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/client/book/content/ContentTool.java \
-            src/main/java/slimeknights/tconstruct/library/client/book/TinkerBook.java
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/display/DurabilityDisplayModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectContext.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffectManager.java
           git diff --cached --quiet || {
-            git commit -m 'Port book recipe lookups to 1.21 holders'
+            git commit -m 'Port remaining small compatibility APIs to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
