@@ -1,4 +1,4 @@
-name: Tinkers Stack Helper API Cleanup
+name: Tinkers Context and Entity API Cleanup
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port stack copy and NBT buffer helpers
+      - name: Port context and entity helpers to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
@@ -36,78 +36,108 @@ jobs:
                   raise RuntimeError(f'{label}: expected exactly one match, found {count}')
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # FluidStack 1.21 exposes component-preserving copies through copyWithAmount().
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java')
-          replace_once(path, 'helper.setFluid(tool, new FluidStack(fluid, amount));',
-                       'helper.setFluid(tool, fluid.copyWithAmount(amount));', 'FluidAsCapacityModule copy')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java')
-          replace_once(path, 'helper.setFluid(tool, new FluidStack(fluid, amount));',
-                       'helper.setFluid(tool, fluid.copyWithAmount(amount));', 'FluidPredicateAsCapacityModule copy')
-
-          # FriendlyByteBuf removed readAnySizeNbt(); ordinary readNbt() is the 1.21 API used by Mantle loadables.
-          path = Path('src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java')
-          replace_once(path, 'CompoundTag tag = buffer.readAnySizeNbt();',
-                       'CompoundTag tag = buffer.readNbt();', 'GsonLoadable NBT read')
-
-          # ItemStack now owns count-preserving copies and component-aware identity comparison.
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java')
+          # NeoForge 1.21 moved final block XP from BreakEvent to BlockDropsEvent.
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java')
           text = path.read_text(encoding='utf-8')
-          expected = {
-              'ItemHandlerHelper.copyStackWithSize(ammo, projectilesDesired)': 'ammo.copyWithCount(projectilesDesired)',
-              'ItemHandlerHelper.copyStackWithSize(ammo, Math.min(projectilesDesired, ammo.getCount()))': 'ammo.copyWithCount(Math.min(projectilesDesired, ammo.getCount()))',
-              'ItemHandlerHelper.copyStackWithSize(standardAmmo, projectilesDesired)': 'standardAmmo.copyWithCount(projectilesDesired)',
-              'ItemStack.isSameItemSameTags(stack, match)': 'ItemStack.isSameItemSameComponents(stack, match)',
-          }
-          for old, new in expected.items():
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'BowAmmoModifierHook expected exactly one {old!r}, found {count}')
-              text = text.replace(old, new, 1)
-          if 'ItemHandlerHelper.' not in text:
-              text = text.replace('import net.neoforged.neoforge.items.ItemHandlerHelper;\n', '')
-          path.write_text(text, encoding='utf-8')
-
-          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java')
-          text = path.read_text(encoding='utf-8')
-          old = 'ItemHandlerHelper.copyStackWithSize(item.get(), count * item.getCount())'
-          new = 'item.get().copyWithCount(count * item.getCount())'
-          if text.count(old) != 1:
-              raise RuntimeError('DropItemFluidEffect stack copy changed unexpectedly')
+          if 'import net.neoforged.neoforge.event.level.BlockDropsEvent;' not in text:
+              anchor = 'import net.neoforged.neoforge.event.level.BlockEvent;\n'
+              if anchor not in text:
+                  raise RuntimeError('BlockSideHitListener BlockEvent import anchor missing')
+              text = text.replace(anchor, anchor + 'import net.neoforged.neoforge.event.level.BlockDropsEvent;\n', 1)
+          old = '''  private static void breakBlock(BlockEvent.BreakEvent event) {\n    TinkerDataCapability.Holder data = TinkerDataCapability.getData(event.getPlayer());\n    if (data != null) {\n      data.put(LAST_XP, event.getExpToDrop());\n    }\n  }'''
+          new = '''  private static void breakBlock(BlockDropsEvent event) {\n    if (event.getBreaker() instanceof Player player) {\n      TinkerDataCapability.Holder data = TinkerDataCapability.getData(player);\n      if (data != null) {\n        data.put(LAST_XP, event.getDroppedExperience());\n      }\n    }\n  }'''
+          if old not in text:
+              raise RuntimeError('BlockSideHitListener XP listener changed unexpectedly')
           text = text.replace(old, new, 1)
-          if 'ItemHandlerHelper.' not in text:
-              text = text.replace('import net.neoforged.neoforge.items.ItemHandlerHelper;\n', '')
           path.write_text(text, encoding='utf-8')
+
+          # UseOnContext#getHitResult is protected in 1.21; reconstruct from public accessors.
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java')
+          replace_once(path,
+            'this(base.getLevel(), base.getPlayer(), base.getHand(), base.getItemInHand(), base.getHitResult());',
+            'this(base.getLevel(), base.getPlayer(), base.getHand(), base.getItemInHand(), new BlockHitResult(base.getClickLocation(), base.getClickedFace(), base.getClickedPos(), base.isInside()));',
+            'MutableUseOnContext hit result')
+
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/Util.java')
+          text = path.read_text(encoding='utf-8')
+          old = '''  private static int calcColor(DyeColor color) {\n    float[] diffuse = color.getTextureDiffuseColors();\n    return FastColor.ARGB32.color(255, Math.round(255 * diffuse[0]), Math.round(255 * diffuse[1]), Math.round(255 * diffuse[2]));\n  }'''
+          new = '''  private static int calcColor(DyeColor color) {\n    return color.getTextureDiffuseColor();\n  }'''
+          if old not in text:
+              raise RuntimeError('Util dye color helper changed unexpectedly')
+          text = text.replace(old, new, 1)
+          old = 'return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(context.getHitResult(), offset));'
+          new = 'return new UseOnContext(context.getLevel(), context.getPlayer(), context.getHand(), context.getItemInHand(), offset(new BlockHitResult(context.getClickLocation(), context.getClickedFace(), context.getClickedPos(), context.isInside()), offset));'
+          if text.count(old) != 1:
+              raise RuntimeError('Util UseOnContext offset changed unexpectedly')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # DamageSource no longer exposes isIndirect; direct damage means direct and causing entities are identical.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java')
+          replace_once(path,
+            'return source.getEntity() != null && !source.isIndirect() && !source.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS);',
+            'return source.getEntity() != null && source.getDirectEntity() == source.getEntity() && !source.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS);',
+            'OnAttacked direct damage')
+
+          # Entity#setSecondsOnFire was replaced by igniteForSeconds(float).
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java')
+          text = path.read_text(encoding='utf-8')
+          count = text.count('target.setSecondsOnFire(')
+          if count != 2:
+              raise RuntimeError(f'FireFluidEffect expected 2 legacy ignition calls, found {count}')
+          text = text.replace('target.setSecondsOnFire(', 'target.igniteForSeconds(')
+          path.write_text(text, encoding='utf-8')
+
+          # MobEffectInstance now exposes a holder; inspect the effect value for instant behavior.
+          path = Path('src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java')
+          replace_once(path, 'instance.getEffect().isInstantenous()', 'instance.getEffect().value().isInstantenous()', 'PotionCloud instant effect')
+
+          # ResourceLocation single-string constructors are private/removed in 1.21.
+          for name in (
+              'src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java',
+              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              old = 'new ResourceLocation("missingno")'
+              if text.count(old) != 1:
+                  raise RuntimeError(f'{name}: expected one legacy missingno ResourceLocation')
+              text = text.replace(old, 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")', 1)
+              path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify stack helper cleanup
+      - name: Verify context and entity cleanup
         shell: bash
         run: |
-          grep -Fq 'fluid.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java
-          grep -Fq 'fluid.copyWithAmount(amount)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java
-          grep -Fq 'CompoundTag tag = buffer.readNbt();' src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java
-          test "$(grep -F -c '.copyWithCount(' src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java)" -ge 3
-          grep -Fq 'ItemStack.isSameItemSameComponents(stack, match)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java
-          grep -Fq 'item.get().copyWithCount(count * item.getCount())' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
-          ! grep -R -F 'ItemHandlerHelper.copyStackWithSize' \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
-          ! grep -Fq 'readAnySizeNbt' src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java
+          grep -Fq 'private static void breakBlock(BlockDropsEvent event)' src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java
+          grep -Fq 'event.getDroppedExperience()' src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java
+          ! grep -R -F 'getHitResult()' \
+            src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java \
+            src/main/java/slimeknights/tconstruct/library/utils/Util.java
+          grep -Fq 'return color.getTextureDiffuseColor();' src/main/java/slimeknights/tconstruct/library/utils/Util.java
+          grep -Fq 'source.getDirectEntity() == source.getEntity()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java
+          test "$(grep -F -c 'target.igniteForSeconds(' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java)" -eq 2
+          grep -Fq 'instance.getEffect().value().isInstantenous()' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java
+          grep -Fq 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java
+          grep -Fq 'ResourceLocation.fromNamespaceAndPath("minecraft", "missingno")' src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java
           git diff --check
 
-      - name: Commit stack helper cleanup
+      - name: Commit context and entity cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidAsCapacityModule.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/modules/capacity/FluidPredicateAsCapacityModule.java \
-            src/main/java/slimeknights/tconstruct/library/utils/GsonLoadable.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/hook/ranged/BowAmmoModifierHook.java \
-            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/general/DropItemFluidEffect.java
+            src/main/java/slimeknights/tconstruct/library/utils/BlockSideHitListener.java \
+            src/main/java/slimeknights/tconstruct/library/utils/MutableUseOnContext.java \
+            src/main/java/slimeknights/tconstruct/library/utils/Util.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/armor/OnAttackedModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/entity/FireFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/PotionCloudFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/FluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/MaxArmorLevelModule.java
           git diff --cached --quiet || {
-            git commit -m 'Port stack copy and buffer helpers to 1.21'
+            git commit -m 'Port context and entity helpers to 1.21'
             git push origin HEAD:1.21.1-neoforge
           }
 
