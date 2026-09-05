@@ -1,4 +1,4 @@
-name: Tinkers Attribute and Effect Holder Migration
+name: Tinkers Enchantment Component Migration
 
 on:
   push:
@@ -23,251 +23,132 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port attribute and residual effect APIs to 1.21 holders
+      - name: Port enchantment components and mining context
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           root = Path('src/main/java')
 
-          def path(rel):
+          def p(rel):
               return root / rel
 
-          def add_import(p, anchor, imp):
-              text = p.read_text(encoding='utf-8')
-              if imp not in text:
-                  if anchor not in text:
-                      raise RuntimeError(f'Import anchor missing in {p}: {anchor!r}')
-                  text = text.replace(anchor, imp + anchor, 1)
-                  p.write_text(text, encoding='utf-8')
-
-          def replace(p, old, new, expected=1):
-              text = p.read_text(encoding='utf-8')
+          def replace(path, old, new, expected=1):
+              text = path.read_text(encoding='utf-8')
               count = text.count(old)
               if count != expected:
-                  raise RuntimeError(f'{p}: expected {expected} x {old!r}, found {count}')
-              p.write_text(text.replace(old, new), encoding='utf-8')
+                  raise RuntimeError(f'{path}: expected {expected} x {old!r}, found {count}')
+              path.write_text(text.replace(old, new), encoding='utf-8')
 
-          # Rename the vanilla AttributeModifier operation enum without touching Tinkers StatOperation.
-          counts = {'ADDITION': 0, 'MULTIPLY_BASE': 0, 'MULTIPLY_TOTAL': 0}
-          for p in (root / 'slimeknights/tconstruct').rglob('*.java'):
-              text = p.read_text(encoding='utf-8')
-              if 'import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;' in text:
-                  for old, new in [('ADDITION', 'ADD_VALUE'), ('MULTIPLY_BASE', 'ADD_MULTIPLIED_BASE'), ('MULTIPLY_TOTAL', 'ADD_MULTIPLIED_TOTAL')]:
-                      count = text.count('Operation.' + old)
-                      counts[old] += count
-                      text = text.replace('Operation.' + old, 'Operation.' + new)
-                  p.write_text(text, encoding='utf-8')
-          if counts != {'ADDITION': 30, 'MULTIPLY_BASE': 11, 'MULTIPLY_TOTAL': 24}:
-              raise RuntimeError(f'Unexpected vanilla operation counts: {counts}')
+          def add_import(path, anchor, imp):
+              text = path.read_text(encoding='utf-8')
+              if imp not in text:
+                  if anchor not in text:
+                      raise RuntimeError(f'Import anchor missing in {path}: {anchor!r}')
+                  path.write_text(text.replace(anchor, imp + anchor, 1), encoding='utf-8')
 
-          replace(path('slimeknights/tconstruct/tools/TinkerModifiers.java'),
-                  'AttributeModifier.Operation.ADDITION', 'AttributeModifier.Operation.ADD_VALUE')
+          # Fix the one missing import exposed by the attribute batch.
+          path = p('slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java')
+          add_import(path, 'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeUniqueField;\n',
+                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
 
-          # Accept both legacy Tinkers operation names and the new 1.21 serialized names.
-          p = path('slimeknights/tconstruct/library/json/TinkerLoadables.java')
-          old = '  public static final StringLoadable<Operation> OPERATION = new EnumLoadable<>(Operation.class);'
-          new = '''  public static final StringLoadable<Operation> OPERATION = StringLoadable.DEFAULT.comapFlatMap((name, error) -> switch (name) {
-            case "addition", "add_value" -> Operation.ADD_VALUE;
-            case "multiply_base", "add_multiplied_base" -> Operation.ADD_MULTIPLIED_BASE;
-            case "multiply_total", "add_multiplied_total" -> Operation.ADD_MULTIPLIED_TOTAL;
-            default -> throw error.create("Unknown attribute operation " + name);
-          }, Operation::getSerializedName);'''
-          replace(p, old, new)
-
-          # Residual raw MobEffect values are wrapped only at vanilla Holder callsites.
-          for rel, old, new in [
-              ('slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleRemoveEffectModule.java',
-               'player.removeEffect(effect);', 'player.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'),
-              ('slimeknights/tconstruct/library/json/predicate/HasMobEffectPredicate.java',
-               'living.hasEffect(effect)', 'living.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))'),
-              ('slimeknights/tconstruct/library/json/variable/entity/EntityEffectLevelVariable.java',
-               'entity.getEffect(effect)', 'entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))'),
-              ('slimeknights/tconstruct/tools/modules/ClearEffectOnUnequipModule.java',
-               'entity.removeEffect(effect);', 'entity.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));'),
-          ]:
-              p = path(rel)
-              add_import(p, 'import net.minecraft.world.effect.MobEffect;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-              replace(p, old, new)
-
-          # Datagen records still store raw MobEffect, so unwrap vanilla holders at construction.
-          p = path('slimeknights/tconstruct/tools/data/ModifierProvider.java')
-          text = p.read_text(encoding='utf-8')
-          for cls, expected in [('HasMobEffectPredicate', 2), ('EntityEffectLevelVariable', 2), ('EdibleRemoveEffectModule', 1)]:
-              pattern = rf'new {cls}\(MobEffects\.([A-Z0-9_]+)\)'
-              text, count = re.subn(pattern, rf'new {cls}(MobEffects.\1.value())', text)
-              if count != expected:
-                  raise RuntimeError(f'{cls}: expected {expected} vanilla holder constructor callsites, found {count}')
-          p.write_text(text, encoding='utf-8')
-
-          # Raw attribute variable callsite.
-          p = path('slimeknights/tconstruct/library/json/variable/entity/AttributeEntityVariable.java')
-          add_import(p, 'import net.minecraft.world.entity.LivingEntity;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          replace(p, 'entity.getAttributeValue(attribute)',
-                  'entity.getAttributeValue(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
-
-          # Vanilla Attributes constants passed to raw-Attribute records/builders are unwrapped at construction.
-          patterns = [
-              (r'(?<![A-Za-z0-9_])AttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'AttributeModule.builder(Attributes.\1.value(),', 18),
-              (r'MaxArmorAttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'MaxArmorAttributeModule.builder(Attributes.\1.value(),', 1),
-              (r'GoldenAttributeModule\.builder\(Attributes\.([A-Z0-9_]+),', r'GoldenAttributeModule.builder(Attributes.\1.value(),', 2),
-              (r'new AttributeEntityVariable\(Attributes\.([A-Z0-9_]+)\)', r'new AttributeEntityVariable(Attributes.\1.value())', 3),
-              (r'new LightspeedAttributeModule\(([^,]+), Attributes\.([A-Z0-9_]+),', r'new LightspeedAttributeModule(\1, Attributes.\2.value(),', 1),
-          ]
-          java_files = list((root / 'slimeknights/tconstruct').rglob('*.java'))
-          for pattern, repl, expected in patterns:
-              total = 0
-              for p in java_files:
-                  text = p.read_text(encoding='utf-8')
-                  text, count = re.subn(pattern, repl, text)
-                  if count:
-                      p.write_text(text, encoding='utf-8')
-                      total += count
-              if total != expected:
-                  raise RuntimeError(f'{pattern}: expected {expected}, found {total}')
-
-          # AttributeModule: preserve legacy UUID identity by mapping it into a stable ResourceLocation ID.
-          p = path('slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java')
-          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          add_import(p, 'import slimeknights.mantle.client.TooltipKey;\n', 'import slimeknights.tconstruct.TConstruct;\n')
-          text = p.read_text(encoding='utf-8')
-          anchor = '  /** Gets the UUID from a name */\n  public static UUID getUUID(String name, EquipmentSlot slot) {\n'
-          helper = '''  /** Converts a legacy UUID attribute modifier key into a stable 1.21 ResourceLocation ID. */
-          public static ResourceLocation idFromUUID(UUID uuid) {
-            return TConstruct.getResource("attribute/" + uuid);
-          }
-
-          '''
+          # Keep the public modifier hook API on raw Enchantment values, but bridge stack data through 1.21 components.
+          path = p('slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java')
+          add_import(path, 'import net.minecraft.world.item.ItemStack;\n',
+                     'import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.registries.Registries;\n')
+          add_import(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
+                     'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
+          add_import(path, 'import java.util.Collection;\n', 'import java.util.HashMap;\n')
+          replace(path,
+                  '''  static int getEnchantmentLevel(ItemStack stack, Enchantment enchantment) {\n    int level = EnchantmentHelper.getTagEnchantmentLevel(enchantment, stack);''',
+                  '''  static int getEnchantmentLevel(ItemStack stack, Enchantment enchantment) {\n    int level = 0;\n    for (var entry : stack.getEnchantments().entrySet()) {\n      if (entry.getKey().value() == enchantment) {\n        level = entry.getIntValue();\n        break;\n      }\n    }''')
+          replace(path,
+                  'Map<Enchantment,Integer> enchantments = EnchantmentHelper.getEnchantments(stack);',
+                  'Map<Enchantment,Integer> enchantments = getStoredEnchantments(stack);')
+          text = path.read_text(encoding='utf-8')
+          anchor = '''  /**\n   * Gets all enchantments on the given stack\n'''
+          helper = '''  /** Gets the stack enchantment component as the legacy raw-enchantment map used by modifier hooks. */\n  static Map<Enchantment,Integer> getStoredEnchantments(ItemStack stack) {\n    Map<Enchantment,Integer> enchantments = new HashMap<>();\n    for (var entry : stack.getEnchantments().entrySet()) {\n      enchantments.put(entry.getKey().value(), entry.getIntValue());\n    }\n    return enchantments;\n  }\n\n  /** Applies a legacy raw-enchantment map through the active dynamic enchantment registry. */\n  static void setEnchantments(ItemStack stack, RegistryAccess registryAccess, Map<Enchantment,Integer> enchantments) {\n    ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(stack.getEnchantments());\n    mutable.removeIf(holder -> true);\n    var registry = registryAccess.registryOrThrow(Registries.ENCHANTMENT);\n    enchantments.forEach((enchantment, level) -> {\n      if (level > 0) {\n        mutable.set(registry.wrapAsHolder(enchantment), level);\n      }\n    });\n    EnchantmentHelper.setEnchantments(stack, mutable.toImmutable());\n  }\n\n'''
           if helper not in text:
               if anchor not in text:
-                  raise RuntimeError('AttributeModule UUID helper anchor missing')
-              text = text.replace(anchor, helper + anchor, 1)
-              p.write_text(text, encoding='utf-8')
-          replace(p, 'new AttributeModifier(uuid, unique + "." + slot.getName(), formula.apply(tool, modifier), operation)',
-                  'new AttributeModifier(idFromUUID(uuid), formula.apply(tool, modifier), operation)')
-          replace(p, 'context.getEntity().getAttribute(attribute)',
-                  'context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
-          replace(p, 'attributeModifier.getId()', 'attributeModifier.id()')
-          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(idFromUUID(uuid));')
-          replace(p, 'TooltipUtil.addAttribute(attribute, operation, amount, uuid, player, tooltip);',
-                  'TooltipUtil.addAttribute(attribute, operation, amount, uuid == null ? null : idFromUUID(uuid), player, tooltip);')
+                  raise RuntimeError('EnchantmentModifierHook helper anchor missing')
+              path.write_text(text.replace(anchor, helper + anchor, 1), encoding='utf-8')
 
-          # Melee transient attribute.
-          p = path('slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java')
-          add_import(p, 'import net.minecraft.resources.ResourceLocation;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          replace(p, 'target.getAttribute(attribute)',
-                  'target.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
-          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
-          replace(p, 'new AttributeModifier(uuid, unique, amount.compute(modifier.getEffectiveLevel()), operation)',
-                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), amount.compute(modifier.getEffectiveLevel()), operation)')
+          # Harvest enchantment overrides now snapshot and restore ItemEnchantments instead of legacy NBT lists.
+          path = p('slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java')
+          replace(path, 'import net.minecraft.nbt.CompoundTag;\n', '')
+          replace(path, 'import net.minecraft.nbt.ListTag;\n', '')
+          add_import(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
+                     'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
+          replace(path,
+                  'static ListTag updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context)',
+                  'static ItemEnchantments updateHarvestEnchantments(IToolStackView tool, ItemStack stack, ToolHarvestContext context)')
+          replace(path, 'ListTag originalEnchants = null;', 'ItemEnchantments originalEnchants = null;')
+          replace(path,
+                  '''                originalEnchants = stack.getEnchantmentTags();\n                enchantments = EnchantmentHelper.deserializeEnchantments(originalEnchants);''',
+                  '''                originalEnchants = stack.getEnchantments();\n                enchantments = EnchantmentModifierHook.getStoredEnchantments(stack);''')
+          replace(path,
+                  'EnchantmentHelper.setEnchantments(enchantments, stack);',
+                  'EnchantmentModifierHook.setEnchantments(stack, context.getWorld().registryAccess(), enchantments);')
+          replace(path,
+                  '''  static void restoreEnchantments(ItemStack stack, ListTag originalTag) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null) {\n      if (originalTag.isEmpty()) {\n        nbt.remove(TAG_ENCHANTMENTS);\n      } else {\n        nbt.put(TAG_ENCHANTMENTS, originalTag);\n      }\n    }\n  }''',
+                  '''  static void restoreEnchantments(ItemStack stack, ItemEnchantments originalEnchantments) {\n    EnchantmentHelper.setEnchantments(stack, originalEnchantments);\n  }''')
 
-          # Maximum worn-armor attribute.
-          p = path('slimeknights/tconstruct/library/modifiers/modules/armor/MaxArmorAttributeModule.java')
-          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          replace(p, 'context.getEntity().getAttribute(attribute)',
-                  'context.getEntity().getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
-          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));')
-          replace(p, 'new AttributeModifier(uuid, unique, attributeValue, operation)',
-                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), attributeValue, operation)')
+          # Caller local type follows the component snapshot.
+          path = p('slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java')
+          replace(path, 'import net.minecraft.nbt.ListTag;\n', 'import net.minecraft.world.item.enchantment.ItemEnchantments;\n')
+          replace(path,
+                  'ListTag originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);',
+                  'ItemEnchantments originalEnchantments = HarvestEnchantmentsModifierHook.updateHarvestEnchantments(tool, stack, context);')
 
-          # Held tool base attributes and modifier attributes.
-          p = path('slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java')
-          add_import(p, 'import slimeknights.tconstruct.common.TinkerTags;\n',
-                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
-          for old, new in [
-              ('builder.put(Attributes.ATTACK_DAMAGE, new AttributeModifier(Item.BASE_ATTACK_DAMAGE_UUID, "tconstruct.tool.attack_damage", statsNBT.get(ToolStats.ATTACK_DAMAGE), AttributeModifier.Operation.ADDITION));',
-               'builder.put(Attributes.ATTACK_DAMAGE.value(), new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID, statsNBT.get(ToolStats.ATTACK_DAMAGE), AttributeModifier.Operation.ADD_VALUE));'),
-              ('builder.put(Attributes.ATTACK_SPEED, new AttributeModifier(Item.BASE_ATTACK_SPEED_UUID, "tconstruct.tool.attack_speed", statsNBT.get(ToolStats.ATTACK_SPEED) - 4d, AttributeModifier.Operation.ADDITION));',
-               'builder.put(Attributes.ATTACK_SPEED.value(), new AttributeModifier(Item.BASE_ATTACK_SPEED_ID, statsNBT.get(ToolStats.ATTACK_SPEED) - 4d, AttributeModifier.Operation.ADD_VALUE));'),
-              ('builder.put(Attributes.ARMOR, new AttributeModifier(uuid, "tconstruct.held.armor", value, AttributeModifier.Operation.ADDITION));',
-               'builder.put(Attributes.ARMOR.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
-              ('builder.put(Attributes.ARMOR_TOUGHNESS, new AttributeModifier(uuid, "tconstruct.held.toughness", value, AttributeModifier.Operation.ADDITION));',
-               'builder.put(Attributes.ARMOR_TOUGHNESS.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
-              ('builder.put(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier(uuid, "tconstruct.held.knockback_resistance", value, AttributeModifier.Operation.ADDITION));',
-               'builder.put(Attributes.KNOCKBACK_RESISTANCE.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid), value, AttributeModifier.Operation.ADD_VALUE));'),
-          ]:
-              replace(p, old, new)
+          # Fluid block breaker resolves configured raw enchantments through the active server registry.
+          path = p('slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java')
+          replace(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
+                  'import slimeknights.tconstruct.library.modifiers.hook.behavior.EnchantmentModifierHook;\n')
+          replace(path,
+                  'EnchantmentHelper.setEnchantments(enchantments, fakeTool);',
+                  'EnchantmentModifierHook.setEnchantments(fakeTool, server.registryAccess(), enchantments);')
+          replace(path,
+                  'MutableComponent component = Component.translatable(enchantment.getDescriptionId());',
+                  'MutableComponent component = enchantment.description().copy();')
 
-          # Gold-count attribute module.
-          p = path('slimeknights/tconstruct/tools/modules/armor/GoldenAttributeModule.java')
-          add_import(p, 'import net.minecraft.network.chat.Component;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          add_import(p, 'import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;\n',
-                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
-          replace(p, 'attribute == Attributes.MAX_HEALTH', 'attribute == Attributes.MAX_HEALTH.value()')
-          replace(p, 'living.getAttribute(attribute)', 'living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))', 2)
-          replace(p, 'player.getAttribute(attribute)', 'player.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
-          replace(p, 'instance.getModifier(uuid)', 'instance.getModifier(AttributeModule.idFromUUID(uuid))', 2)
-          replace(p, 'instance.removeModifier(uuid);', 'instance.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
-          replace(p, 'new AttributeModifier(uuid, unique, amount.compute(totalGold), operation)',
-                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), amount.compute(totalGold), operation)')
-          replace(p, 'modifier.getAmount()', 'modifier.amount()')
-
-          # Light-dependent armor attribute module.
-          p = path('slimeknights/tconstruct/tools/modules/armor/LightspeedAttributeModule.java')
-          add_import(p, 'import net.minecraft.core.BlockPos;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          add_import(p, 'import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;\n',
-                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
-          replace(p, 'living.getAttribute(this.attribute)', 'living.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute))')
-          replace(p, 'livingEntity.getAttribute(this.attribute)', 'livingEntity.getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(this.attribute))')
-          replace(p, 'attribute.getModifier(uuid)', 'attribute.getModifier(AttributeModule.idFromUUID(uuid))', 2)
-          replace(p, 'attribute.removeModifier(uuid);', 'attribute.removeModifier(AttributeModule.idFromUUID(uuid));', 2)
-          replace(p, 'new AttributeModifier(uuid, unique, scaledLight * amount * modifier.getEffectiveLevel(), operation)',
-                  'new AttributeModifier(AttributeModule.idFromUUID(uuid), scaledLight * amount * modifier.getEffectiveLevel(), operation)')
-
-          # Deprecated damage/speed trade attribute hook.
-          p = path('slimeknights/tconstruct/tools/modifiers/traits/DamageSpeedTradeModifier.java')
-          add_import(p, 'import slimeknights.tconstruct.library.modifiers.hook.mining.BreakSpeedModifierHook;\n',
-                     'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;\n')
-          replace(p,
-                  'consumer.accept(Attributes.ATTACK_DAMAGE, new AttributeModifier(uuid.get(), attributeName.get(), boost / 2, Operation.ADD_MULTIPLIED_TOTAL));',
-                  'consumer.accept(Attributes.ATTACK_DAMAGE.value(), new AttributeModifier(AttributeModule.idFromUUID(uuid.get()), boost / 2, Operation.ADD_MULTIPLIED_TOTAL));')
-
-          # Armored slime's three built-in attribute modifiers.
-          p = path('slimeknights/tconstruct/world/entity/ArmoredSlimeEntity.java')
-          add_import(p, 'import net.minecraft.nbt.CompoundTag;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          add_import(p, 'import org.jetbrains.annotations.Nullable;\n', 'import slimeknights.tconstruct.TConstruct;\n')
-          for old, new in [
-              ('tryAddAttribute(Attributes.ARMOR, new AttributeModifier("tconstruct.small_armor_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
-               'tryAddAttribute(Attributes.ARMOR.value(), new AttributeModifier(TConstruct.getResource("small_armor_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
-              ('tryAddAttribute(Attributes.ARMOR_TOUGHNESS, new AttributeModifier("tconstruct.small_toughness_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
-               'tryAddAttribute(Attributes.ARMOR_TOUGHNESS.value(), new AttributeModifier(TConstruct.getResource("small_toughness_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
-              ('tryAddAttribute(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier("tconstruct.small_resistence_bonus", 3, Operation.ADD_MULTIPLIED_TOTAL));',
-               'tryAddAttribute(Attributes.KNOCKBACK_RESISTANCE.value(), new AttributeModifier(TConstruct.getResource("small_resistence_bonus"), 3, Operation.ADD_MULTIPLIED_TOTAL));'),
-          ]:
-              replace(p, old, new)
-          replace(p, 'getAttribute(attribute)', 'getAttribute(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute))')
-
-          # Critical-damage custom attribute is raw, so wrap for LivingEntity's Holder API.
-          p = path('slimeknights/tconstruct/tools/logic/ModifierEvents.java')
-          add_import(p, 'import net.minecraft.advancements.CriteriaTriggers;\n', 'import net.minecraft.core.registries.BuiltInRegistries;\n')
-          replace(p,
-                  'living.getAttributeValue(attribute) - attribute.getDefaultValue()',
-                  'living.getAttributeValue(BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute)) - attribute.getDefaultValue()')
+          # Vanilla 1.21 represents underwater mining slowdown through an attribute, including Aqua Affinity changes.
+          path = p('slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java')
+          replace(path, 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n',
+                  'import net.minecraft.world.entity.ai.attributes.Attributes;\n')
+          replace(path,
+                  '''    if (entity.isEyeInFluid(FluidTags.WATER) && !EnchantmentHelper.hasAquaAffinity(entity)) {\n      modifier /= 5.0F;\n    }''',
+                  '''    if (entity.isEyeInFluid(FluidTags.WATER)) {\n      modifier *= (float)entity.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);\n    }''')
           PY
 
-      - name: Verify attribute and effect holder migration
+      - name: Verify enchantment component migration
         shell: bash
         run: |
-          grep -Fq 'new AttributeModifier(Item.BASE_ATTACK_DAMAGE_ID' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java
-          grep -Fq 'new AttributeModifier(Item.BASE_ATTACK_SPEED_ID' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/AttributesModifierHook.java
-          grep -Fq 'ResourceLocation idFromUUID(UUID uuid)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java
-          grep -Fq 'BuiltInRegistries.ATTRIBUTE.wrapAsHolder(attribute)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java
-          grep -Fq 'BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)' src/main/java/slimeknights/tconstruct/library/modifiers/modules/interaction/edible/EdibleRemoveEffectModule.java
-          grep -Fq 'case "addition", "add_value" -> Operation.ADD_VALUE;' src/main/java/slimeknights/tconstruct/library/json/TinkerLoadables.java
-          ! grep -R -F 'Item.BASE_ATTACK_DAMAGE_UUID' src/main/java/slimeknights/tconstruct
-          ! grep -R -F 'Item.BASE_ATTACK_SPEED_UUID' src/main/java/slimeknights/tconstruct
-          ! grep -R -F 'AttributeModifier.Operation.ADDITION' src/main/java/slimeknights/tconstruct
+          grep -Fq 'import slimeknights.tconstruct.library.modifiers.modules.behavior.AttributeModule;' src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java
+          grep -Fq 'static Map<Enchantment,Integer> getStoredEnchantments(ItemStack stack)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
+          grep -Fq 'registryAccess.registryOrThrow(Registries.ENCHANTMENT)' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
+          grep -Fq 'static ItemEnchantments updateHarvestEnchantments' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
+          grep -Fq 'ItemEnchantments originalEnchantments' src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java
+          grep -Fq 'EnchantmentModifierHook.setEnchantments(fakeTool, server.registryAccess(), enchantments);' src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java
+          grep -Fq 'Attributes.SUBMERGED_MINING_SPEED' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java
+          ! grep -R -F 'getTagEnchantmentLevel' src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java
+          ! grep -R -F 'getEnchantmentTags()' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
+          ! grep -R -F 'deserializeEnchantments' src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java
           git diff --check
 
-      - name: Commit attribute and effect holder migration
+      - name: Commit enchantment component migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java
+          git add \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/combat/MeleeAttributeModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/behavior/EnchantmentModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/HarvestEnchantmentsModifierHook.java \
+            src/main/java/slimeknights/tconstruct/library/tools/helper/ToolHarvestLogic.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/fluid/block/BreakBlockFluidEffect.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/hook/mining/BreakSpeedContext.java
           git diff --cached --quiet || {
-            git commit -m 'Port attribute and residual effect APIs to 1.21 holders'
+            git commit -m 'Port enchantment storage and mining context to 1.21 components'
             git push origin HEAD:1.21.1-neoforge
           }
 
