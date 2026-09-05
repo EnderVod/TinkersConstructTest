@@ -71,7 +71,7 @@ public record ReplaceBlockWalkerModule(List<BlockReplacement> replacements, Leve
           BlockState state = replacement.state;
           if (replacement.target.matches(world.getBlockState(mutable))
               && state.canSurvive(world, mutable) && world.isUnobstructed(state, mutable, CollisionContext.empty())
-              && !ForgeEventFactory.onBlockPlace(living, BlockSnapshot.create(world.dimension(), world, mutable), Direction.UP)) {
+              && !EventHooks.onBlockPlace(living, BlockSnapshot.create(world.dimension(), world, mutable), Direction.UP)) {
             world.setBlockAndUpdate(mutable, state);
             world.scheduleTick(mutable, state.getBlock(), Mth.nextInt(living.getRandom(), 60, 120));
 

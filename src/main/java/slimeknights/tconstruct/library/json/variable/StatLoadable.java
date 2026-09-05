@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSyntaxException;
 import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.EncoderException;
 import net.minecraft.Util;
 import net.minecraft.core.IdMap;
 import net.minecraft.core.Registry;
@@ -19,7 +20,6 @@ import net.minecraft.util.GsonHelper;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 import slimeknights.mantle.data.loadable.Loadable;
@@ -120,12 +120,21 @@ public enum StatLoadable implements Loadable<Stat<?>> {
     encodeGeneric(buffer, value);
   }
 
+  /** Writes a registry value by numeric ID, throwing for unregistered values. */
+  private static <T> void encodeRegistry(FriendlyByteBuf buffer, Registry<T> registry, T value) {
+    int id = registry.getId(value);
+    if (id < 0) {
+      throw new EncoderException("Unknown " + registry.key().location() + " value " + value);
+    }
+    buffer.writeVarInt(id);
+  }
+
   /** Encodes the value to the registry using the type generics */
   @SuppressWarnings("deprecation")
   private <T> void encodeGeneric(FriendlyByteBuf buffer, Stat<T> value) {
     StatType<T> type = value.getType();
-    buffer.writeId(BuiltInRegistries.STAT_TYPE, type);
-    buffer.writeId(type.getRegistry(), value.getValue());
+    encodeRegistry(buffer, BuiltInRegistries.STAT_TYPE, type);
+    encodeRegistry(buffer, type.getRegistry(), value.getValue());
   }
 
 
@@ -169,8 +178,6 @@ public enum StatLoadable implements Loadable<Stat<?>> {
       name = ((Fluid) value).getFluidType().getDescription();
     } else if (registry == BuiltInRegistries.MOB_EFFECT) {
       name = ((MobEffect) value).getDisplayName();
-    } else if (registry == BuiltInRegistries.ENCHANTMENT) {
-      name = Component.translatable(((Enchantment) value).getDescriptionId());
     } else {
       // if it's not one of the above types we do not know how to translate it, so use the raw key
       name = Component.literal(getKey(stat));
