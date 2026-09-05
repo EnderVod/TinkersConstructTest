@@ -1,4 +1,4 @@
-name: Tinkers Projectile Compatibility Migration
+name: Tinkers Fluid Projectile Migration
 
 on:
   push:
@@ -23,161 +23,117 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Port fireball and shuriken projectiles to 1.21
+      - name: Port fluid projectile to 1.21
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new, label):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              if text.count(old) != 1:
-                  raise RuntimeError(f'{label}: expected exactly one match, found {text.count(old)}')
-              p.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          # CustomFireball: 1.21 projectile constructors accept a Vec3 acceleration and enchantment post-hit moved to EnchantmentHelper.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java')
+          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java')
           text = path.read_text(encoding='utf-8')
-          anchor = 'import net.minecraft.resources.ResourceLocation;\n'
-          if text.count(anchor) != 1:
-              raise RuntimeError('CustomFireball ResourceLocation import anchor changed')
-          if 'import net.minecraft.server.level.ServerLevel;\n' not in text:
-              text = text.replace(anchor, anchor + 'import net.minecraft.server.level.ServerLevel;\n', 1)
-          anchor = 'import net.minecraft.world.item.ItemStack;\n'
-          if text.count(anchor) != 1:
-              raise RuntimeError('CustomFireball ItemStack import anchor changed')
-          if 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n' not in text:
-              text = text.replace(anchor, anchor + 'import net.minecraft.world.item.enchantment.EnchantmentHelper;\n', 1)
-          anchor = 'import net.minecraft.world.phys.HitResult;\n'
-          if text.count(anchor) != 1:
-              raise RuntimeError('CustomFireball HitResult import anchor changed')
-          if 'import net.minecraft.world.phys.Vec3;\n' not in text:
-              text = text.replace(anchor, anchor + 'import net.minecraft.world.phys.Vec3;\n', 1)
-          old = '    super(TinkerModifiers.fireball.get(), shooter, xOffset, yOffset, zOffset, level);'
-          new = '    super(TinkerModifiers.fireball.get(), shooter, new Vec3(xOffset, yOffset, zOffset), level);'
-          if text.count(old) != 1:
-              raise RuntimeError('CustomFireball living constructor changed')
-          text = text.replace(old, new, 1)
-          old = '    super(TinkerModifiers.fireball.get(), x, y, z, xOffset, yOffset, zOffset, pLevel);'
-          new = '    super(TinkerModifiers.fireball.get(), x, y, z, new Vec3(xOffset, yOffset, zOffset), pLevel);'
-          if text.count(old) != 1:
-              raise RuntimeError('CustomFireball positional constructor changed')
-          text = text.replace(old, new, 1)
-          if text.count('ItemStack stack = getItemRaw();') != 1:
-              raise RuntimeError('CustomFireball getItemRaw call changed')
-          text = text.replace('ItemStack stack = getItemRaw();', 'ItemStack stack = getItem();', 1)
-          old = ('      Entity target = hit.getEntity();\n'
-                 '      Entity owner = this.getOwner();\n'
-                 '      if (target.hurt(CombatHelper.damageSource(TinkerEffects.needsEnderferenceOverride(target) ? enderferenceType : damageType, this, owner), getDamage()) && owner instanceof LivingEntity livingOwner) {\n'
-                 '        this.doEnchantDamageEffects(livingOwner, target);\n'
-                 '      }')
-          new = ('      Entity target = hit.getEntity();\n'
-                 '      Entity owner = this.getOwner();\n'
-                 '      DamageSource source = CombatHelper.damageSource(TinkerEffects.needsEnderferenceOverride(target) ? enderferenceType : damageType, this, owner);\n'
-                 '      if (target.hurt(source, getDamage()) && owner instanceof LivingEntity && this.level() instanceof ServerLevel serverLevel) {\n'
-                 '        EnchantmentHelper.doPostAttackEffects(serverLevel, target, source);\n'
-                 '      }')
-          if text.count(old) != 1:
-              raise RuntimeError('CustomFireball legacy enchant damage block changed')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # ThrownShuriken: use the 1.21 projectile hit/portal lifecycle while preserving custom water inertia.
-          path = Path('src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java')
-          text = path.read_text(encoding='utf-8')
+          # Replace old Forge capability imports with NeoForge's block capability system.
           for imp in [
-              'import net.minecraft.core.BlockPos;\n',
-              'import net.minecraft.world.level.block.Blocks;\n',
-              'import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;\n',
-              'import net.minecraft.world.level.block.state.BlockState;\n']:
+              'import net.minecraft.world.level.block.entity.BlockEntity;\n',
+              'import net.minecraftforge.common.capabilities.ForgeCapabilities;\n',
+              'import slimeknights.mantle.inventory.EmptyItemHandler;\n']:
               text = text.replace(imp, '')
-          old = ('  @Override\n'
-                 '  public boolean isReusable() {\n'
-                 '    return reclaim;\n'
-                 '  }')
-          new = ('  @Override\n'
-                 '  public boolean isReusable() {\n'
-                 '    return reclaim;\n'
-                 '  }\n\n'
-                 '  @Override\n'
-                 '  public boolean canUsePortal(boolean allowPassengers) {\n'
-                 '    return true;\n'
-                 '  }')
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownShuriken reusable method changed')
-          text = text.replace(old, new, 1)
-          old = ('    boolean teleported = false;\n'
-                 '    if (hit.getType() == HitResult.Type.BLOCK) {\n'
-                 '      BlockPos pos = ((BlockHitResult)hit).getBlockPos();\n'
-                 '      BlockState state = this.level().getBlockState(pos);\n'
-                 '      if (state.is(Blocks.NETHER_PORTAL)) {\n'
-                 '        this.handleInsidePortal(pos);\n'
-                 '        teleported = true;\n'
-                 '      } else if (state.is(Blocks.END_GATEWAY)) {\n'
-                 '        if (this.level().getBlockEntity(pos) instanceof TheEndGatewayBlockEntity gateway && TheEndGatewayBlockEntity.canEntityTeleport(this)) {\n'
-                 '          TheEndGatewayBlockEntity.teleportEntity(this.level(), pos, state, this, gateway);\n'
-                 '        }\n'
-                 '        teleported = true;\n'
+          anchor = 'import net.neoforged.neoforge.event.EventHooks;\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError('FluidEffectProjectile EventHooks import anchor changed')
+          if 'import net.neoforged.neoforge.capabilities.Capabilities;\n' not in text:
+              text = text.replace(anchor, 'import net.neoforged.neoforge.capabilities.Capabilities;\n' + anchor, 1)
+
+          old = ('    if (this.cannon != null && level.isLoaded(this.cannon)) {\n'
+                 '      BlockEntity cannonBE = level.getBlockEntity(this.cannon);\n'
+                 '      if (cannonBE != null && cannonBE.getCapability(ForgeCapabilities.ITEM_HANDLER).orElse(EmptyItemHandler.INSTANCE) instanceof IItemHandlerModifiable modifiable) {\n'
+                 '        return modifiable;\n'
                  '      }\n'
-                 '    }\n\n')
+                 '    }')
+          new = ('    if (this.cannon != null && level.isLoaded(this.cannon)) {\n'
+                 '      IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK, this.cannon, null);\n'
+                 '      if (handler instanceof IItemHandlerModifiable modifiable) {\n'
+                 '        return modifiable;\n'
+                 '      }\n'
+                 '    }')
           if text.count(old) != 1:
-              raise RuntimeError('ThrownShuriken legacy portal block changed')
-          text = text.replace(old, '', 1)
-          old = '    if (type != HitResult.Type.MISS && !teleported) {'
-          new = '    if (type != HitResult.Type.MISS) {'
-          if text.count(old) != 1:
-              raise RuntimeError('ThrownShuriken impact condition changed')
+              raise RuntimeError('FluidEffectProjectile cannon capability block changed')
           text = text.replace(old, new, 1)
-          if text.count('if (!ForgeEventFactory.onProjectileImpact(this, hit)) {') != 1:
-              raise RuntimeError('ThrownShuriken old projectile hook changed')
-          text = text.replace('if (!ForgeEventFactory.onProjectileImpact(this, hit)) {', 'if (!EventHooks.onProjectileImpact(this, hit)) {', 1)
-          if text.count('        this.onHit(hit);') != 1:
-              raise RuntimeError('ThrownShuriken direct onHit call changed')
-          text = text.replace('        this.onHit(hit);', '        this.hitTargetOrDeflectSelf(hit);', 1)
+
+          if text.count('if (hitType != HitResult.Type.MISS && !ForgeEventFactory.onProjectileImpact(this, hitResult)) {') != 1:
+              raise RuntimeError('FluidEffectProjectile old projectile impact hook changed')
+          text = text.replace('if (hitType != HitResult.Type.MISS && !ForgeEventFactory.onProjectileImpact(this, hitResult)) {', 'if (hitType != HitResult.Type.MISS && !EventHooks.onProjectileImpact(this, hitResult)) {', 1)
+          if text.count('      this.onHit(hitResult);') != 1:
+              raise RuntimeError('FluidEffectProjectile direct onHit changed')
+          text = text.replace('      this.onHit(hitResult);', '      this.hitTargetOrDeflectSelf(hitResult);', 1)
+
+          if text.count('factor += dimensions.height;') != 1 or text.count('factor += dimensions.width / 2;') != 1:
+              raise RuntimeError('FluidEffectProjectile EntityDimensions access changed')
+          text = text.replace('factor += dimensions.height;', 'factor += dimensions.height();', 1)
+          text = text.replace('factor += dimensions.width / 2;', 'factor += dimensions.width() / 2;', 1)
+
           old = ('  @Override\n'
                  '  protected void defineSynchedData() {\n'
-                 '    this.entityData.define(STACK, ItemStack.EMPTY);\n'
-                 '    this.entityData.define(WATER_INERTIA, 0.8f);\n'
+                 '    this.entityData.define(FLUID, FluidStack.EMPTY);\n'
+                 '    this.entityData.define(WATER_INERTIA, 0.6f);\n'
                  '  }')
           new = ('  @Override\n'
                  '  protected void defineSynchedData(SynchedEntityData.Builder builder) {\n'
-                 '    builder.define(STACK, ItemStack.EMPTY);\n'
-                 '    builder.define(WATER_INERTIA, 0.8f);\n'
+                 '    builder.define(FLUID, FluidStack.EMPTY);\n'
+                 '    builder.define(WATER_INERTIA, 0.6f);\n'
                  '  }')
           if text.count(old) != 1:
-              raise RuntimeError('ThrownShuriken synced data block changed')
+              raise RuntimeError('FluidEffectProjectile synced-data block changed')
           text = text.replace(old, new, 1)
-          if text.count('tag.put(KEY_STACK, this.stack.save(new CompoundTag()));') != 1:
-              raise RuntimeError('ThrownShuriken stack save changed')
-          text = text.replace('tag.put(KEY_STACK, this.stack.save(new CompoundTag()));', 'tag.put(KEY_STACK, this.stack.save(this.registryAccess()));', 1)
-          if text.count('setStack(ItemStack.of(tag.getCompound(KEY_STACK)));') != 1:
-              raise RuntimeError('ThrownShuriken stack load changed')
-          text = text.replace('setStack(ItemStack.of(tag.getCompound(KEY_STACK)));', 'setStack(ItemStack.parse(this.registryAccess(), tag.getCompound(KEY_STACK)).orElse(ItemStack.EMPTY));', 1)
+
+          if text.count('nbt.put(KEY_FLUID, fluid.writeToNBT(new CompoundTag()));') != 1:
+              raise RuntimeError('FluidEffectProjectile legacy fluid save changed')
+          text = text.replace('nbt.put(KEY_FLUID, fluid.writeToNBT(new CompoundTag()));', 'nbt.put(KEY_FLUID, fluid.save(this.registryAccess()));', 1)
+
+          old = ('    if (nbt.contains(KEY_CANNON)) {\n'
+                 '      this.cannon = NbtUtils.readBlockPos(nbt.getCompound(KEY_CANNON));\n'
+                 '    } else {\n'
+                 '      this.cannon = null;\n'
+                 '    }')
+          new = ('    if (nbt.contains(KEY_CANNON)) {\n'
+                 '      this.cannon = NbtUtils.readBlockPos(nbt, KEY_CANNON).orElse(null);\n'
+                 '    } else {\n'
+                 '      this.cannon = null;\n'
+                 '    }')
+          if text.count(old) != 1:
+              raise RuntimeError('FluidEffectProjectile cannon NBT load changed')
+          text = text.replace(old, new, 1)
+
+          if text.count('setFluid(FluidStack.loadFluidStackFromNBT(nbt.getCompound(KEY_FLUID)));') != 1:
+              raise RuntimeError('FluidEffectProjectile legacy fluid load changed')
+          text = text.replace('setFluid(FluidStack.loadFluidStackFromNBT(nbt.getCompound(KEY_FLUID)));', 'setFluid(FluidStack.parseOptional(this.registryAccess(), nbt.getCompound(KEY_FLUID)));', 1)
+
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Verify projectile migration
+      - name: Verify fluid projectile migration
         shell: bash
         run: |
-          grep -Fq 'new Vec3(xOffset, yOffset, zOffset)' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
-          grep -Fq 'EnchantmentHelper.doPostAttackEffects(serverLevel, target, source);' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
-          ! grep -Fq 'getItemRaw()' src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java
-          grep -Fq 'public boolean canUsePortal(boolean allowPassengers)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          grep -Fq 'EventHooks.onProjectileImpact(this, hit)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          grep -Fq 'this.hitTargetOrDeflectSelf(hit);' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          grep -Fq 'ItemStack.parse(this.registryAccess()' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          ! grep -Fq 'ForgeEventFactory.onProjectileImpact' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          ! grep -Fq 'handleInsidePortal' src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
+          grep -Fq 'Capabilities.ItemHandler.BLOCK' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'EventHooks.onProjectileImpact(this, hitResult)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'this.hitTargetOrDeflectSelf(hitResult);' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'dimensions.height()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'dimensions.width()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'defineSynchedData(SynchedEntityData.Builder builder)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'fluid.save(this.registryAccess())' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'NbtUtils.readBlockPos(nbt, KEY_CANNON).orElse(null)' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          grep -Fq 'FluidStack.parseOptional(this.registryAccess()' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          ! grep -Fq 'ForgeCapabilities' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          ! grep -Fq 'ForgeEventFactory' src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
           git diff --check
 
-      - name: Commit projectile migration
+      - name: Commit fluid projectile migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/entity/CustomFireball.java src/main/java/slimeknights/tconstruct/tools/entity/ThrownShuriken.java
-          git commit -m 'Port fireball and shuriken projectiles to 1.21'
+          git add src/main/java/slimeknights/tconstruct/tools/entity/FluidEffectProjectile.java
+          git commit -m 'Port fluid effect projectile to 1.21'
           git push origin HEAD:1.21.1-neoforge
 
       - name: Trigger fresh compile
