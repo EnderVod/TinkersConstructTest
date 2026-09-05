@@ -100,7 +100,7 @@ public class TinkerEffects extends TinkerModule {
   }
 
   /** Gets a holder for a registered effect. */
-  public static <R extends MobEffect, T extends R> Holder<MobEffect> holder(DeferredHolder<R, T> effect) {
+  public static <T extends MobEffect> Holder<MobEffect> holder(DeferredHolder<? super T, T> effect) {
     return BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect.get());
   }
 

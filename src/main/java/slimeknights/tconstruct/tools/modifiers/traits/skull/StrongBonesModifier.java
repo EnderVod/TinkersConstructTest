@@ -12,6 +12,7 @@ import net.neoforged.bus.api.EventPriority;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags;
+import slimeknights.tconstruct.library.modifiers.EffectCureHelper;
 import slimeknights.tconstruct.library.modifiers.fluid.FluidEffect;
 import slimeknights.tconstruct.library.modifiers.fluid.FluidEffectContext;
 import slimeknights.tconstruct.library.modifiers.impl.SingleLevelModifier;
@@ -21,6 +22,8 @@ import slimeknights.tconstruct.library.module.ModuleHookMap.Builder;
 import slimeknights.tconstruct.library.tools.capability.TinkerDataCapability.TinkerDataKey;
 import slimeknights.tconstruct.library.tools.helper.ModifierUtil;
 import slimeknights.tconstruct.tools.TinkerModifiers;
+
+import java.util.List;
 
 // TODO: make JSON?
 public class StrongBonesModifier extends SingleLevelModifier {
@@ -48,8 +51,7 @@ public class StrongBonesModifier extends SingleLevelModifier {
     int level = ModifierUtil.getModifierLevel(helmet, TinkerModifiers.strongBones.getId());
     if (level > 0) {
       MobEffectInstance effect = new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, flat + eachLevel * level);
-      effect.getCurativeItems().clear();
-      effect.getCurativeItems().add(new ItemStack(helmet.getItem()));
+      EffectCureHelper.replaceCurativeItems(effect, List.of(helmet.getItem()));
       // on simulate, don't apply the effect, just ask if we can apply
       didSomething = action.execute() ? living.addEffect(effect) : living.canBeAffected(effect);
       // quick exit on simulate: no more information needed
