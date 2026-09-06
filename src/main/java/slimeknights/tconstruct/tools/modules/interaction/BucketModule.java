@@ -9,7 +9,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ClipContext;
@@ -21,7 +20,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult.Type;
 import net.neoforged.neoforge.common.SoundActions;
@@ -67,15 +65,16 @@ public record BucketModule(IJsonPredicate<Fluid> fluids) implements ModifierModu
 
   /**
    * Checks if the block is unable to contain fluid
+   * @param player Player placing the fluid
    * @param world  Level
    * @param pos    Position to try
    * @param state  State
    * @param fluid  Fluid to place
    * @return  True if the block is unable to contain fluid, false if it can contain fluid
    */
-  private static boolean cannotContainFluid(Level world, BlockPos pos, BlockState state, Fluid fluid) {
+  private static boolean cannotContainFluid(Player player, Level world, BlockPos pos, BlockState state, Fluid fluid) {
     Block block = state.getBlock();
-    return !(block instanceof LiquidBlockContainer container && container.canPlaceLiquid(world, pos, state, fluid));
+    return !(block instanceof LiquidBlockContainer container && container.canPlaceLiquid(player, world, pos, state, fluid));
   }
 
   @Override
@@ -108,10 +107,10 @@ public record BucketModule(IJsonPredicate<Fluid> fluids) implements ModifierModu
 
     // if the block cannot be placed at the current location, try placing at the neighbor
     BlockState existing = world.getBlockState(target);
-    if (cannotContainFluid(world, target, existing, fluidStack.getFluid())) {
+    if (cannotContainFluid(player, world, target, existing, fluidStack.getFluid())) {
       target = offset;
       existing = world.getBlockState(target);
-      if (!existing.isAir() && !existing.canBeReplaced(fluid) && cannotContainFluid(world, target, existing, fluidStack.getFluid())) {
+      if (!existing.isAir() && !existing.canBeReplaced(fluid) && cannotContainFluid(player, world, target, existing, fluidStack.getFluid())) {
         return InteractionResult.PASS;
       }
     }
@@ -161,10 +160,10 @@ public record BucketModule(IJsonPredicate<Fluid> fluids) implements ModifierModu
       return InteractionResult.PASS;
     }
 
-    // need at least a bucket worth of empty space in a fluid we can pickup, and cannot have NBT on the stored fluid
+    // need at least a bucket worth of empty space in a fluid we can pickup, and cannot have custom components on the stored fluid
     FluidStack fluidStack = TANK_HELPER.getFluid(tool);
     Fluid currentFluid = fluidStack.getFluid();
-    if (fluidStack.hasTag() || TANK_HELPER.getCapacity(tool) - fluidStack.getAmount() < FluidType.BUCKET_VOLUME || !fluidStack.isEmpty() && !fluids.matches(currentFluid)) {
+    if (!fluidStack.isComponentsPatchEmpty() || TANK_HELPER.getCapacity(tool) - fluidStack.getAmount() < FluidType.BUCKET_VOLUME || !fluidStack.isEmpty() && !fluids.matches(currentFluid)) {
       return InteractionResult.PASS;
     }
     // have to trace to find the fluid, ensure we can edit the position
@@ -191,24 +190,22 @@ public record BucketModule(IJsonPredicate<Fluid> fluids) implements ModifierModu
     BlockState state = world.getBlockState(target);
     // note that not all bucket pickup is a fluid, but we validated fluid state above
     if (state.getBlock() instanceof BucketPickup bucketPickup) {
-      ItemStack bucket = bucketPickup.pickupBlock(world, target, state);
-      if (!bucket.isEmpty() && bucket.getItem() instanceof BucketItem bucketItem) {
-        Fluid pickedUpFluid = bucketItem.getFluid();
-        if (pickedUpFluid != Fluids.EMPTY) {
-          player.playSound(Objects.requireNonNullElse(pickedUpFluid.getFluidType().getSound(SoundActions.BUCKET_FILL), SoundEvents.BUCKET_FILL), 1.0F, 1.0F);
-          // set the fluid if empty, increase the fluid if filled
-          if (!world.isClientSide) {
-            if (fluidStack.isEmpty()) {
-              TANK_HELPER.setFluid(tool, new FluidStack(pickedUpFluid, FluidType.BUCKET_VOLUME));
-            } else if (pickedUpFluid == currentFluid) {
-              fluidStack.grow(FluidType.BUCKET_VOLUME);
-              TANK_HELPER.setFluid(tool, fluidStack);
-            } else {
-              TConstruct.LOG.error("Picked up a fluid {} that does not match the current fluid state {}, this should not happen", pickedUpFluid, fluidState.getType());
-            }
+      ItemStack bucket = bucketPickup.pickupBlock(player, world, target, state);
+      if (!bucket.isEmpty()) {
+        Fluid pickedUpFluid = targetedFluid;
+        player.playSound(Objects.requireNonNullElse(pickedUpFluid.getFluidType().getSound(SoundActions.BUCKET_FILL), SoundEvents.BUCKET_FILL), 1.0F, 1.0F);
+        // set the fluid if empty, increase the fluid if filled
+        if (!world.isClientSide) {
+          if (fluidStack.isEmpty()) {
+            TANK_HELPER.setFluid(tool, new FluidStack(pickedUpFluid, FluidType.BUCKET_VOLUME));
+          } else if (pickedUpFluid == currentFluid) {
+            fluidStack.grow(FluidType.BUCKET_VOLUME);
+            TANK_HELPER.setFluid(tool, fluidStack);
+          } else {
+            TConstruct.LOG.error("Picked up a fluid {} that does not match the current fluid state {}, this should not happen", pickedUpFluid, fluidState.getType());
           }
-          return InteractionResult.SUCCESS;
         }
+        return InteractionResult.SUCCESS;
       }
     }
     return InteractionResult.PASS;
