@@ -1,6 +1,5 @@
 package slimeknights.tconstruct.world;
 
-import com.google.common.collect.ImmutableSet;
 import net.minecraft.core.dispenser.BlockSource;
 import net.minecraft.core.Direction;
 import net.minecraft.core.dispenser.DispenseItemBehavior;
@@ -17,12 +16,10 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTab.ItemDisplayParameters;
 import net.minecraft.world.item.CreativeModeTab.Output;
-import net.minecraft.world.item.FireworkRocketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.StandingAndWallBlockItem;
-import net.minecraft.world.item.crafting.FireworkStarRecipe;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ComposterBlock;
@@ -45,6 +42,7 @@ import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.neoforged.neoforge.common.world.BiomeModifier;
+import net.neoforged.neoforge.event.BlockEntityTypeAddBlocksEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent.Operation;
@@ -348,6 +346,14 @@ public final class TinkerWorld extends TinkerModule {
   }
 
   @SubscribeEvent
+  void addSkullBlockEntityBlocks(BlockEntityTypeAddBlocksEvent event) {
+    java.util.List<Block> blocks = new java.util.ArrayList<>();
+    TinkerWorld.heads.forEach(blocks::add);
+    TinkerWorld.wallHeads.forEach(blocks::add);
+    event.modify(BlockEntityType.SKULL, blocks.toArray(Block[]::new));
+  }
+
+  @SubscribeEvent
   void commonSetup(final FMLCommonSetupEvent event) {
     // compostables
     event.enqueueWork(() -> {
@@ -369,16 +375,8 @@ public final class TinkerWorld extends TinkerModule {
         }
       };
       TinkerWorld.heads.forEach(head -> DispenserBlock.registerBehavior(head, dispenseArmor));
-      // heads in firework stars
-      TinkerWorld.heads.forEach(head -> FireworkStarRecipe.SHAPE_BY_ITEM.put(head.asItem(), FireworkRocketItem.Shape.CREEPER));
-      // inject heads into the tile entity type
-      event.enqueueWork(() -> {
-        ImmutableSet.Builder<Block> builder = ImmutableSet.builder();
-        builder.addAll(BlockEntityType.SKULL.validBlocks);
-        TinkerWorld.heads.forEach(head -> builder.add(head));
-        TinkerWorld.wallHeads.forEach(head -> builder.add(head));
-        BlockEntityType.SKULL.validBlocks = builder.build();
-      });
+      // TODO 1.21: vanilla's firework-star shape map is private; restore custom-head creeper-shape
+      // support through a supported recipe extension instead of mutating vanilla private state.
     });
 
     // flammability

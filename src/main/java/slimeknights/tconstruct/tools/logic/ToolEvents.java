@@ -214,7 +214,7 @@ public class ToolEvents {
 
     // determine if there is any modifiable armor, handles the target wearing modifiable armor
     EquipmentContext context = new EquipmentContext(entity);
-    float amount = event.getNewDamage();
+    float amount = event.getAmount();
     if (context.hasModifiableArmor()) {
       // first we need to determine if any of the four slots want to cancel the event
       for (EquipmentSlot slotType : EquipmentSlot.values()) {
@@ -222,7 +222,7 @@ public class ToolEvents {
         if (toolStack != null && !toolStack.isBroken()) {
           for (ModifierEntry entry : toolStack.getModifierList()) {
             if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {
-              event.setNewDamage(0);
+              event.setAmount(0);
               return;
             }
           }
@@ -431,9 +431,8 @@ public class ToolEvents {
             for (ModifierEntry entry : modifiers.getModifiers()) {
               // TODO 1.21: pass in arrow with projectile to save some instance of checks
               if (entry.getHook(hook).onProjectileHitEntity(modifiers, nbt, entry, projectile, entityHit, attacker, target, notBlocked)) {
-                // on forge, this means the cancelled entity won't be hit again if its a piercing arrow
-                // on neo, they will get processed again next frame. Is this something we need to work around?
-                event.setNewDamage(0);
+                // cancelling prevents the projectile impact from being processed by vanilla
+                event.setCanceled(true);
                 break;
               }
             }
@@ -443,7 +442,7 @@ public class ToolEvents {
           BlockHitResult blockHit = (BlockHitResult)hit;
           for (ModifierEntry entry : modifiers.getModifiers()) {
             if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {
-              event.setNewDamage(0);
+              event.setCanceled(true);
               break;
             }
           }
