@@ -23,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -54,7 +55,6 @@ import slimeknights.tconstruct.library.modifiers.modules.ModifierModule;
 import slimeknights.tconstruct.library.module.HookProvider;
 import slimeknights.tconstruct.library.module.ModuleHook;
 import slimeknights.tconstruct.library.module.ModuleHookMap.Builder;
-import slimeknights.tconstruct.library.recipe.SingleItemContainer;
 import slimeknights.tconstruct.library.recipe.partbuilder.Pattern;
 import slimeknights.tconstruct.library.tools.capability.inventory.InventoryModule;
 import slimeknights.tconstruct.library.tools.context.EquipmentContext;
@@ -75,8 +75,6 @@ import static slimeknights.tconstruct.library.tools.capability.inventory.Invento
 public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeType, float multiplier, InventoryModule input, InventoryModule output) implements ModifierModule, MeleeHitModifierHook, MonsterMeleeHitModifierHook.RedirectAfter, LauncherHitModifierHook, BlockHarvestModifierHook, ProjectileLaunchModifierHook, OnAttackedModifierHook, PlantHarvestModifierHook, ShearsModifierHook, SlingLaunchModifierHook {
   /** NBT key to store the cooking time */
   private static final String TAG_TIME = "tic_remaining_time";
-  /** Container instance for recipe lookups */
-  private static final SingleItemContainer CONTAINER = new SingleItemContainer();
   /** Cache of last recipe found */
   private static AbstractCookingRecipe lastRecipe = null;
   /** Cooking time for when a slot has no available recipe */
@@ -84,12 +82,12 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   private static final List<ModuleHook<?>> DEFAULT_HOOKS = HookProvider.<SmeltingModule>defaultHooks(ModifierHooks.MELEE_HIT, ModifierHooks.MONSTER_MELEE_HIT, ModifierHooks.LAUNCHER_HIT, ModifierHooks.BLOCK_HARVEST, ModifierHooks.PROJECTILE_LAUNCH, ModifierHooks.ON_ATTACKED, ModifierHooks.PLANT_HARVEST, ModifierHooks.SHEAR_ENTITY, ModifierHooks.SLING_LAUNCH);
   @SuppressWarnings("unchecked")
   public static final RecordLoadable<SmeltingModule> LOADER = RecordLoadable.create(
-    TinkerLoadables.RECIPE_TYPE.<RecipeType<? extends AbstractCookingRecipe>>flatXmap(t -> (RecipeType<? extends AbstractCookingRecipe>) t, t -> t)
+    TinkerLoadables.RECIPE_TYPE.<RecipeType<? extends AbstraactCookingRecipe>>flatXmap(t -> (RecipeType<? extends AbstraactCookingRecipe>) t, t -> t)
                                .requiredField("recipe_type", SmeltingModule::recipeType),
     FloatLoadable.FROM_ZERO.requiredField("multiplier", SmeltingModule::multiplier),
     InventoryModule.LOADER.directField(SmeltingModule::input),
     OutputKeyField.INSTANCE,
-    // TODO 1.21: remove default value
+     // TODO 1.21: remove default value
     Pattern.PARSER.defaultField("output_pattern", Patterns.RESULT, true, m -> m.output.pattern()),
     SmeltingModule::new);
 
@@ -97,11 +95,11 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   @Internal
   public SmeltingModule {}
 
-  public SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeType, float multiplier, InventoryModule inventory, @Nullable ResourceLocation outputKey, Pattern outputPattern) {
+  public SmeltingModule(RecipeType<? extends AbstraactCookingRecipe> recipeType, float multiplier, InventoryModule inventory, @Nullable ResourceLocation outputKey, Pattern outputPattern) {
     this(recipeType, multiplier, inventory, InventoryModule.builder().from(inventory).key(outputKey).pattern(outputPattern).filter(ItemPredicate.NONE).slots(inventory.slots()));
   }
 
-  public SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeType, float multiplier, InventoryModule inventory) {
+  public SmeltingModule(RecipeType<? extends AbstraactCookingRecipe> recipeType, float multiplier, InventoryModule inventory) {
     this(recipeType, multiplier, inventory, null, Patterns.RESULT);
   }
 
@@ -121,17 +119,17 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
     builder.addModule(output);
   }
 
-  /** Finds the recipe for the given stack */
+  /*** Finds the recipe for the given stack */
   @Nullable
   private static AbstractCookingRecipe findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {
-    CONTAINER.setStack(stack);
+    SingleRecipeInput input = new SingleRecipeInput(stack);
     try {
       // first, try the cached recipe
-      if (lastRecipe != null && lastRecipe.matches(CONTAINER, level)) {
+      if (lastRecipe != null && lastRecipe.matches(input, level)) {
         return lastRecipe;
       }
       // if that failed, do a recipe lookup
-      AbstractCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, CONTAINER, level).orElse(null);
+      AbstraactCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);
       if (recipe != null) {
         lastRecipe = recipe;
       }
@@ -140,8 +138,6 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
       // we don't have a good way to validate the recipe type on parse, so an invalid recipe type would error here
       TConstruct.LOG.error("Error fetching recipe for {} on modifier {}, this usually indicates a broken modifier or a broken recipe", stack, modifier, e);
       return null;
-    } finally {
-      CONTAINER.setStack(ItemStack.EMPTY);
     }
   }
 
@@ -191,7 +187,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
             int slot = entry.getInt(TAG_SLOT);
             ItemStack currentResult = output.getStack(tool, modifier, slot);
             int maxStackSize = 0;
-            if (!currentResult.isEmpty()) {
+            if (!currentResult.isEmpty() {
               maxStackSize = Math.min(currentResult.getMaxStackSize(), output.getSlotLimit(tool, modifier, slot));
               // no space in output? freeze at 1 tick left to cook
               if (currentResult.getCount() >= maxStackSize) {
@@ -210,9 +206,8 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
             // if we have a recipe, time to cook
             if (recipe != null) {
               // attempt to assemble the recipe, use a try/catch in case their assemble logic is bad
-              CONTAINER.setStack(stack);
               try {
-                ItemStack result = recipe.assemble(CONTAINER, level.registryAccess());
+                ItemStack result = recipe.assemble(new SingleRecipeInput(stack), level.registryAccess());
 
                 // check again if we have space for the result now that we know its size
                 if (!result.isEmpty()) {
@@ -223,7 +218,6 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
                   // if not enough space for the combo or its type is wrong, just mark as almost finished and give up
                   if (result.getCount() + currentResult.getCount() > maxStackSize || !currentResult.isEmpty() && !ItemStack.isSameItemSameTags(currentResult, result)) {
                     entry.putInt(TAG_TIME, 1);
-                    CONTAINER.setStack(ItemStack.EMPTY);
                     continue;
                   }
                 }
@@ -267,7 +261,6 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
               } catch (Exception e) {
                 TConstruct.LOG.error("Error getting result of recipe {} on modifier {}, this usually indicates a broken recipe", recipe.getId(), modifier, e);
               }
-              CONTAINER.setStack(ItemStack.EMPTY);
             } else {
               // lost the recipe? stop trying to smelt it
               entry.putInt(TAG_TIME, NO_RECIPE);
