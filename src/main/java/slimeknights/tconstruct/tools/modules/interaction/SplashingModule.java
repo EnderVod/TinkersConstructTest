@@ -58,7 +58,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
   }
 
   @Override
-  public List<ModuleHook<?>> getDefaultHooks() {
+  public List<ModuleHook<?>>> getDefaultHooks() {
     return DEFAULT_HOOKS;
   }
 
@@ -118,7 +118,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
 
             // consume the fluid last, if any target used fluid
             if (ModifierUtil.consumesResources(player)) {
-              if (numTargets > 0) {
+             if (numTargets > 0) {
                 TANK_HELPER.setFluid(tool, fluid);
               }
 
@@ -196,7 +196,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
               // damage the tool, we charge for the multiplier and for the number of targets hit
               ItemStack stack = context.getItemInHand();
               if (ToolDamageUtil.damage(tool, Mth.ceil(numTargets * level), player, stack, modifier.getId()) && player != null) {
-                player.broadcastBreakEvent(source.getSlot(context.getHand()));
+                player.onEquippedItemBroken(stack.getItem(), source.getSlot(context.getHand()));
               }
             }
           }

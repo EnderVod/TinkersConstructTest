@@ -148,7 +148,7 @@ public enum PlaceFireModule implements ModifierModule, EntityInteractionModifier
       targetingFire = true;
     }
 
-    // AOE selection logic, get boosted from both fireprimer (unique modifer) and expanded
+    // AOE selection logic, get boosted from both fireprimer (unique modifier) and expanded
     int range = tool.getVolatileData().getInt(IModifiable.EXPANDED);
     Iterable<BlockPos> targets = Collections.emptyList();
     if (range > 0) {
@@ -165,7 +165,7 @@ public enum PlaceFireModule implements ModifierModule, EntityInteractionModifier
       didIgnite = ignite(world, pos, state, sideHit, horizontalFacing, player);
       if (didIgnite && ToolDamageUtil.damage(tool, 1, player, stack, modifier.getId())) {
         if (player != null) {
-          player.broadcastBreakEvent(slotType);
+          player.onEquippedItemBroken(stack.getItem(), slotType);
         }
         return InteractionResult.sidedSuccess(world.isClientSide);
       }
@@ -176,13 +176,13 @@ public enum PlaceFireModule implements ModifierModule, EntityInteractionModifier
         didIgnite = true;
         if (ToolDamageUtil.damage(tool, 1, player, stack, modifier.getId())) {
           if (player != null) {
-            player.broadcastBreakEvent(slotType);
+            player.onEquippedItemBroken(stack.getItem(), slotType);
           }
           break;
         }
       }
     }
-    // when targeting fire, return true so left click interact does not continue to run
+   // when targeting fire, return true so left click interact does not continue to run
     return didIgnite || targetingFire ? InteractionResult.sidedSuccess(world.isClientSide) : InteractionResult.PASS;
   }
 
