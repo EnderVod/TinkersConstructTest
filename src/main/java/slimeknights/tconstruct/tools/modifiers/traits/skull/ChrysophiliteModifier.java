@@ -2,6 +2,7 @@ package slimeknights.tconstruct.tools.modifiers.traits.skull;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.modifiers.impl.NoLevelsModifier;
@@ -13,7 +14,6 @@ import slimeknights.tconstruct.shared.TinkerAttributes;
 import slimeknights.tconstruct.tools.modules.armor.GoldenAttributeModule;
 
 import javax.annotation.Nullable;
-import java.util.Optional;
 
 /** @deprecated use {@link GoldenAttributeModule} with {@link TinkerAttributes#CHRYSOPHILITE} */
 @Deprecated(forRemoval = true)
@@ -36,11 +36,11 @@ public class ChrysophiliteModifier extends NoLevelsModifier {
   /** @deprecated use {@link slimeknights.tconstruct.shared.TinkerAttributes#CHRYSOPHILITE} */
   @Deprecated(forRemoval = true)
   public static int getTotalGold(@Nullable Entity entity) {
-    return Optional.ofNullable(entity)
-                   .flatMap(e -> e.getCapability(TinkerDataCapability.CAPABILITY).resolve())
-                   .map(data -> data.get(ChrysophiliteModifier.TOTAL_GOLD))
-                   .map(TotalGold::getTotalGold)
-                   .orElse(0);
+    if (entity instanceof LivingEntity living) {
+      TotalGold data = TinkerDataCapability.getData(living).get(ChrysophiliteModifier.TOTAL_GOLD);
+      return data == null ? 0 : data.getTotalGold();
+    }
+    return 0;
   }
 
 
