@@ -70,7 +70,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
    */
   private static boolean harvestInteract(UseOnContext context, ServerLevel world, BlockState state, BlockPos pos, Player player) {
     BlockHitResult trace = new BlockHitResult(context.getClickLocation(), context.getClickedFace(), pos, false);
-    InteractionResult result = state.use(world, player, context.getHand(), trace);
+    InteractionResult result = state.useWithoutItem(world, player, trace);
     return result.consumesAction();
   }
 
@@ -173,7 +173,7 @@ public enum HarvestModule implements ModifierModule, BlockInteractionModifierHoo
    * @param context  Item use context of the original block clicked
    * @param world    Level instance
    * @param state    State to harvest
-   * @param pos      Position to harvest
+   * @param pos      Block position
    * @param source   Source of the interaction
    * @return  True if harvested
    */
