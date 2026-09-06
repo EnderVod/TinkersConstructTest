@@ -8,14 +8,12 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.fluid.FluidTransferHelper;
-import slimeknights.mantle.util.LogicHelper;
 import slimeknights.tconstruct.library.json.TinkerLoadables;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
@@ -56,13 +54,8 @@ public record TankInteractionModule(@Nullable InteractionSource source) implemen
 
     Level world = context.getLevel();
     BlockPos target = context.getClickedPos();
-    // must have a TE that has a fluid handler capability
-    BlockEntity te = world.getBlockEntity(target);
-    if (te == null) {
-      return InteractionResult.PASS;
-    }
     Direction face = context.getClickedFace();
-    IFluidHandler cap = LogicHelper.orElseNull(te.getCapability(ForgeCapabilities.FLUID_HANDLER, face));
+    IFluidHandler cap = world.getCapability(Capabilities.FluidHandler.BLOCK, target, face);
     if (cap == null) {
       return InteractionResult.PASS;
     }
@@ -89,7 +82,7 @@ public record TankInteractionModule(@Nullable InteractionSource source) implemen
         FluidStack drained = cap.drain(TANK_HELPER.getCapacity(tool), FluidAction.EXECUTE);
         if (!drained.isEmpty()) {
           TANK_HELPER.setFluid(tool, drained);
-          sound = FluidTransferHelper.getFillSound(fluidStack);
+          sound = FluidTransferHelper.getFillSound(drained);
         }
       } else {
         // filter drained to be the same as the current fluid
