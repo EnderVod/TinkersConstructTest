@@ -82,14 +82,13 @@ public class AutosmeltModule implements ModifierModule, ProcessLootModifierHook 
   private Optional<? extends AbstractCookingRecipe> findRecipe(ItemStack stack, Level world) {
     SingleRecipeInput input = new SingleRecipeInput(stack);
     // try each recipe type to see if we have a recipe for any of them
-    Optional<? extends AbstractCookingRecipe> recipe = Optional.empty();
     for (RecipeType<? extends AbstractCookingRecipe> recipeType : recipeTypes) {
-      recipe = world.getRecipeManager().getRecipeFor(recipeType, input, world);
+      var recipe = world.getRecipeManager().getRecipeFor(recipeType, input, world);
       if (recipe.isPresent()) {
-        break;
+        return Optional.of(recipe.get().value());
       }
     }
-    return recipe;
+    return Optional.empty();
   }
 
   /**
