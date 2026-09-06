@@ -1,4 +1,4 @@
-name: Tinkers one-shot 1.21 API batch
+name: Tinkers one-shot modifier events 1.21 batch
 
 on:
   push:
@@ -21,91 +21,74 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified 1.21 API migrations
+      - name: Apply verified ModifierEvents migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text(encoding="utf-8")
+          path = Path("src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_once(old, new):
+              global text
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"Expected exactly one match in {path}, found {count}: {old[:100]!r}")
-              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise RuntimeError(f"Expected exactly one match, found {count}: {old[:120]!r}")
+              text = text.replace(old, new, 1)
 
-          # LeftClickBlock is the cancellable event subtype used by this helper in 1.21.
+          # Dynamic enchantment registry + item data components.
           replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java",
-              "private static void setLeftClickEventResult(PlayerInteractEvent event, InteractionResult result)",
-              "private static void setLeftClickEventResult(LeftClickBlock event, InteractionResult result)")
+              "import net.minecraft.core.registries.BuiltInRegistries;",
+              "import net.minecraft.core.component.DataComponents;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.core.registries.Registries;")
+          replace_once(
+              "import net.minecraft.server.level.ServerPlayer;",
+              "import net.minecraft.server.level.ServerLevel;\nimport net.minecraft.server.level.ServerPlayer;")
+          replace_once(
+              "import net.minecraft.world.item.ItemStack;",
+              "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.component.CustomData;")
+          replace_once(
+              "import net.minecraft.world.item.enchantment.EnchantmentHelper;",
+              "import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;")
+          replace_once(
+              "import net.neoforged.neoforge.event.level.BlockEvent.BreakEvent;",
+              "import net.neoforged.neoforge.event.level.BlockDropsEvent;")
 
-          # LivingIncomingDamageEvent renamed its mutable amount accessors; projectile impacts cancel directly.
+          # Vanishing is holder-backed in 1.21.
           replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
-              """    EquipmentContext context = new EquipmentContext(entity);\n    float amount = event.getNewDamage();\n    if (context.hasModifiableArmor()) {""",
-              """    EquipmentContext context = new EquipmentContext(entity);\n    float amount = event.getAmount();\n    if (context.hasModifiableArmor()) {""")
+              """        LivingEntity target = event.getEntity();\n        // check each slot for gold""",
+              """        LivingEntity target = event.getEntity();\n        var vanishing = target.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.VANISHING_CURSE);\n        // check each slot for gold""")
           replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
-              """            if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {\n              event.setNewDamage(0);\n              return;""",
-              """            if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {\n              event.setAmount(0);\n              return;""")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
-              """                // on forge, this means the cancelled entity won't be hit again if its a piercing arrow\n                // on neo, they will get processed again next frame. Is this something we need to work around?\n                event.setNewDamage(0);\n                break;""",
-              """                // cancelling prevents the projectile impact from being processed by vanilla\n                event.setCanceled(true);\n                break;""")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
-              """            if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {\n              event.setNewDamage(0);\n              break;""",
-              """            if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {\n              event.setCanceled(true);\n              break;""")
+              "!EnchantmentHelper.hasVanishingCurse(stack)",
+              "EnchantmentHelper.getItemEnchantmentLevel(vanishing, stack) <= 0")
 
-          # NeoForge's loot registries are now MapCodec/parameterized function registries.
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
-              "import com.mojang.serialization.Codec;",
-              "import com.mojang.serialization.MapCodec;")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
-              "import net.neoforged.neoforge.data.event.GatherDataEvent;",
-              "import net.neoforged.neoforge.common.loot.IGlobalLootModifier;\nimport net.neoforged.neoforge.data.event.GatherDataEvent;")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
-              "public static final DeferredHolder<? super Codec<ModifierLootModifier>, Codec<ModifierLootModifier>> modifierLootModifier",
-              "public static final DeferredHolder<MapCodec<? extends IGlobalLootModifier>, MapCodec<ModifierLootModifier>> modifierLootModifier")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
-              "public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> modifierBonusFunction",
-              "public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<ModifierBonusLootFunction>> modifierBonusFunction")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
-              "public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> chrysophiliteBonusFunction",
-              "public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<ChrysophiliteBonusFunction>> chrysophiliteBonusFunction")
+          # Mantle 1.21 reads the soulbound slot marker from CUSTOM_DATA.
+          old = "stack.getOrCreateTag().putInt(MantleEvents.SOULBOUND_SLOT, i);"
+          if text.count(old) != 2:
+              raise RuntimeError(f"Expected two soulbound NBT writes, found {text.count(old)}")
+          text = text.replace(old, "int slot = i;\n          CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> tag.putInt(MantleEvents.SOULBOUND_SLOT, slot));", 2)
 
-          # NeoForge 1.21 provides a safe event for extending vanilla block-entity valid-block sets.
+          # Block experience is mutable on BlockDropsEvent in current NeoForge.
           replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              "import com.google.common.collect.ImmutableSet;\n",
-              "")
+              """  static void beforeBlockBreak(BreakEvent event) {\n    Player player = event.getPlayer();""",
+              """  static void beforeBlockBreak(BlockDropsEvent event) {\n    if (!(event.getBreaker() instanceof Player player)) {\n      return;\n    }""")
           replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              "import net.minecraft.world.item.FireworkRocketItem;\n",
-              "")
+              "event.setExpToDrop((int)(event.getExpToDrop() * bonus));",
+              "event.setDroppedExperience((int)(event.getDroppedExperience() * bonus));")
+
+          # 1.21 collapsed directional fireball power into a scalar acceleration value.
           replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              "import net.minecraft.world.item.crafting.FireworkStarRecipe;\n",
-              "")
+              """                if (projectile instanceof AbstractHurtingProjectile hurting) {\n                  hurting.xPower = reboundAngle.x * 0.1;\n                  hurting.yPower = reboundAngle.y * 0.1;\n                  hurting.zPower = reboundAngle.z * 0.1;\n                }""",
+              """                if (projectile instanceof AbstractHurtingProjectile hurting) {\n                  hurting.accelerationPower = 0.1;\n                }""")
+
+          replace_once("target.setSecondsOnFire(5);", "target.igniteForSeconds(5);")
+
+          # Vanilla 1.21 combines post-hurt and post-damage enchantment callbacks.
           replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              "import net.neoforged.neoforge.common.world.BiomeModifier;",
-              "import net.neoforged.neoforge.common.world.BiomeModifier;\nimport net.neoforged.neoforge.event.BlockEntityTypeAddBlocksEvent;")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              """      // heads in firework stars\n      TinkerWorld.heads.forEach(head -> FireworkStarRecipe.SHAPE_BY_ITEM.put(head.asItem(), FireworkRocketItem.Shape.CREEPER));\n      // inject heads into the tile entity type\n      event.enqueueWork(() -> {\n        ImmutableSet.Builder<Block> builder = ImmutableSet.builder();\n        builder.addAll(BlockEntityType.SKULL.validBlocks);\n        TinkerWorld.heads.forEach(head -> builder.add(head));\n        TinkerWorld.wallHeads.forEach(head -> builder.add(head));\n        BlockEntityType.SKULL.validBlocks = builder.build();\n      });""",
-              """      // TODO 1.21: vanilla's firework-star shape map is private; restore custom-head creeper-shape\n      // support through a supported recipe extension instead of mutating vanilla private state.""")
-          replace_once(
-              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
-              """  @SubscribeEvent\n  void commonSetup(final FMLCommonSetupEvent event) {""",
-              """  @SubscribeEvent\n  void addSkullBlockEntityBlocks(BlockEntityTypeAddBlocksEvent event) {\n    java.util.List<Block> blocks = new java.util.ArrayList<>();\n    TinkerWorld.heads.forEach(blocks::add);\n    TinkerWorld.wallHeads.forEach(blocks::add);\n    event.modify(BlockEntityType.SKULL, blocks.toArray(Block[]::new));\n  }\n\n  @SubscribeEvent\n  void commonSetup(final FMLCommonSetupEvent event) {""")
+              """          if (!level.isClientSide && livingOwner != null) {\n            EnchantmentHelper.doPostHurtEffects(target, livingOwner);\n            EnchantmentHelper.doPostDamageEffects(livingOwner, target);\n          }""",
+              """          if (level instanceof ServerLevel serverLevel && livingOwner != null) {\n            EnchantmentHelper.doPostAttackEffects(serverLevel, target, damageSource);\n          }""")
+
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Commit verified batch
@@ -117,11 +100,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java \
-                  src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
-                  src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java \
-                  src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
-          git commit -m "Port remaining event and registry APIs to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
+          git commit -m "Port modifier event APIs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
