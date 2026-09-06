@@ -3,7 +3,6 @@ package slimeknights.tconstruct.tools.logic;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.stats.Stats;
@@ -148,7 +147,7 @@ public class InteractionHandler {
     Player player = context.getPlayer();
     Level world = context.getLevel();
     BlockInWorld info = new BlockInWorld(world, context.getClickedPos(), false);
-    if (player != null && !player.getAbilities().mayBuild && !stack.hasAdventureModePlaceTagForBlock(BuiltInRegistries.BLOCK, info)) {
+    if (player != null && !player.getAbilities().mayBuild && !stack.canPlaceOnBlockInAdventureMode(info)) {
       return InteractionResult.PASS;
     }
 
@@ -200,7 +199,7 @@ public class InteractionHandler {
         Level level = player.level();
         if (useBlock == TriState.TRUE || (useBlock != TriState.FALSE
                                          && (!player.isSecondaryUseActive() || player.getItemInHand(Util.getOpposite(hand)).doesSneakBypassUse(level, pos, player)))) {
-          InteractionResult result = level.getBlockState(pos).use(level, player, hand, trace);
+          InteractionResult result = level.getBlockState(pos).useWithoutItem(level, player, trace);
           if (result.consumesAction()) {
             if (player instanceof ServerPlayer serverPlayer) {
               CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(serverPlayer, pos, ItemStack.EMPTY);
@@ -368,8 +367,8 @@ public class InteractionHandler {
       if (result == InteractionResult.SUCCESS) {
         event.getEntity().swing(event.getHand());
       }
-      event.setCancellationResult(result);
-      // don't cancel the result in survival as it does not actually prevent breaking the block, just causes really weird desyncs
+      // LeftClickBlock no longer carries a cancellation result in 1.21.
+      // don't cancel the event in survival as it does not actually prevent breaking the block, just causes really weird desyncs
       // leaving uncanceled lets us still do blocky stuff but if you hold click it digs
       if (event.getEntity().getAbilities().instabuild) {
         event.setCanceled(true);
@@ -404,7 +403,7 @@ public class InteractionHandler {
     }
     // ensure we have not fired this tick
     Player player = event.getEntity();
-    if (player.getCapability(TinkerDataCapability.CAPABILITY).filter(data -> data.computeIfAbsent(LAST_TICK).update(player)).isEmpty()) {
+    if (!TinkerDataCapability.getData(player).computeIfAbsent(LAST_TICK).update(player)) {
       return;
     }
     // must support interaction
@@ -502,7 +501,7 @@ public class InteractionHandler {
           if (damage >= 3) {
             InteractionHand usingHand = entity.getUsedItemHand();
             if (ToolDamageUtil.damageAnimated(tool, 1 + Mth.floor(damage), entity, usingHand)) {
-              ForgeEventFactory.onPlayerDestroyItem(player, activeStack, usingHand);
+              EventHooks.onPlayerDestroyItem(player, activeStack, usingHand);
               entity.stopUsingItem();
               entity.playSound(SoundEvents.SHIELD_BREAK, 0.8F, 0.8F + entity.level().random.nextFloat() * 0.4F);
             }
