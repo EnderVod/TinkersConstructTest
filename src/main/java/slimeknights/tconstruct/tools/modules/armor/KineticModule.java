@@ -7,6 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.TooltipFlag;
 import slimeknights.mantle.client.TooltipKey;
 import slimeknights.mantle.data.loadable.record.SingletonLoader;
+import slimeknights.mantle.util.LogicHelper;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerEffect;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
@@ -57,7 +58,7 @@ public enum KineticModule implements ModifierModule, OnAttackedModifierHook, Too
   public void onAttacked(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     // require the damage to be entity caused, but does not strictly need to be melee damage
     if (source.getEntity() != null) {
-      int level = SlotInChargeModule.getLevel(context.getTinkerData(), SLOT_IN_CHARGE, slotType);
+      int level = SlotInChargeModule.getLevel(LogicHelper.orElseNull(context.getTinkerData()), SLOT_IN_CHARGE, slotType);
       if (level > 0) {
         InsatiableModifier.applyEffect(context.getEntity(), ToolType.ARMOR, 10 * 20, 1, level - 1);
       }

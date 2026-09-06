@@ -10,6 +10,7 @@ import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.mantle.data.loadable.field.ContextKey;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.mantle.data.predicate.IJsonPredicate;
+import slimeknights.mantle.util.LogicHelper;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.json.LevelingValue;
@@ -84,14 +85,14 @@ public record KnockbackCounterModule(TinkerDataKey<SlotInCharge> slotInCharge, L
     // direct damage on the server against a living entity
     // only run once across all pieces, as we want a max effect and knockback doesn't naturally max
     LivingEntity defender = context.getEntity();
-    if (isDirectDamage && !defender.level().isClientSide && condition.matches(tool, modifier) && this.defender.matches(defender) && source.getEntity() instanceof LivingEntity attacker && this.attacker.matches(attacker) && SlotInChargeModule.isInCharge(context.getTinkerData(), slotInCharge, slotType)) {
+    if (isDirectDamage && !defender.level().isClientSide && condition.matches(tool, modifier) && this.defender.matches(defender) && source.getEntity() instanceof LivingEntity attacker && this.attacker.matches(attacker) && SlotInChargeModule.isInCharge(LogicHelper.orElseNull(context.getTinkerData()), slotInCharge, slotType)) {
       // figure out which slot is blocking, it gets its effect doubled
       EquipmentSlot blockingSlot = null;
       if (defender.isUsingItem()) {
         EquipmentSlot checkSlot = Util.getSlotType(defender.getUsedItemHand());
         IToolStackView blockingTool = context.getValidTool(checkSlot);
         // TODO: CounterModule.isBlocking?
-        if (blockingTool != null && ModifierUtil.canPerformAction(blockingTool, ItemAbilities.SHIELD_BLOCK) && defender.getItemBySlot(checkSlot).getUseDuration() - defender.getUseItemRemainingTicks() >= 5) {
+        if (blockingTool != null && ModifierUtil.canPerformAction(blockingTool, ItemAbilities.SHIELD_BLOCK) && defender.getItemBySlot(checkSlot).getUseDuration(defender) - defender.getUseItemRemainingTicks() >= 5) {
           blockingSlot = checkSlot;
         }
       }

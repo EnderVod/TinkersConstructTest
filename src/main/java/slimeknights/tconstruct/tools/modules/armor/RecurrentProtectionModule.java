@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.tools.modules.armor;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
@@ -11,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.TooltipFlag;
 import slimeknights.mantle.client.TooltipKey;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
+import slimeknights.mantle.util.LogicHelper;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerEffect;
 import slimeknights.tconstruct.library.json.LevelingInt;
@@ -62,7 +64,7 @@ public record RecurrentProtectionModule(LevelingValue percent, LevelingInt durat
   @Override
   public float modifyDamageTaken(IToolStackView tool, ModifierEntry modifier, EquipmentContext context, EquipmentSlot slotType, DamageSource source, float amount, boolean isDirectDamage) {
     if (!source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
-      int level = SlotInChargeModule.getLevel(context.getTinkerData(), SLOT_KEY, slotType);
+      int level = SlotInChargeModule.getLevel(LogicHelper.orElseNull(context.getTinkerData()), SLOT_KEY, slotType);
       if (level > 0) {
         // step 1: reduce damage based on the current effect level
         MobEffect effect = TinkerModifiers.momentumEffect.get(ToolType.ARMOR);
@@ -72,7 +74,7 @@ public record RecurrentProtectionModule(LevelingValue percent, LevelingInt durat
         // step 2: apply momentum based on damage taken
         int reduction = (int)(percent.compute(level) * amount);
         if (reduction > 0) {
-          entity.addEffect(new MobEffectInstance(effect, duration.compute(level), reduction - 1, false, false, true));
+          entity.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), duration.compute(level), reduction - 1, false, false, true));
         }
       }
     }
@@ -80,9 +82,9 @@ public record RecurrentProtectionModule(LevelingValue percent, LevelingInt durat
   }
 
   @Override
-  public void addTooltip(IToolStackView tool, ModifierEntry modifier, @Nullable Player player, List<Component> tooltip, TooltipKey tooltipKey, TooltipFlag tooltipFlag) {
+  public void addTooltip(IToolStackView tool, ModifierEntry modifier, @Nullable Player player, List<Component> tooltip, TooltipKey key, TooltipFlag tooltipFlag) {
     // if not holding shift or no player, display the percent amount
-    if (player == null || tooltipKey != TooltipKey.SHIFT) {
+    if (player == null || key != TooltipKey.SHIFT) {
       TooltipModifierHook.addPercentBoost(modifier.getModifier(), PROTECTION, this.percent.compute(modifier.getLevel()), tooltip);
     } else {
       // if we have a player, use the current effect level for reduction display
