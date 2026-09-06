@@ -1,7 +1,6 @@
 package slimeknights.tconstruct.tools.modifiers.ability.tool;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -64,8 +63,8 @@ public class ExchangingModifier extends NoLevelsModifier implements RemoveBlockM
     // the mainhand next (this tool), in case we have glowing or a similar modifier to provide blocks.
     if (blockItem == null) {
       item = entity.getMainHandItem();
-      // skip forges cap system and go to the tinkers hook because we know this is a tinkers tool
-      blockProvider = new BlockItemProviderModifierHook.CapabilityImpl(tool);
+      // skip capability lookup and go to the Tinkers hook because we know this is a Tinkers tool
+      blockProvider = BlockItemProviderModifierHook.CapabilityImpl.INSTANCE;
       backingStack = blockProvider.getBlockItemStack(item, entity);
       blockItem = BlockItemProviderCapability.verifyBlockItem(backingStack, blockProvider);
 
@@ -80,7 +79,7 @@ public class ExchangingModifier extends NoLevelsModifier implements RemoveBlockM
     // Note that we check the mined position as the block we are placing 'against', which could be considered variance against vanilla but it is the block that make the most sense here.
     Level world = context.getWorld();
     BlockPos pos = context.getPos();
-    if (entity instanceof Player player && !player.mayBuild() && !fakeStack.hasAdventureModePlaceTagForBlock(BuiltInRegistries.BLOCK, new BlockInWorld(world, pos, false))) {
+    if (entity instanceof Player player && !player.mayBuild() && !fakeStack.canPlaceOnBlockInAdventureMode(new BlockInWorld(world, pos, false))) {
       return null;
     }
 
