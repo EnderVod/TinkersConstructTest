@@ -3,6 +3,7 @@ package slimeknights.tconstruct.tools.modules.interaction.sling;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -101,7 +102,7 @@ public record SlingLeapModule(LevelingValue forceMultiplier, boolean leaveGround
           }
           // if supported, perform drill attack if the modifier is available
           if (ModifierManager.isInTag(modifier.getId(), TinkerTags.Modifiers.DRILL_ATTACKS) && ModifierUtil.canPerformAction(tool, TinkerToolActions.DRILL_ATTACK)) {
-            player.startAutoSpinAttack(20);
+            player.startAutoSpinAttack(20, (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE), player.getWeaponItem());
           }
         }
         return;
