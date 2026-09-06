@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.world.block;
 
+import com.mojang.serialization.MapCodec;
 import lombok.Getter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
@@ -27,6 +28,11 @@ public class SlimeTallGrassBlock extends BushBlock implements IShearable {
   public SlimeTallGrassBlock(Properties properties, FoliageType foliageType) {
     super(properties);
     this.foliageType = foliageType;
+  }
+
+  @Override
+  protected MapCodec<? extends BushBlock> codec() {
+    return MapCodec.unit(this);
   }
 
   @Deprecated
