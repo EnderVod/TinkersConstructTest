@@ -86,10 +86,10 @@ public enum BannerModule implements ModifierModule, DisplayNameModifierHook, Too
           String translation = tag.getString(KEY_TRANSLATION);
           if (!translation.isEmpty()) {
             tooltip.add(Component.translatable(translation + '.' + dye.getName()).withStyle(ChatFormatting.GRAY));
-          } else if (access != null) {
+          } else if (player != null) {
             ResourceLocation patternId = ResourceLocation.tryParse(tag.getString(KEY_PATTERN));
             if (patternId != null) {
-              access.lookupOrThrow(Registries.BANNER_PATTERN).get(ResourceKey.create(Registries.BANNER_PATTERN, patternId))
+              player.level().registryAccess().lookupOrThrow(Registries.BANNER_PATTERN).get(ResourceKey.create(Registries.BANNER_PATTERN, patternId))
                 .ifPresent(holder -> tooltip.add(Component.translatable(holder.value().translationKey() + '.' + dye.getName()).withStyle(ChatFormatting.GRAY)));
             }
           }
