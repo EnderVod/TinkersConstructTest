@@ -58,7 +58,7 @@ public record SplashingModule(LevelingValue strength) implements ModifierModule,
   }
 
   @Override
-  public List<ModuleHook<?>>> getDefaultHooks() {
+  public List<ModuleHook<?>> getDefaultHooks() {
     return DEFAULT_HOOKS;
   }
 
