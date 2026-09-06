@@ -190,13 +190,12 @@ public class CombatFishingHookRenderer extends EntityRenderer<CombatFishingHook>
 
     /** Draws a vertex using this texture. */
     public void vertex(VertexConsumer consumer, Matrix4f pose, Matrix3f normal, int lightmap, float pX, int pY, int pU, int pV) {
-      consumer.vertex(pose, pX - 0.5f, pY - 0.5f, 0f)
-        .color(red, green, blue, alpha)
-        .uv(pU, pV)
-        .overlayCoords(OverlayTexture.NO_OVERLAY)
-        .uv2(lightmap)
-        .normal(normal, 0.0F, 1.0F, 0.0F)
-        .endVertex();
+      consumer.addVertex(pose, pX - 0.5f, pY - 0.5f, 0f)
+        .setColor(red, green, blue, alpha)
+        .setUv(pU, pV)
+        .setOverlay(OverlayTexture.NO_OVERLAY)
+        .setLight(lightmap)
+        .setNormal(normal, 0.0F, 1.0F, 0.0F);
     }
   }
 }

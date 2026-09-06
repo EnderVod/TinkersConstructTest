@@ -93,8 +93,8 @@ public class RayTracer {
      * @return the block reach distance from the client
      */
     private static double getBlockReachDistanceClient() {
-      assert Minecraft.getInstance().gameMode != null;
-      return Minecraft.getInstance().gameMode.getPickRange();
+      assert Minecraft.getInstance().player != null;
+      return Minecraft.getInstance().player.blockInteractionRange();
     }
   }
 }
