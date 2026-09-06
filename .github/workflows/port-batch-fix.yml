@@ -1,4 +1,4 @@
-name: Tinkers one-shot port cleanup
+name: Tinkers one-shot 1.21 API batch
 
 on:
   push:
@@ -21,90 +21,107 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Remove runtime references to temporarily excluded datagen providers
+      - name: Apply verified 1.21 API migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def remove_imports(text, imports):
-              for imp in imports:
-                  text = text.replace(f"import {imp};\n", "")
-              return text
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"Expected exactly one match in {path}, found {count}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          def remove_method(text, needle="gatherData("):
-              idx = text.find(needle)
-              if idx < 0:
-                  return text
-              start = text.rfind("@SubscribeEvent", 0, idx)
-              if start < 0:
-                  start = text.rfind("\n", 0, idx) + 1
-              brace = text.find("{", idx)
-              if brace < 0:
-                  raise RuntimeError(f"Could not find method body for {needle}")
-              depth = 0
-              end = None
-              for i in range(brace, len(text)):
-                  if text[i] == "{":
-                      depth += 1
-                  elif text[i] == "}":
-                      depth -= 1
-                      if depth == 0:
-                          end = i + 1
-                          break
-              if end is None:
-                  raise RuntimeError(f"Could not match braces for {needle}")
-              while end < len(text) and text[end] in "\r\n":
-                  end += 1
-              return text[:start] + text[end:]
+          # LeftClickBlock is the cancellable event subtype used by this helper in 1.21.
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java",
+              "private static void setLeftClickEventResult(PlayerInteractEvent event, InteractionResult result)",
+              "private static void setLeftClickEventResult(LeftClickBlock event, InteractionResult result)")
 
-          files = {
-              Path("src/main/java/slimeknights/tconstruct/tools/TinkerTools.java"): [
-                  "slimeknights.tconstruct.common.data.tags.MaterialTagProvider",
-                  "slimeknights.tconstruct.tools.data.ArmorModelProvider",
-                  "slimeknights.tconstruct.tools.data.StationSlotLayoutProvider",
-                  "slimeknights.tconstruct.tools.data.ToolDefinitionDataProvider",
-                  "slimeknights.tconstruct.tools.data.ToolItemModelProvider",
-                  "slimeknights.tconstruct.tools.data.ToolsRecipeProvider",
-                  "slimeknights.tconstruct.tools.data.client.ModifierModelMapProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialDataProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialRecipeProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialRenderInfoProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialStatsDataProvider",
-                  "slimeknights.tconstruct.tools.data.material.MaterialTraitsDataProvider",
-              ],
-              Path("src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java"): [
-                  "slimeknights.tconstruct.common.data.tags.ModifierTagProvider",
-                  "slimeknights.tconstruct.tools.data.EnchantmentToModifierProvider",
-                  "slimeknights.tconstruct.tools.data.FluidEffectProvider",
-                  "slimeknights.tconstruct.tools.data.ModifierProvider",
-                  "slimeknights.tconstruct.tools.data.ModifierRecipeProvider",
-              ],
-              Path("src/main/java/slimeknights/tconstruct/tables/TinkerTables.java"): [
-                  "slimeknights.tconstruct.tables.data.TableRecipeProvider",
-              ],
-          }
+          # LivingIncomingDamageEvent renamed its mutable amount accessors; projectile impacts cancel directly.
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
+              """    EquipmentContext context = new EquipmentContext(entity);\n    float amount = event.getNewDamage();\n    if (context.hasModifiableArmor()) {""",
+              """    EquipmentContext context = new EquipmentContext(entity);\n    float amount = event.getAmount();\n    if (context.hasModifiableArmor()) {""")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
+              """            if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {\n              event.setNewDamage(0);\n              return;""",
+              """            if (entry.getHook(ModifierHooks.DAMAGE_BLOCK).isDamageBlocked(toolStack, entry, context, slotType, source, amount)) {\n              event.setAmount(0);\n              return;""")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
+              """                // on forge, this means the cancelled entity won't be hit again if its a piercing arrow\n                // on neo, they will get processed again next frame. Is this something we need to work around?\n                event.setNewDamage(0);\n                break;""",
+              """                // cancelling prevents the projectile impact from being processed by vanilla\n                event.setCanceled(true);\n                break;""")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java",
+              """            if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {\n              event.setNewDamage(0);\n              break;""",
+              """            if (entry.getHook(hook).onProjectileHitsBlock(modifiers, nbt, entry, projectile, blockHit, attacker)) {\n              event.setCanceled(true);\n              break;""")
 
-          for path, imports in files.items():
-              text = path.read_text(encoding="utf-8")
-              text = remove_imports(text, imports)
-              text = remove_method(text)
-              path.write_text(text, encoding="utf-8")
+          # NeoForge's loot registries are now MapCodec/parameterized function registries.
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
+              "import com.mojang.serialization.Codec;",
+              "import com.mojang.serialization.MapCodec;")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
+              "import net.neoforged.neoforge.data.event.GatherDataEvent;",
+              "import net.neoforged.neoforge.common.loot.IGlobalLootModifier;\nimport net.neoforged.neoforge.data.event.GatherDataEvent;")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
+              "public static final DeferredHolder<? super Codec<ModifierLootModifier>, Codec<ModifierLootModifier>> modifierLootModifier",
+              "public static final DeferredHolder<MapCodec<? extends IGlobalLootModifier>, MapCodec<ModifierLootModifier>> modifierLootModifier")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
+              "public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> modifierBonusFunction",
+              "public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<ModifierBonusLootFunction>> modifierBonusFunction")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java",
+              "public static final DeferredHolder<? super LootItemFunctionType, LootItemFunctionType> chrysophiliteBonusFunction",
+              "public static final DeferredHolder<LootItemFunctionType<?>, LootItemFunctionType<ChrysophiliteBonusFunction>> chrysophiliteBonusFunction")
+
+          # NeoForge 1.21 provides a safe event for extending vanilla block-entity valid-block sets.
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              "import com.google.common.collect.ImmutableSet;\n",
+              "")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              "import net.minecraft.world.item.FireworkRocketItem;\n",
+              "")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              "import net.minecraft.world.item.crafting.FireworkStarRecipe;\n",
+              "")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              "import net.neoforged.neoforge.common.world.BiomeModifier;",
+              "import net.neoforged.neoforge.common.world.BiomeModifier;\nimport net.neoforged.neoforge.event.BlockEntityTypeAddBlocksEvent;")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              """      // heads in firework stars\n      TinkerWorld.heads.forEach(head -> FireworkStarRecipe.SHAPE_BY_ITEM.put(head.asItem(), FireworkRocketItem.Shape.CREEPER));\n      // inject heads into the tile entity type\n      event.enqueueWork(() -> {\n        ImmutableSet.Builder<Block> builder = ImmutableSet.builder();\n        builder.addAll(BlockEntityType.SKULL.validBlocks);\n        TinkerWorld.heads.forEach(head -> builder.add(head));\n        TinkerWorld.wallHeads.forEach(head -> builder.add(head));\n        BlockEntityType.SKULL.validBlocks = builder.build();\n      });""",
+              """      // TODO 1.21: vanilla's firework-star shape map is private; restore custom-head creeper-shape\n      // support through a supported recipe extension instead of mutating vanilla private state.""")
+          replace_once(
+              "src/main/java/slimeknights/tconstruct/world/TinkerWorld.java",
+              """  @SubscribeEvent\n  void commonSetup(final FMLCommonSetupEvent event) {""",
+              """  @SubscribeEvent\n  void addSkullBlockEntityBlocks(BlockEntityTypeAddBlocksEvent event) {\n    java.util.List<Block> blocks = new java.util.ArrayList<>();\n    TinkerWorld.heads.forEach(blocks::add);\n    TinkerWorld.wallHeads.forEach(blocks::add);\n    event.modify(BlockEntityType.SKULL, blocks.toArray(Block[]::new));\n  }\n\n  @SubscribeEvent\n  void commonSetup(final FMLCommonSetupEvent event) {""")
           PY
 
-      - name: Commit cleanup
+      - name: Commit verified batch
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "No cleanup changes were needed."
+            echo "No migration changes were needed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tools/TinkerTools.java \
+          git add src/main/java/slimeknights/tconstruct/tools/logic/InteractionHandler.java \
+                  src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
                   src/main/java/slimeknights/tconstruct/tools/TinkerModifiers.java \
-                  src/main/java/slimeknights/tconstruct/tables/TinkerTables.java
-          git commit -m "Remove excluded datagen hooks from runtime compile"
+                  src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
+          git commit -m "Port remaining event and registry APIs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
