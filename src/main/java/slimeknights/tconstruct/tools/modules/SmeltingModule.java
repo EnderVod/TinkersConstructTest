@@ -82,7 +82,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   private static final List<ModuleHook<?>> DEFAULT_HOOKS = HookProvider.<SmeltingModule>defaultHooks(ModifierHooks.MELEE_HIT, ModifierHooks.MONSTER_MELEE_HIT, ModifierHooks.LAUNCHER_HIT, ModifierHooks.BLOCK_HARVEST, ModifierHooks.PROJECTILE_LAUNCH, ModifierHooks.ON_ATTACKED, ModifierHooks.PLANT_HARVEST, ModifierHooks.SHEAR_ENTITY, ModifierHooks.SLING_LAUNCH);
   @SuppressWarnings("unchecked")
   public static final RecordLoadable<SmeltingModule> LOADER = RecordLoadable.create(
-    TinkerLoadables.RECIPE_TYPE.<RecipeType<? extends AbstraactCookingRecipe>>flatXmap(t -> (RecipeType<? extends AbstraactCookingRecipe>) t, t -> t)
+    TinkerLoadables.RECIPE_TYPE.<RecipeType<? extends AbstractCookingRecipe>>flatXmap(t -> (RecipeType<? extends AbstractCookingRecipe>) t, t -> t)
                                .requiredField("recipe_type", SmeltingModule::recipeType),
     FloatLoadable.FROM_ZERO.requiredField("multiplier", SmeltingModule::multiplier),
     InventoryModule.LOADER.directField(SmeltingModule::input),
@@ -95,11 +95,11 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   @Internal
   public SmeltingModule {}
 
-  public SmeltingModule(RecipeType<? extends AbstraactCookingRecipe> recipeType, float multiplier, InventoryModule inventory, @Nullable ResourceLocation outputKey, Pattern outputPattern) {
+  public SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeType, float multiplier, InventoryModule inventory, @Nullable ResourceLocation outputKey, Pattern outputPattern) {
     this(recipeType, multiplier, inventory, InventoryModule.builder().from(inventory).key(outputKey).pattern(outputPattern).filter(ItemPredicate.NONE).slots(inventory.slots()));
   }
 
-  public SmeltingModule(RecipeType<? extends AbstraactCookingRecipe> recipeType, float multiplier, InventoryModule inventory) {
+  public SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeType, float multiplier, InventoryModule inventory) {
     this(recipeType, multiplier, inventory, null, Patterns.RESULT);
   }
 
@@ -119,7 +119,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
     builder.addModule(output);
   }
 
-  /*** Finds the recipe for the given stack */
+  /** Finds the recipe for the given stack */
   @Nullable
   private static AbstractCookingRecipe findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {
     SingleRecipeInput input = new SingleRecipeInput(stack);
@@ -129,7 +129,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
         return lastRecipe;
       }
       // if that failed, do a recipe lookup
-      AbstraactCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);
+      AbstractCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);
       if (recipe != null) {
         lastRecipe = recipe;
       }
@@ -187,7 +187,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
             int slot = entry.getInt(TAG_SLOT);
             ItemStack currentResult = output.getStack(tool, modifier, slot);
             int maxStackSize = 0;
-            if (!currentResult.isEmpty() {
+            if (!currentResult.isEmpty()) {
               maxStackSize = Math.min(currentResult.getMaxStackSize(), output.getSlotLimit(tool, modifier, slot));
               // no space in output? freeze at 1 tick left to cook
               if (currentResult.getCount() >= maxStackSize) {
