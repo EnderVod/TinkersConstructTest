@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 6fad2127: walking modifier previous-position fix compile green.
+# Runtime source validated through 28b2fcef: dynamic Minecraft 1.21 equipment-slot caches compile green.
 on:
   push:
     branches:
