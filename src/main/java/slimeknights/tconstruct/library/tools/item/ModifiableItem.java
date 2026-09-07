@@ -167,6 +167,16 @@ public class ModifiableItem extends TieredItem implements IModifiableDisplay {
 
   /* Damage/Durability */
 
+  /**
+   * 1.21 NeoForge uses a stack-sensitive damageability check before invoking the
+   * item damage hook. Tinkers stores dynamic durability in tool data instead of
+   * vanilla MAX_DAMAGE, so mark durability-tagged tools as damageable here.
+   */
+  @Override
+  public boolean isDamageable(ItemStack stack) {
+    return stack.getCount() == 1 && stack.is(TinkerTags.Items.DURABILITY);
+  }
+
   @Override
   public boolean isRepairable(ItemStack stack) {
     // handle in the tinker station
