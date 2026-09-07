@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Touch this workflow after migration sweeps when a clean verification run is needed.
+# Verify the full ResourceLocation migration through bd70d0e2.
 on:
   push:
     branches:
