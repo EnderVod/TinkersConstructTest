@@ -1,0 +1,117 @@
+name: Port Item Tag Migration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-item-tag-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Migrate Tinkers item tags to 1.21 singular path
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+
+          old_root = Path('src/generated/resources/data/tconstruct/tags/items')
+          new_root = Path('src/generated/resources/data/tconstruct/tags/item')
+          if not old_root.exists():
+              raise SystemExit(f'Missing legacy item tag tree: {old_root}')
+
+          def migrate(value):
+              if isinstance(value, list):
+                  return [migrate(v) for v in value]
+              if isinstance(value, dict):
+                  return {k: migrate(v) for k, v in value.items()}
+              if isinstance(value, str) and value.startswith('#forge:'):
+                  return '#c:' + value[len('#forge:'):]
+              return value
+
+          count = 0
+          forge_refs = 0
+          for src in sorted(old_root.rglob('*.json')):
+              rel = src.relative_to(old_root)
+              dst = new_root / rel
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              raw = json.loads(src.read_text(encoding='utf-8'))
+
+              def count_forge(v):
+                  if isinstance(v, list):
+                      return sum(count_forge(x) for x in v)
+                  if isinstance(v, dict):
+                      return sum(count_forge(x) for x in v.values())
+                  return int(isinstance(v, str) and v.startswith('#forge:'))
+
+              forge_refs += count_forge(raw)
+              dst.write_text(json.dumps(migrate(raw), indent=2) + '\n', encoding='utf-8')
+              count += 1
+
+          print(f'Migrated {count} Tinkers item-tag files to tags/item')
+          print(f'Converted {forge_refs} legacy #forge common-tag references to #c')
+
+      - name: Validate core tool classification tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          old_root=src/generated/resources/data/tconstruct/tags/items
+          new_root=src/generated/resources/data/tconstruct/tags/item
+
+          old_count=$(find "$old_root" -type f -name '*.json' | wc -l)
+          new_count=$(find "$new_root" -type f -name '*.json' | wc -l)
+          if [ "$new_count" -lt "$old_count" ]; then
+            echo "Item tag migration incomplete: old=$old_count new=$new_count"
+            exit 1
+          fi
+
+          for file in \
+            modifiable.json \
+            modifiable/durability.json \
+            modifiable/melee.json \
+            modifiable/melee/weapon.json \
+            modifiable/harvest.json \
+            modifiable/harvest/primary.json \
+            modifiable/harvest/stone.json; do
+            test -f "$new_root/$file"
+          done
+
+          grep -q 'tconstruct:pickaxe' "$new_root/modifiable/durability.json"
+          grep -q 'tconstruct:pickaxe' "$new_root/modifiable/harvest/primary.json"
+          grep -q 'tconstruct:sword' "$new_root/modifiable/melee/weapon.json"
+          grep -q '#tconstruct:modifiable/durability' "$new_root/modifiable.json"
+          grep -q '#tconstruct:modifiable/melee' "$new_root/modifiable.json"
+          grep -q '#tconstruct:modifiable/harvest' "$new_root/modifiable.json"
+
+          if grep -R -q '"#forge:' "$new_root"; then
+            echo 'Stale #forge tag references remain in migrated 1.21 item-tag tree.'
+            grep -R '"#forge:' "$new_root" | head -n 30
+            exit 1
+          fi
+
+          echo "Validated $new_count singular-path item tag files."
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/data/tconstruct/tags/item
+          if git diff --cached --quiet; then
+            echo 'No item tag changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Migrate Tinkers item tags to 1.21 paths'
+          git push
