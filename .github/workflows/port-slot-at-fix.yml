@@ -1,0 +1,69 @@
+name: Tinkers Slot Position AT Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-slot-at-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+          fetch-depth: 0
+
+      - name: Restore validated AT and patch Slot coordinates
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          baseline = '1cc1f41ddc7a62e850c8cdd43b4d5bf033276aaf'
+          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          old = subprocess.check_output(
+              ['git', 'show', f'{baseline}:{path.as_posix()}'], text=True
+          )
+          expected = (
+              'public-f net.minecraft.world.inventory.Slot f_40220_ # xPos\n'
+              'public-f net.minecraft.world.inventory.Slot f_40221_ # yPos'
+          )
+          replacement = (
+              '# Minecraft 1.21 keeps Slot coordinates final; Tinker Station dynamically repositions them.\n'
+              'public-f net.minecraft.world.inventory.Slot x\n'
+              'public-f net.minecraft.world.inventory.Slot y'
+          )
+          if expected not in old:
+              raise SystemExit('Validated baseline no longer contains the expected old Slot AT block')
+          new = old.replace(expected, replacement, 1)
+          if 'Slot f_40220_' in new or 'Slot f_40221_' in new:
+              raise SystemExit('Stale Slot SRG AT names remain')
+          if new.count('net.minecraft.world.inventory.Slot x') != 1 or new.count('net.minecraft.world.inventory.Slot y') != 1:
+              raise SystemExit('Expected exactly one named Slot x/y AT entry each')
+          path.write_text(new, encoding='utf-8')
+          PY
+
+          # Prove the restored file differs from the validated baseline only at the Slot block.
+          git diff -- src/main/resources/META-INF/accesstransformer.cfg
+
+      - name: Commit exact Slot AT migration
+        shell: bash
+        run: |
+          if git diff --quiet -- src/main/resources/META-INF/accesstransformer.cfg; then
+            echo 'Slot AT already migrated.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Use 1.21 Slot x/y access transformer names'
+          git push origin HEAD:1.21.1-neoforge
