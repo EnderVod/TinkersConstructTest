@@ -11,6 +11,7 @@ import slimeknights.tconstruct.tables.block.entity.table.TinkerStationBlockEntit
  * Slot coordinates are dynamically repositioned by TinkerStationScreen; Minecraft 1.21 requires the named x/y AT entries
  * so the final coordinate fields are transformed before the client screen updates the selected tool layout.
  * The same runtime pass also validates the SmithingScreen transforms used by the armor-stand preview.
+ * Tool-slot filters are tag driven, so the 1.21 port also requires the generated item tags under the singular tags/item path.
  */
 public class TinkerStationSlot extends Slot {
   private final LazyResultContainer craftResult;
