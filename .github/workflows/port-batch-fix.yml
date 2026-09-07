@@ -1,4 +1,4 @@
-name: Tinkers one-shot smashing components 1.21 batch
+name: Tinkers one-shot part builder 1.21 batch
 
 on:
   push:
@@ -21,56 +21,41 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified Smashing fluid component migration
+      - name: Apply verified Part Builder 1.21 migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/SmashingModule.java")
-          text = path.read_text(encoding="utf-8")
-
-          def replace_once(old, new):
-              global text
+          def replace_once(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"Expected exactly one match, found {count}: {old[:180]!r}")
-              text = text.replace(old, new, 1)
+                  raise RuntimeError(f"{label}: expected exactly one match, found {count}: {old[:160]!r}")
+              return text.replace(old, new, 1)
 
-          replace_once(
-              "import net.minecraft.core.RegistryAccess;",
-              "import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.component.DataComponentPatch;\nimport net.minecraft.core.component.DataComponents;")
-          replace_once(
-              "import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.Tag;",
-              "import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.NbtOps;\nimport net.minecraft.nbt.Tag;")
-          replace_once(
-              "import net.minecraft.world.item.TooltipFlag;",
-              "import net.minecraft.world.item.TooltipFlag;\nimport net.minecraft.world.item.component.CustomData;")
-          replace_once("import java.util.Objects;\n", "")
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/PartBuilderBlockEntity.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(text, "import net.minecraft.world.item.crafting.Recipe;\n", "", "remove Recipe import")
+          text = replace_once(text, "import net.minecraftforge.common.util.LazyOptional;\n", "", "remove LazyOptional import")
+          text = replace_once(text, "    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "", "remove legacy item handler cap")
+          text = replace_once(
+              text,
+              """        recipes = level.getRecipeManager().byType(TinkerRecipeTypes.PART_BUILDER.get()).values().stream()\n                       .filter(r -> r.partialMatch(inventoryWrapper))\n                       .sorted(Comparator.comparing(Recipe::getId))\n                       .flatMap(r -> r.getPatterns(inventoryWrapper).map(p -> new PatternRecipe(p, r)))\n                       .collect(Collectors.toMap(PatternRecipe::pattern, PatternRecipe::recipe, (a, b) -> a));""",
+              """        recipes = level.getRecipeManager().getAllRecipesFor(TinkerRecipeTypes.PART_BUILDER.get()).stream()\n                       .sorted(Comparator.comparing(holder -> holder.id().toString()))\n                       .map(holder -> holder.value())\n                       .filter(r -> r.partialMatch(inventoryWrapper))\n                       .flatMap(r -> r.getPatterns(inventoryWrapper).map(p -> new PatternRecipe(p, r)))\n                       .collect(Collectors.toMap(PatternRecipe::pattern, PatternRecipe::recipe, (a, b) -> a));""",
+              "recipe holder list")
+          text = replace_once(text, "ItemStack.isSameItemSameTags(original, stack)", "ItemStack.isSameItemSameComponents(original, stack)", "component-aware equality")
+          text = replace_once(text, "ForgeEventFactory.firePlayerCraftingEvent(player, result, this.inventoryWrapper);", "EventHooks.firePlayerCraftingEvent(player, result, this.inventoryWrapper);", "crafting event")
+          if "LazyOptional" in text or "itemHandlerCap" in text or ".byType(" in text or "Recipe::getId" in text or "isSameItemSameTags" in text or "ForgeEventFactory" in text:
+              raise RuntimeError("Legacy PartBuilderBlockEntity API remains after migration")
+          path.write_text(text, encoding="utf-8")
 
-          replace_once(
-              """  /** Gets the current fluid NBT */\n  @Nullable\n  private static CompoundTag getFluidTag(IModDataView data) {\n    if (data.contains(KEY_FLUID_TAG, Tag.TAG_COMPOUND)) {\n      return data.getCompound(KEY_FLUID_TAG);\n    }\n    return null;\n  }""",
-              """  /** Reads the stored 1.21 fluid component patch. Legacy 1.20 fluid NBT becomes custom data. */\n  private static DataComponentPatch getFluidComponents(IModDataView data) {\n    if (!data.contains(KEY_FLUID_TAG)) {\n      return DataComponentPatch.EMPTY;\n    }\n    Tag encoded = data.get(KEY_FLUID_TAG);\n    if (encoded == null) {\n      return DataComponentPatch.EMPTY;\n    }\n    var parsed = DataComponentPatch.CODEC.parse(NbtOps.INSTANCE, encoded);\n    var result = parsed.result();\n    if (result.isPresent()) {\n      return result.get();\n    }\n    // Before 1.21 this key stored FluidStack's arbitrary tag directly. Preserve it as CUSTOM_DATA.\n    if (encoded instanceof CompoundTag legacy && !legacy.isEmpty()) {\n      return DataComponentPatch.builder().set(DataComponents.CUSTOM_DATA, CustomData.of(legacy.copy())).build();\n    }\n    parsed.error().ifPresent(error -> TConstruct.LOG.warn("Unable to decode Smashing fluid components: {}", error.message()));\n    return DataComponentPatch.EMPTY;\n  }\n\n  /** Serializes a fluid's component patch for persistent modifier/projectile storage. */\n  @Nullable\n  private static Tag serializeFluidComponents(FluidStack stack) {\n    return DataComponentPatch.CODEC.encodeStart(NbtOps.INSTANCE, stack.getComponentsPatch())\n      .resultOrPartial(error -> TConstruct.LOG.warn("Unable to encode Smashing fluid components: {}", error))\n      .orElse(null);\n  }\n\n  /** Reconstructs a component-aware fluid stack from modifier data. */\n  private static FluidStack makeFluidStack(IModDataView data, Fluid fluid, int amount) {\n    FluidStack stack = new FluidStack(fluid, amount);\n    stack.applyComponents(getFluidComponents(data));\n    return stack;\n  }""")
-
-          replace_once(
-              """    // success! we can fill\n    if (action.execute()) {\n      // we don't actually store the amount, its up to the modifier to determine that\n      data.putString(KEY_FLUID, Loadables.FLUID.getString(resource.getFluid()));\n      // we want to store a fixed size, but its possible part swapping changes our capacity, so keep track of our capacity at the time of storing\n      data.putFloat(KEY_VALIDATE, getValidationAmount(tool, modifier));\n      CompoundTag tag = resource.getTag();\n      if (tag != null) {\n        data.put(KEY_FLUID_TAG, tag.copy());\n      }\n    }""",
-              """    // Ensure all fluid components are persistable before accepting the fill.\n    Tag components = serializeFluidComponents(resource);\n    if (components == null) {\n      return 0;\n    }\n    // success! we can fill\n    if (action.execute()) {\n      // we don't actually store the amount, its up to the modifier to determine that\n      data.putString(KEY_FLUID, Loadables.FLUID.getString(resource.getFluid()));\n      // we want to store a fixed size, but its possible part swapping changes our capacity, so keep track of our capacity at the time of storing\n      data.putFloat(KEY_VALIDATE, getValidationAmount(tool, modifier));\n      data.put(KEY_FLUID_TAG, components.copy());\n    }""")
-
-          text = text.replace("new FluidStack(fluid, amount, getFluidTag(data))", "makeFluidStack(data, fluid, amount)")
-          text = text.replace("new FluidStack(fluid, amount, getFluidTag(persistentData))", "makeFluidStack(persistentData, fluid, amount)")
-          text = text.replace("new FluidStack(fluid, FluidValues.BOTTLE, getFluidTag(data))", "makeFluidStack(data, fluid, FluidValues.BOTTLE)")
-
-          replace_once(
-              """          // ensure the tag matches\n          CompoundTag storedTag = getFluidTag(data);\n          if (Objects.equals(storedTag, resource.getTag())) {\n            FluidStack result = new FluidStack(fluid, amount, storedTag);\n            if (action.execute()) {\n              clearFluid(data);\n            }\n            return result;\n          }""",
-              """          // ensure both fluid identity and the 1.21 component patch match\n          FluidStack stored = makeFluidStack(data, fluid, amount);\n          if (FluidStack.isSameFluidSameComponents(stored, resource)) {\n            if (action.execute()) {\n              clearFluid(data);\n            }\n            return stored;\n          }""")
-
-          replace_once(
-              """          if (toolData.contains(KEY_FLUID_TAG, Tag.TAG_COMPOUND)) {\n            persistentData.put(KEY_FLUID_TAG, toolData.getCompound(KEY_FLUID_TAG));\n          }""",
-              """          if (toolData.contains(KEY_FLUID_TAG)) {\n            Tag components = toolData.get(KEY_FLUID_TAG);\n            if (components != null) {\n              persistentData.put(KEY_FLUID_TAG, components.copy());\n            }\n          }""")
-
-          if "getFluidTag(" in text or "getTag()" in text or "new FluidStack(fluid, amount," in text:
-              raise RuntimeError("Legacy FluidStack tag API remains after Smashing migration")
-
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/PartBuilderContainerWrapper.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              "this.material = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), this, world).orElse(null);",
+              "this.material = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), this, world).map(holder -> holder.value()).orElse(null);",
+              "material recipe holder")
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -83,8 +68,9 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/SmashingModule.java
-          git commit -m "Port Smashing fluid data components to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/block/entity/table/PartBuilderBlockEntity.java \
+                  src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/PartBuilderContainerWrapper.java
+          git commit -m "Port Part Builder recipes and components to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
