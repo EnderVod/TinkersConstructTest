@@ -118,15 +118,27 @@ jobs:
           grep -q '"type": "tconstruct:tool_building"' "$root/recipe/tools/building/pickaxe.json"
           grep -q '"mantle_id": "tconstruct:tools/building/pickaxe"' "$root/recipe/tools/building/pickaxe.json"
 
-          for name in materials_and_you puny_smelting mighty_smelting fantastic_foundry tinkers_gadgetry encyclopedia; do
-            file="$root/recipe/common/$name.json"
-            test -f "$file"
-            grep -q '"id": "tconstruct:' "$file"
-            if grep -q '"item": "tconstruct:' "$file"; then
-              echo "Found stale vanilla recipe result.item in $file"
-              exit 1
-            fi
-          done
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          root = Path('src/generated/resources/data/tconstruct/recipe/common')
+          expected = {
+              'materials_and_you': 'tconstruct:materials_and_you',
+              'puny_smelting': 'tconstruct:puny_smelting',
+              'mighty_smelting': 'tconstruct:mighty_smelting',
+              'fantastic_foundry': 'tconstruct:fantastic_foundry',
+              'tinkers_gadgetry': 'tconstruct:tinkers_gadgetry',
+              'encyclopedia': 'tconstruct:encyclopedia',
+          }
+          for name, item in expected.items():
+              path = root / f'{name}.json'
+              data = json.loads(path.read_text(encoding='utf-8'))
+              result = data.get('result', {})
+              if result.get('id') != item:
+                  raise SystemExit(f'{path}: expected result.id {item}, got {result!r}')
+              if 'item' in result:
+                  raise SystemExit(f'{path}: stale result.item remains')
+          PY
 
           adv="$root/advancement/internal/starting_book.json"
           loot="$root/loot_table/gameplay/starting_book.json"
