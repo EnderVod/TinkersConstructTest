@@ -18,8 +18,7 @@
     " W "
   ],
   "result": {
-    "item": "tconstruct:sky_staff"
+    "id": "tconstruct:sky_staff"
   },
-  "show_notification": true,
-  "mantle_id": "tconstruct:tools/building/sky_staff"
+  "show_notification": true
 }

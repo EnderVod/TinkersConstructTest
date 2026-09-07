@@ -15,7 +15,6 @@
     ]
   ],
   "result": {
-    "item": "tconstruct:flint_and_brick"
-  },
-  "mantle_id": "tconstruct:tools/building/flint_and_brick"
+    "id": "tconstruct:flint_and_brick"
+  }
 }
