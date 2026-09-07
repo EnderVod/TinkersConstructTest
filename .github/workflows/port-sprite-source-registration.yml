@@ -1,0 +1,124 @@
+name: Tinkers Sprite Source Registration Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-sprite-source-registration.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Move custom sprite source to NeoForge registration event
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          shield = Path('src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java')
+          text = shield.read_text(encoding='utf-8')
+          text = text.replace('import net.minecraft.client.renderer.texture.atlas.SpriteSources;\n', '')
+          text = text.replace(
+              'import org.jetbrains.annotations.ApiStatus.Internal;\n',
+              'import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;\nimport org.jetbrains.annotations.ApiStatus.Internal;\n'
+          )
+          text = text.replace('import java.util.Optional;\n', '')
+          old = '''  /** Registered type set on init */
+            private static SpriteSourceType TYPE = null;
+
+            /** Registers this sprite source */
+            @Internal
+            public static SpriteSourceType register() {
+              if (TYPE == null) {
+                TYPE = SpriteSources.register(TConstruct.getResource("shield_banner_to_modifier").toString(), CODEC);
+              }
+              return TYPE;
+            }
+          '''
+          new = '''  /** Sprite source type registered through NeoForge's client registration event. */
+            private static final SpriteSourceType TYPE = new SpriteSourceType(CODEC);
+
+            /** Registers this sprite source through the supported NeoForge lifecycle. */
+            @Internal
+            public static void register(RegisterSpriteSourceTypesEvent event) {
+              event.register(TConstruct.getResource("shield_banner_to_modifier"), TYPE);
+            }
+          '''
+          if old not in text:
+              raise SystemExit('Expected legacy ShieldBannerModifierSpriteSource registration block was not found')
+          text = text.replace(old, new)
+          old_type = '''  @Override
+            public SpriteSourceType type() {
+              return register();
+            }
+          '''
+          new_type = '''  @Override
+            public SpriteSourceType type() {
+              return TYPE;
+            }
+          '''
+          if old_type not in text:
+              raise SystemExit('Expected legacy type() block was not found')
+          shield.write_text(text.replace(old_type, new_type), encoding='utf-8')
+
+          events = Path('src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java')
+          text = events.read_text(encoding='utf-8')
+          import_anchor = 'import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;\n'
+          if 'RegisterSpriteSourceTypesEvent' not in text:
+              if import_anchor not in text:
+                  raise SystemExit('Could not locate client event import anchor')
+              text = text.replace(import_anchor, import_anchor + 'import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;\n')
+          legacy_call = '    ShieldBannerModifierSpriteSource.register();\n'
+          if legacy_call not in text:
+              raise SystemExit('Expected legacy sprite source registration call was not found')
+          text = text.replace(legacy_call, '')
+          method_anchor = '''  @SubscribeEvent
+            static void registerModelLoaders(RegisterGeometryLoaders event) {
+          '''
+          event_method = '''  @SubscribeEvent
+            static void registerSpriteSourceTypes(RegisterSpriteSourceTypesEvent event) {
+              ShieldBannerModifierSpriteSource.register(event);
+            }
+
+            @SubscribeEvent
+            static void registerModelLoaders(RegisterGeometryLoaders event) {
+          '''
+          if method_anchor not in text:
+              raise SystemExit('Could not locate model loader event anchor')
+          events.write_text(text.replace(method_anchor, event_method), encoding='utf-8')
+
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = at.read_text(encoding='utf-8')
+          stale = '''# Custom sprite source
+          public net.minecraft.client.renderer.texture.atlas.SpriteSources m_260887_(Ljava/lang/String;Lcom/mojang/serialization/Codec;)Lnet/minecraft/client/renderer/texture/atlas/SpriteSourceType; # register
+          '''
+          if stale not in text:
+              raise SystemExit('Expected stale SpriteSources access transformer was not found')
+          at.write_text(text.replace(stale, ''), encoding='utf-8')
+          PY
+
+      - name: Commit sprite source registration migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No sprite source registration changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tools/client/ShieldBannerModifierSpriteSource.java \
+                  src/main/java/slimeknights/tconstruct/tools/ToolClientEvents.java \
+                  src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Use NeoForge sprite source registration event'
+          git push origin HEAD:1.21.1-neoforge
