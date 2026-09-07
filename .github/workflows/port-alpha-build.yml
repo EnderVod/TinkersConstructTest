@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 28b2fcef: dynamic Minecraft 1.21 equipment-slot caches compile green.
+# Runtime source validated through 1118999b: station tab font access and Minecraft 1.21 pattern recipe migration compile green.
 on:
   push:
     branches:
