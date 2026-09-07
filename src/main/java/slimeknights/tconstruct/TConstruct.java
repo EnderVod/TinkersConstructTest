@@ -81,17 +81,16 @@ public class TConstruct {
 
     bus.register(new TinkerCommons());
     bus.register(new TinkerMaterials());
-    // TinkerEffects registers its potion deferred register on the mod bus and its brewing listener
-    // on NeoForge.EVENT_BUS from its constructor. NeoForge 1.21 rejects registering the instance
-    // itself here because it has no @SubscribeEvent methods.
+    // These modules need construction for their own deferred/event registrations, but they do not
+    // contain @SubscribeEvent methods themselves. NeoForge 1.21 rejects registering such instances.
     new slimeknights.tconstruct.shared.TinkerEffects();
     bus.register(new TinkerGadgets());
     bus.register(new TinkerAttributes());
     bus.register(new TinkerWorld());
-    bus.register(new TinkerStructures());
+    new TinkerStructures();
     bus.register(new TinkerTables());
     bus.register(new TinkerModifiers());
-    bus.register(new TinkerToolParts());
+    new TinkerToolParts();
     bus.register(new TinkerTools());
     bus.register(new TinkerSmeltery());
     bus.register(new TinkerFluids());
@@ -173,7 +172,7 @@ public class TConstruct {
   }
 
   public static <T> ComputableDataKey<T> createKey(String name, Supplier<T> constructor) {
-    return ComputableDataKey.of(getResource(name));
+    return ComputableDataKey.of(getResource(name), constructor);
   }
 
   public static String resourceString(String res) {
