@@ -29,9 +29,9 @@ public class EquipmentContext {
   @Getter
   private final LivingEntity entity;
   /** Determines if the tool in the given slot was fetched */
-  protected final boolean[] fetchedTool = new boolean[6];
+  protected final boolean[] fetchedTool = new boolean[EquipmentSlot.values().length];
   /** Array of tools currently on the entity */
-  protected final IToolStackView[] toolsInSlots = new IToolStackView[6];
+  protected final IToolStackView[] toolsInSlots = new IToolStackView[EquipmentSlot.values().length];
   /** Cached transient Tinkers data for this entity. */
   private TinkerDataCapability.Holder tinkerData = null;
 
@@ -113,8 +113,8 @@ public class EquipmentContext {
 
   /** Gets all tools from the given function */
   public Iterable<EquipmentEntry> makeIterable(Function<EquipmentSlot,IToolStackView> getter) {
-    List<IToolStackView> tools = new ArrayList<>(6);
-    List<EquipmentSlot> slots = new ArrayList<>(6);
+    List<IToolStackView> tools = new ArrayList<>(EquipmentSlot.values().length);
+    List<EquipmentSlot> slots = new ArrayList<>(EquipmentSlot.values().length);
     for (EquipmentSlot slot : EquipmentSlot.values()) {
       IToolStackView tool = getter.apply(slot);
       if (tool != null && !tool.isBroken() && !tool.getModifiers().isEmpty()) {
