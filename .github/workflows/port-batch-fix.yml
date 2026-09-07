@@ -1,4 +1,4 @@
-name: Tinkers one-shot chest capability 1.21 batch
+name: Tinkers one-shot worldgen datagen 1.21 batch
 
 on:
   push:
@@ -21,60 +21,53 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified chest capability and NBT migration
+      - name: Apply verified worldgen and recipe-builder migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(text, old, new, label):
+          def replace_once(path, old, new, label):
+              text = path.read_text(encoding="utf-8")
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{label}: expected one match, found {count}: {old[:180]!r}")
-              return text.replace(old, new, 1)
+                  raise RuntimeError(f"{path}: {label}: expected one match, found {count}: {old[:180]!r}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/chest/AbstractChestBlockEntity.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.core.BlockPos;\nimport net.minecraft.core.Direction;", "import net.minecraft.core.BlockPos;\nimport net.minecraft.core.HolderLookup;", "registry provider import")
-          text = replace_once(text, "import net.minecraftforge.common.capabilities.Capability;\nimport net.minecraftforge.common.capabilities.ForgeCapabilities;\nimport net.minecraftforge.common.util.LazyOptional;\nimport net.neoforged.neoforge.items.IItemHandler;", "import net.neoforged.neoforge.capabilities.Capabilities;\nimport net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;", "native capability imports")
-          text = replace_once(text, "  private final LazyOptional<IItemHandler> capability;\n", "", "remove legacy capability field")
-          text = replace_once(text, "    this.capability = LazyOptional.of(() -> itemHandler);\n", "", "remove legacy capability allocation")
-          text = replace_once(
-              text,
-              """  @Nonnull\n  @Override\n  public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {\n    if (cap == ForgeCapabilities.ITEM_HANDLER) {\n      return capability.cast();\n    }\n    return super.getCapability(cap, side);\n  }\n\n  @Override\n  public void invalidateCaps() {\n    super.invalidateCaps();\n    capability.invalidate();\n  }\n\n""",
-              """  /** Registers the chest's native NeoForge item handler capability. */\n  public static <T extends AbstractChestBlockEntity> void registerItemHandler(RegisterCapabilitiesEvent event, BlockEntityType<T> type) {\n    event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, type, (chest, side) -> chest.getItemHandler());\n  }\n\n""",
-              "replace legacy capability overrides")
-          text = replace_once(
-              text,
-              """  @Override\n  public void saveAdditional(CompoundTag tags) {\n    super.saveAdditional(tags);\n    // move the items from the serialized result\n    // we don't care about the size and need it here for compat with old worlds\n    CompoundTag handlerNBT = itemHandler.serializeNBT();\n    tags.put(KEY_ITEMS, handlerNBT.getList(KEY_ITEMS, Tag.TAG_COMPOUND));\n  }\n\n  /** Reads the inventory from NBT */\n  public void readInventory(CompoundTag tags) {\n    // copy in just the items key for deserializing, don't want to change the size\n    CompoundTag handlerNBT = new CompoundTag();\n    handlerNBT.put(KEY_ITEMS, tags.getList(KEY_ITEMS, Tag.TAG_COMPOUND));\n    itemHandler.deserializeNBT(handlerNBT);\n  }\n\n  @Override\n  public void load(CompoundTag tags) {\n    super.load(tags);\n    readInventory(tags);\n  }""",
-              """  @Override\n  public void saveAdditional(CompoundTag tags, HolderLookup.Provider registries) {\n    super.saveAdditional(tags, registries);\n    // Move the items from ItemStackHandler's serialized result. We intentionally omit its size so\n    // old worlds keep the chest's configured capacity while preserving the legacy Items key.\n    CompoundTag handlerNBT = itemHandler.serializeNBT(registries);\n    tags.put(KEY_ITEMS, handlerNBT.getList(KEY_ITEMS, Tag.TAG_COMPOUND));\n  }\n\n  /** Reads the inventory from NBT using the active 1.21 registry lookup. */\n  public void readInventory(CompoundTag tags, HolderLookup.Provider registries) {\n    CompoundTag handlerNBT = new CompoundTag();\n    handlerNBT.put(KEY_ITEMS, tags.getList(KEY_ITEMS, Tag.TAG_COMPOUND));\n    itemHandler.deserializeNBT(registries, handlerNBT);\n  }\n\n  @Override\n  public void loadAdditional(CompoundTag tags, HolderLookup.Provider registries) {\n    super.loadAdditional(tags, registries);\n    readInventory(tags, registries);\n  }""",
-              "registry-aware chest serialization")
-          for legacy in ("ForgeCapabilities", "LazyOptional", "getCapability(Capability", "invalidateCaps()", "serializeNBT()", "deserializeNBT(handlerNBT)", "public void load(CompoundTag"):
-              if legacy in text:
-                  raise RuntimeError(f"Legacy chest API remains: {legacy}")
-          path.write_text(text, encoding="utf-8")
+          at = Path("src/main/resources/META-INF/port-accesstransformer.cfg")
+          text = at.read_text(encoding="utf-8")
+          marker = "public net.minecraft.world.item.context.BlockPlaceContext replaceClicked\n"
+          if text.count(marker) != 1:
+              raise RuntimeError("Expected BlockPlaceContext AT anchor exactly once")
+          additions = """
 
-          path = Path("src/main/java/slimeknights/tconstruct/TConstruct.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import slimeknights.tconstruct.tables.TinkerTables;", "import slimeknights.tconstruct.tables.TinkerTables;\nimport slimeknights.tconstruct.tables.block.entity.chest.AbstractChestBlockEntity;", "chest import")
-          text = replace_once(
-              text,
-              """    InventoryBlockEntity.registerItemHandler(event, TinkerTables.partBuilderTile.get());\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.modifierWorktableTile.get());""",
-              """    InventoryBlockEntity.registerItemHandler(event, TinkerTables.partBuilderTile.get());\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.modifierWorktableTile.get());\n    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.tinkersChestTile.get());\n    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.partChestTile.get());\n    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.castChestTile.get());""",
-              "register chest item handlers")
-          path.write_text(text, encoding="utf-8")
+# HugeFungusFeature kept these generation helpers in 1.21.1 but made them private. Tinkers' slime
+# fungus only changes base validation/height selection, then deliberately delegates stem/hat placement
+# to vanilla so behavior stays identical to the active Minecraft implementation.
+public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeStem(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V
+public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeHat(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V
+"""
+          if "HugeFungusFeature placeStem" in text or "HugeFungusFeature placeHat" in text:
+              raise RuntimeError("Huge fungus AT entries already present unexpectedly")
+          at.write_text(text.replace(marker, marker + additions, 1), encoding="utf-8")
 
-          path = Path("src/main/java/slimeknights/tconstruct/tables/client/inventory/module/ScalingChestScreen.java")
+          path = Path("src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationDamagingRecipeBuilder.java")
+          replace_once(
+              path,
+              "consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));",
+              "consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));",
+              "Mantle LoadableFinishedRecipe constructor")
+
+          path = Path("src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationPartSwappingBuilder.java")
           text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraftforge.common.capabilities.ForgeCapabilities;", "import net.neoforged.neoforge.capabilities.Capabilities;", "screen capability import")
-          text = replace_once(text, "\nimport java.util.Optional;\n", "\n", "remove Optional import")
-          text = replace_once(
-              text,
-              """    IItemHandler handler = Optional.ofNullable(tile)\n                                   .flatMap(t -> t.getCapability(ForgeCapabilities.ITEM_HANDLER).resolve())\n                                   .orElse(EmptyItemHandler.INSTANCE);""",
-              """    IItemHandler handler = EmptyItemHandler.INSTANCE;\n    if (tile != null && tile.getLevel() != null) {\n      IItemHandler capability = tile.getLevel().getCapability(Capabilities.ItemHandler.BLOCK, tile.getBlockPos(), tile.getBlockState(), tile, null);\n      if (capability != null) {\n        handler = capability;\n      }\n    }""",
-              "screen native capability lookup")
-          if "ForgeCapabilities" in text or ".getCapability(ForgeCapabilities" in text:
-              raise RuntimeError("Legacy ScalingChestScreen capability API remains")
+          old = "consumer.accept(new LoadableFinishedRecipe<>(new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));"
+          if text.count(old) != 1:
+              raise RuntimeError("Tool material swapping finished recipe constructor mismatch")
+          text = text.replace(old, "consumer.accept(new LoadableFinishedRecipe<>(id, new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));", 1)
+          old = "consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));"
+          if text.count(old) != 1:
+              raise RuntimeError("Part swapping finished recipe constructor mismatch")
+          text = text.replace(old, "consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));", 1)
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -87,10 +80,10 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tables/block/entity/chest/AbstractChestBlockEntity.java \
-                  src/main/java/slimeknights/tconstruct/TConstruct.java \
-                  src/main/java/slimeknights/tconstruct/tables/client/inventory/module/ScalingChestScreen.java
-          git commit -m "Port chest capabilities and inventory NBT to 1.21"
+          git add src/main/resources/META-INF/port-accesstransformer.cfg \
+                  src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationDamagingRecipeBuilder.java \
+                  src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationPartSwappingBuilder.java
+          git commit -m "Port slime fungus access and recipe builders to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
