@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through f1490329 with latest green Mantle: positioned crafting consumption, 1.21 table tags/recipes, and extended display-context parsing.
+# Runtime source validated through b7b9ff09 with latest green Mantle: crafting consumption, 1.21 table tags/recipes, display-context parsing, and flattened custom sprite-source data.
 on:
   push:
     branches:
