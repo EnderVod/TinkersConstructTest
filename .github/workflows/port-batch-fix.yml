@@ -1,4 +1,4 @@
-name: Port data condition namespaces to NeoForge 1.21
+name: Fix ResourceLocation runtime inheritance for 1.21
 
 on:
   push:
@@ -21,73 +21,42 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Migrate generated condition codec IDs
+      - name: Expose ResourceLocation subclass contract at runtime
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          roots = [Path('src/generated/resources'), Path('src/main/resources')]
-          replacements = {
-              '"type": "forge:mod_loaded"': '"type": "neoforge:mod_loaded"',
-              '"type": "forge:item_exists"': '"type": "neoforge:item_exists"',
-              '"type": "forge:not"': '"type": "neoforge:not"',
-              '"type": "forge:and"': '"type": "neoforge:and"',
-              '"type": "forge:or"': '"type": "neoforge:or"',
-              '"type": "forge:true"': '"type": "neoforge:true"',
-              '"type": "forge:false"': '"type": "neoforge:false"',
-              '"type": "forge:tag_empty"': '"type": "neoforge:tag_empty"',
-          }
-
-          total = 0
-          files = 0
-          for root in roots:
-              for path in root.rglob('*.json'):
-                  text = path.read_text(encoding='utf-8')
-                  original = text
-                  for old, new in replacements.items():
-                      hits = text.count(old)
-                      if hits:
-                          total += hits
-                          text = text.replace(old, new)
-                  if text != original:
-                      path.write_text(text, encoding='utf-8')
-                      files += 1
-
-          leftovers = []
-          for root in roots:
-              for path in root.rglob('*.json'):
-                  text = path.read_text(encoding='utf-8')
-                  for old in replacements:
-                      if old in text:
-                          leftovers.append((str(path), old))
-          if leftovers:
-              raise RuntimeError(f'Legacy Forge condition IDs remain: {leftovers[:20]}')
-          if total != 317:
-              raise RuntimeError(f'Expected exactly 317 stale built-in condition IDs, found {total}')
-          print(f'Migrated {total} condition codec IDs across {files} JSON files')
-
-          worldgen = Path('src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java')
-          source = worldgen.read_text(encoding='utf-8')
-          old = '.addGrass(Blocks.GRASS, 7)'
-          new = '.addGrass(Blocks.SHORT_GRASS, 7)'
-          if source.count(old) != 1:
-              raise RuntimeError(f'Expected one old clay-island grass reference, found {source.count(old)}')
-          worldgen.write_text(source.replace(old, new, 1), encoding='utf-8')
+          path = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = path.read_text(encoding='utf-8')
+          class_rule = 'public-f net.minecraft.resources.ResourceLocation'
+          ctor_rule = 'protected net.minecraft.resources.ResourceLocation <init>(Ljava/lang/String;Ljava/lang/String;)V'
+          if class_rule in text or ctor_rule in text:
+              raise RuntimeError('ResourceLocation runtime AT rules already present; refusing duplicate insertion')
+          anchor = '# ResourceLocation validation\n'
+          if text.count(anchor) != 1:
+              raise RuntimeError(f'Expected one ResourceLocation validation anchor, found {text.count(anchor)}')
+          rules = (
+              '# ResourceLocation typed IDs - Minecraft 1.21 made the class final and constructor private\n'
+              + class_rule + '\n'
+              + ctor_rule + '\n\n'
+          )
+          path.write_text(text.replace(anchor, rules + anchor, 1), encoding='utf-8')
           PY
 
-      - name: Commit data migration
+      - name: Commit runtime ResourceLocation transform
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/generated/resources src/main/resources src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java
-          git commit -m "Migrate generated conditions to NeoForge namespace"
+          git add src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m "Transform ResourceLocation for typed Tinkers IDs at runtime"
           git push origin HEAD:1.21.1-neoforge
 
-      - name: Dispatch compile and server smoke
+      - name: Dispatch validation builds
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run port-compile.yml --ref 1.21.1-neoforge
           gh workflow run port-server-smoke.yml --ref 1.21.1-neoforge
+          gh workflow run port-alpha-build.yml --ref 1.21.1-neoforge
