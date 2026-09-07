@@ -20,10 +20,10 @@ import mezz.jei.api.registration.IRecipeTransferRegistration;
 import mezz.jei.api.registration.ISubtypeRegistration;
 import mezz.jei.api.registration.IVanillaCategoryExtensionRegistration;
 import mezz.jei.api.runtime.IIngredientManager;
-import mezz.jei.api.runtime.IIngredientVisibility;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -31,9 +31,10 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.alchemy.Potion;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.ItemLike;
@@ -126,7 +127,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -268,7 +268,7 @@ public class JEIPlugin implements IModPlugin {
   private static void addCastingCatalyst(IRecipeCatalystRegistration registry, ItemLike item, mezz.jei.api.recipe.RecipeType<IDisplayableCastingRecipe> ownCategory, RecipeType<MoldingRecipe> type) {
     registry.addRecipeCatalyst(item, ownCategory);
     assert Minecraft.getInstance().level != null;
-    if (!Minecraft.getInstance().level.getRecipeManager().byType(type).isEmpty()) {
+    if (!Minecraft.getInstance().level.getRecipeManager().getAllRecipesFor(type).isEmpty()) {
       registry.addRecipeCatalyst(item, TConstructJEIConstants.MOLDING);
     }
   }
@@ -310,7 +310,7 @@ public class JEIPlugin implements IModPlugin {
     addModifierCatalyst(registry, TinkerTags.Modifiers.MELTING, TConstructJEIConstants.MELTING, TConstructJEIConstants.ENTITY_MELTING);
     // add items containing these modifiers to start as catalysts as well
     for (Holder<Item> item : BuiltInRegistries.ITEM.getTagOrEmpty(TinkerTags.Items.MODIFIABLE)) {
-      if (item.get() instanceof IModifiableDisplay modifiable) {
+      if (item.value() instanceof IModifiableDisplay modifiable) {
         // add any tools with a severing trait to severing
         ModifierNBT traits = ToolTraitHook.getTraits(modifiable.getToolDefinition(), MaterialNBT.EMPTY);
         if (traits.has(TinkerTags.Modifiers.CRAFTING)) {
@@ -325,7 +325,7 @@ public class JEIPlugin implements IModPlugin {
         // add any tools with a melting trait to melting
         if (traits.has(TinkerTags.Modifiers.MELTING)) {
           // only add to entity melting if its melee too
-          if (item.containsTag(TinkerTags.Items.MELEE)) {
+          if (item.is(TinkerTags.Items.MELEE)) {
             registry.addRecipeCatalyst(modifiable.getRenderTool(), TConstructJEIConstants.MELTING, TConstructJEIConstants.ENTITY_MELTING);
           } else {
             registry.addRecipeCatalyst(modifiable.getRenderTool(), TConstructJEIConstants.MELTING);
@@ -372,8 +372,8 @@ public class JEIPlugin implements IModPlugin {
     registry.registerSubtypeInterpreter(TinkerTables.scorchedAnvil.asItem(), anvils);
 
     // potions
-    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)ItemStack::getTag);
-    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)FluidStack::getTag);
+    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));
+    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));
 
     // parts
     for (Holder<Item> item : BuiltInRegistries.ITEM.getTagOrEmpty(TinkerTags.Items.TOOL_PARTS)) {
@@ -462,7 +462,7 @@ public class JEIPlugin implements IModPlugin {
     // if the creative is showing just 1, skip the client option
     if (!showOnlyTools.isEmpty()) {
       for (Holder<Item> item : BuiltInRegistries.ITEM.getTagOrEmpty(TinkerTags.Items.MODIFIABLE)) {
-        if (item.get() instanceof IModifiable modifiable) {
+        if (item.value() instanceof IModifiable modifiable) {
           ToolBuildHandler.addVariants(hideItem, modifiable, "");
           ToolBuildHandler.addVariants(showItem, modifiable, showOnlyTools);
         }
@@ -472,7 +472,7 @@ public class JEIPlugin implements IModPlugin {
     String showOnlyParts = Config.CLIENT.showOnlyPartMaterial.get();
     if (!showOnlyParts.isEmpty()) {
       for (Holder<Item> item : BuiltInRegistries.ITEM.getTagOrEmpty(TinkerTags.Items.TOOL_PARTS)) {
-        if (item.get() instanceof IMaterialItem part) {
+        if (item.value() instanceof IMaterialItem part) {
           part.addVariants(hideItem, "");
           part.addVariants(showItem, showOnlyParts);
         }
@@ -522,12 +522,11 @@ public class JEIPlugin implements IModPlugin {
     if (!addItems.isEmpty()) {
       manager.addIngredientsAtRuntime(VanillaTypes.ITEM_STACK, addItems);
     }
-    IIngredientVisibility visibility = jeiRuntime.getJeiHelpers().getIngredientVisibility();
     if (!hideItems.isEmpty()) {
-      visibility.hideIngredients(VanillaTypes.ITEM_STACK, hideItems, Set.of(UidContext.Ingredient));
+      manager.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hideItems);
     }
     if (!showItems.isEmpty()) {
-      visibility.unhideIngredients(VanillaTypes.ITEM_STACK, showItems, Set.of(UidContext.Ingredient));
+      manager.addIngredientsAtRuntime(VanillaTypes.ITEM_STACK, showItems);
     }
 
     // fluid hiding, buckets are hidden via the creative tab logic
@@ -546,10 +545,9 @@ public class JEIPlugin implements IModPlugin {
     // add potion fluids for each potion variant if requested
     if (Config.CLIENT.showPotionFluidInJEI.get()) {
       manager.addIngredientsAtRuntime(NeoForgeTypes.FLUID_STACK,
-                                      BuiltInRegistries.POTION.holders().filter(holder -> {
-                                        Potion potion = holder.get();
-                                        return potion != Potions.EMPTY && potion != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID);
-                                      }).map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());
+                                      BuiltInRegistries.POTION.holders()
+                                        .filter(holder -> holder != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID))
+                                        .map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());
     }
     // remove variantless potion fluid
     removeFluid(removeFluids, TinkerFluids.potion.get());
@@ -561,10 +559,10 @@ public class JEIPlugin implements IModPlugin {
     Level level = SafeClientAccess.getLevel();
     if (level != null) {
       RecipeManager recipes = level.getRecipeManager();
-      List<CraftingRecipe> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)
+      List<RecipeHolder<CraftingRecipe>> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)
         .flatMap(id -> recipes.byKey(id).stream())
-        .filter(recipe -> recipe instanceof CraftingRecipe)
-        .map(recipe -> (CraftingRecipe) recipe)
+        .filter(holder -> holder.value() instanceof CraftingRecipe)
+        .map(holder -> new RecipeHolder<>(holder.id(), (CraftingRecipe) holder.value()))
         .toList();
       if (!easterEggs.isEmpty()) {
         jeiRuntime.getRecipeManager().hideRecipes(RecipeTypes.CRAFTING, easterEggs);
