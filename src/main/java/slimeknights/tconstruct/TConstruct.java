@@ -40,6 +40,7 @@ import slimeknights.tconstruct.smeltery.item.TankItem;
 import slimeknights.tconstruct.smeltery.item.TankItemFluidHandler;
 import slimeknights.tconstruct.smeltery.item.CopperCanFluidHandler;
 import slimeknights.tconstruct.tables.TinkerTables;
+import slimeknights.tconstruct.tables.block.entity.chest.AbstractChestBlockEntity;
 import slimeknights.tconstruct.tools.TinkerModifiers;
 import slimeknights.tconstruct.tools.TinkerToolParts;
 import slimeknights.tconstruct.tools.TinkerTools;
@@ -119,6 +120,9 @@ public class TConstruct {
     InventoryBlockEntity.registerItemHandler(event, TinkerTables.tinkerStationTile.get());
     InventoryBlockEntity.registerItemHandler(event, TinkerTables.partBuilderTile.get());
     InventoryBlockEntity.registerItemHandler(event, TinkerTables.modifierWorktableTile.get());
+    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.tinkersChestTile.get());
+    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.partChestTile.get());
+    AbstractChestBlockEntity.registerItemHandler(event, TinkerTables.castChestTile.get());
 
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
