@@ -1,0 +1,92 @@
+name: Tinkers Screen Bounds Access Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-screen-bounds-access.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Replace protected cross-screen bounds access
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          replacements = {
+              Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/PartBuilderScreen.java'): [
+                  ('this.infoPanelScreen.imageHeight = this.imageHeight;',
+                   'this.infoPanelScreen.setImageHeight(this.imageHeight);'),
+              ],
+              Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java'): [
+                  ('this.tinkerInfo.imageHeight', 'this.tinkerInfo.getArea().getHeight()'),
+                  ('module.topPos += 4;', 'module.adjustBounds(0, 4, 0, 0);'),
+              ],
+          }
+
+          changed = []
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              new = text
+              for old, repl in pairs:
+                  if old in new:
+                      new = new.replace(old, repl)
+                  elif repl not in new:
+                      raise SystemExit(f'Neither old nor replacement form found in {path}: {old}')
+              if new != text:
+                  path.write_text(new, encoding='utf-8')
+                  changed.append(path)
+
+          # Verify the exact runtime-breaking accesses are gone.
+          part = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/PartBuilderScreen.java').read_text(encoding='utf-8')
+          station = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java').read_text(encoding='utf-8')
+          forbidden = [
+              ('PartBuilderScreen.java', 'infoPanelScreen.imageHeight', part),
+              ('TinkerStationScreen.java', 'tinkerInfo.imageHeight', station),
+              ('TinkerStationScreen.java', 'module.topPos', station),
+          ]
+          bad = [(name, token) for name, token, text in forbidden if token in text]
+          if bad:
+              raise SystemExit('Protected cross-screen accesses remain: ' + repr(bad))
+
+          # Report other suspicious direct accesses for follow-up. This is diagnostic only:
+          # some matches may be unrelated objects with similarly named fields.
+          field_re = re.compile(r'\b(?!this\b)([A-Za-z_$][\w$]*)\.(imageHeight|imageWidth|topPos|leftPos|font)\b')
+          candidates = []
+          for path in Path('src/main/java').rglob('*.java'):
+              for lineno, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if field_re.search(line):
+                      candidates.append((str(path), lineno, line.strip()))
+          print(f'Changed {len(changed)} files')
+          print(f'Other direct screen-field candidates: {len(candidates)}')
+          for path, lineno, line in candidates[:250]:
+              print(f'CANDIDATE {path}:{lineno}: {line}')
+          PY
+
+      - name: Commit screen bounds migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No screen-bounds changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tables/client/inventory/PartBuilderScreen.java \
+                  src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java
+          git commit -m 'Use public APIs for table screen dimensions'
+          git push origin HEAD:1.21.1-neoforge
