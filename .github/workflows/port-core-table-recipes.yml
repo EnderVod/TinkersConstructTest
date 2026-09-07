@@ -1,0 +1,95 @@
+name: Tinkers Core Table Recipe Migration
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-core-table-recipes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Migrate Part Builder and Tinker Station recipes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          pairs = [
+              ('part_builder', 'tconstruct:part_builder'),
+              ('tinker_station', 'tconstruct:tinker_station'),
+          ]
+
+          old_root = Path('src/generated/resources/data/tconstruct/recipes/tables')
+          new_root = Path('src/generated/resources/data/tconstruct/recipe/tables')
+          new_root.mkdir(parents=True, exist_ok=True)
+
+          for name, expected_result in pairs:
+              old = old_root / f'{name}.json'
+              new = new_root / f'{name}.json'
+              data = json.loads(old.read_text(encoding='utf-8'))
+
+              result = data.get('result')
+              if not isinstance(result, dict):
+                  raise SystemExit(f'{old}: missing object result')
+              if 'item' in result:
+                  result['id'] = result.pop('item')
+              if result.get('id') != expected_result:
+                  raise SystemExit(f'{old}: unexpected result {result!r}')
+
+              if data.get('type') != 'mantle:crafting_shaped_retextured':
+                  raise SystemExit(f'{old}: unexpected serializer {data.get("type")!r}')
+              if data.get('key', {}).get('w', {}).get('tag') != 'tconstruct:planklike':
+                  raise SystemExit(f'{old}: expected tconstruct:planklike texture/material tag')
+
+              new.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+              print(f'Migrated {old} -> {new}')
+
+          # Minecraft 1.21 uses the singular registry directory for item tags.
+          old_tag = Path('src/generated/resources/data/tconstruct/tags/items/planklike.json')
+          new_tag = Path('src/generated/resources/data/tconstruct/tags/item/planklike.json')
+          new_tag.parent.mkdir(parents=True, exist_ok=True)
+          tag_data = json.loads(old_tag.read_text(encoding='utf-8'))
+          if '#minecraft:planks' not in tag_data.get('values', []):
+              raise SystemExit('planklike tag no longer contains #minecraft:planks')
+          new_tag.write_text(json.dumps(tag_data, indent=2) + '\n', encoding='utf-8')
+          print(f'Migrated {old_tag} -> {new_tag}')
+
+          # Verify the exact 1.21 runtime resources.
+          for name, expected_result in pairs:
+              path = new_root / f'{name}.json'
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('result', {}).get('id') != expected_result:
+                  raise SystemExit(f'{path}: result.id validation failed')
+              if 'item' in data.get('result', {}):
+                  raise SystemExit(f'{path}: legacy result.item remains')
+          if not new_tag.is_file():
+              raise SystemExit('Singular tags/item/planklike.json was not created')
+          PY
+
+      - name: Commit core table resource migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No table recipe changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/data/tconstruct/recipe/tables/part_builder.json \
+                  src/generated/resources/data/tconstruct/recipe/tables/tinker_station.json \
+                  src/generated/resources/data/tconstruct/tags/item/planklike.json
+          git commit -m 'Migrate Part Builder and Tinker Station recipes to 1.21'
+          git push origin HEAD:1.21.1-neoforge
