@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through a14ad20f: protected table screen fields and 1.21 core table recipes compile green.
+# Runtime source validated through b30674ac: 1.21 Slot x/y AT and Crafting Station resources compile green.
 on:
   push:
     branches:
