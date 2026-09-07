@@ -82,7 +82,9 @@ jobs:
       - name: Commit core table resource migration
         shell: bash
         run: |
-          if git diff --quiet; then
+          # `git diff` ignores untracked files, and these 1.21 paths are new files.
+          # Use status so first-time migrations are committed too.
+          if [ -z "$(git status --porcelain)" ]; then
             echo 'No table recipe changes needed.'
             exit 0
           fi
