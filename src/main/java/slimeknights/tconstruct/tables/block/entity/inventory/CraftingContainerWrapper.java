@@ -83,7 +83,7 @@ public class CraftingContainerWrapper implements CraftingContainer {
     }
   }
 
-  /** Creates the immutable 1.21 recipe input snapshot for the current grid. */
+  /** Creates the immutable 1.21 recipe input snapshot for recipe matching and assembly. */
   public CraftingInput asInput() {
     return CraftingInput.of(width, height, getItems());
   }
