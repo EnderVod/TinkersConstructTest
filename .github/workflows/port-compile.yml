@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Verify NeoForge sprite source registration migration through 6a00bf6c.
+# Verify walking modifier previous-position migration through 87c530b4.
 on:
   push:
     branches:
