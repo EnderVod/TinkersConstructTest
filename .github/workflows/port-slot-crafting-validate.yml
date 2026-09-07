@@ -36,14 +36,13 @@ jobs:
           for stale in ('Slot f_40220_', 'Slot f_40221_'):
               if stale in at:
                   raise SystemExit('Stale Slot AT remains: ' + stale)
-
           screen = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java').read_text(encoding='utf-8')
           if 'slot.x =' not in screen or 'slot.y =' not in screen:
               raise SystemExit('Tinker Station no longer contains expected dynamic slot positioning; reevaluate AT need')
           print('Named 1.21 Slot x/y AT is present for Tinker Station dynamic layout.')
           PY
 
-      - name: Verify Crafting Station 1.21 recipes
+      - name: Verify Crafting Station 1.21 recipes and tags
         shell: bash
         run: |
           python3 - <<'PY'
@@ -61,12 +60,24 @@ jobs:
           ingredient = normal.get('key', {}).get('w', {})
           if ingredient.get('type') != 'neoforge:difference':
               raise SystemExit('crafting_station.json is not using neoforge:difference')
-          if ingredient.get('base', {}).get('tag') != 'c:workbenches':
-              raise SystemExit('crafting_station.json is not using c:workbenches')
+          common_tag = 'c:player_workstations/crafting_tables'
+          if ingredient.get('base', {}).get('tag') != common_tag:
+              raise SystemExit(f'crafting_station.json is not using {common_tag}')
+
           tables = Path('src/generated/resources/data/tconstruct/tags/item/tables.json')
           values = set(json.loads(tables.read_text(encoding='utf-8')).get('values', []))
           required = {'tconstruct:crafting_station', 'tconstruct:part_builder', 'tconstruct:tinker_station'}
           if not required.issubset(values):
               raise SystemExit('Singular tables item tag is missing core table blocks')
-          print('All Crafting Station recipe variants and tables tag are in 1.21 resource paths.')
+
+          for registry in ('item', 'block'):
+              path = Path(f'src/generated/resources/data/c/tags/{registry}/player_workstations/crafting_tables.json')
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if 'tconstruct:crafting_station' not in data.get('values', []):
+                  raise SystemExit(f'{path}: Crafting Station is missing from common workstation tag')
+
+          tags = Path('src/main/java/slimeknights/tconstruct/common/TinkerTags.java').read_text(encoding='utf-8')
+          if tags.count('WORKBENCHES = common("player_workstations/crafting_tables");') != 2:
+              raise SystemExit('TinkerTags WORKBENCHES constants are not aligned with NeoForge 1.21')
+          print('Slot AT and Crafting Station 1.21 recipes/common tags are valid.')
           PY
