@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Verify station tabs, 1.21 pattern recipe, and NeoForge model namespace through 6ae60756.
+# Verify station tabs, 1.21 pattern recipe, model namespace, and GUI font access through 68330c40.
 on:
   push:
     branches:
@@ -119,6 +119,30 @@ jobs:
           if data.get('key', {}).get('s', {}).get('tag') != 'c:rods/wooden':
               raise SystemExit('Pattern recipe does not use the NeoForge c: wooden rod tag')
           print('Pattern recipe is present in singular recipe/ path with 1.21 fields and c: tag.')
+          PY
+
+      - name: Verify external Screen font access is gone
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          targets = [
+              Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/TinkerTabsWidget.java'),
+              Path('src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiFuelModule.java'),
+              Path('src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiSmelteryTank.java'),
+              Path('src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiTankModule.java'),
+              Path('src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiMeltingModule.java'),
+          ]
+          bad = []
+          for path in targets:
+              text = path.read_text(encoding='utf-8')
+              if 'parent.font' in text or 'screen.font' in text:
+                  bad.append(str(path))
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg').read_text(encoding='utf-8')
+          if 'net.minecraft.client.gui.screens.Screen f_96547_' in at:
+              bad.append('src/main/resources/META-INF/accesstransformer.cfg')
+          if bad:
+              raise SystemExit('External Screen.font access remains:\n' + '\n'.join(bad))
+          print('External Screen.font reads and stale font AT are gone.')
           PY
 
       - name: Build compact compiler summary
