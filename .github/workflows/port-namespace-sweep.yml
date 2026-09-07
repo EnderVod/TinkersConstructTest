@@ -79,6 +79,14 @@ jobs:
               if payload_import in text:
                   text = re.sub(r'(?<![A-Za-z0-9_$.])Context context', 'IPayloadContext context', text)
 
+              # Minecraft 1.21 no longer exposes the old two-argument ResourceLocation constructor.
+              # Restrict this migration to literal namespace/path pairs so dynamic cases remain manual.
+              text = re.sub(
+                  r'new ResourceLocation\("([^"]+)",\s*"([^"]+)"\)',
+                  r'ResourceLocation.fromNamespaceAndPath("\1", "\2")',
+                  text,
+              )
+
               if text != original:
                   path.write_text(text, encoding='utf-8')
                   changed.append(str(path))
