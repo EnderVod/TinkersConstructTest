@@ -1,4 +1,4 @@
-name: Tinkers one-shot part builder 1.21 batch
+name: Tinkers one-shot modifier worktable 1.21 batch
 
 on:
   push:
@@ -21,41 +21,39 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified Part Builder 1.21 migrations
+      - name: Apply verified Modifier Worktable 1.21 migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(text, old, new, label):
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/ModifierWorktableBlockEntity.java")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_once(old, new, label):
+              global text
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{label}: expected exactly one match, found {count}: {old[:160]!r}")
-              return text.replace(old, new, 1)
+                  raise RuntimeError(f"{label}: expected exactly one match, found {count}: {old[:180]!r}")
+              text = text.replace(old, new, 1)
 
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/PartBuilderBlockEntity.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.world.item.crafting.Recipe;\n", "", "remove Recipe import")
-          text = replace_once(text, "import net.minecraftforge.common.util.LazyOptional;\n", "", "remove LazyOptional import")
-          text = replace_once(text, "    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "", "remove legacy item handler cap")
-          text = replace_once(
-              text,
-              """        recipes = level.getRecipeManager().byType(TinkerRecipeTypes.PART_BUILDER.get()).values().stream()\n                       .filter(r -> r.partialMatch(inventoryWrapper))\n                       .sorted(Comparator.comparing(Recipe::getId))\n                       .flatMap(r -> r.getPatterns(inventoryWrapper).map(p -> new PatternRecipe(p, r)))\n                       .collect(Collectors.toMap(PatternRecipe::pattern, PatternRecipe::recipe, (a, b) -> a));""",
-              """        recipes = level.getRecipeManager().getAllRecipesFor(TinkerRecipeTypes.PART_BUILDER.get()).stream()\n                       .sorted(Comparator.comparing(holder -> holder.id().toString()))\n                       .map(holder -> holder.value())\n                       .filter(r -> r.partialMatch(inventoryWrapper))\n                       .flatMap(r -> r.getPatterns(inventoryWrapper).map(p -> new PatternRecipe(p, r)))\n                       .collect(Collectors.toMap(PatternRecipe::pattern, PatternRecipe::recipe, (a, b) -> a));""",
-              "recipe holder list")
-          text = replace_once(text, "ItemStack.isSameItemSameTags(original, stack)", "ItemStack.isSameItemSameComponents(original, stack)", "component-aware equality")
-          text = replace_once(text, "ForgeEventFactory.firePlayerCraftingEvent(player, result, this.inventoryWrapper);", "EventHooks.firePlayerCraftingEvent(player, result, this.inventoryWrapper);", "crafting event")
-          if "LazyOptional" in text or "itemHandlerCap" in text or ".byType(" in text or "Recipe::getId" in text or "isSameItemSameTags" in text or "ForgeEventFactory" in text:
-              raise RuntimeError("Legacy PartBuilderBlockEntity API remains after migration")
-          path.write_text(text, encoding="utf-8")
+          replace_once("import net.minecraftforge.common.util.LazyOptional;\n", "", "remove LazyOptional")
+          replace_once("import net.neoforged.neoforge.items.ItemHandlerHelper;\n", "", "remove copy helper import")
+          replace_once("    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "", "remove legacy capability")
+          replace_once(
+              "Optional<IModifierWorktableRecipe> recipe = level.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MODIFIER_WORKTABLE.get(), inventoryWrapper, level);",
+              "Optional<IModifierWorktableRecipe> recipe = level.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MODIFIER_WORKTABLE.get(), inventoryWrapper, level).map(holder -> holder.value());",
+              "unwrap recipe holder")
+          replace_once("ItemStack.isSameItemSameTags(original, stack)", "ItemStack.isSameItemSameComponents(original, stack)", "component-aware equality")
+          replace_once("ForgeEventFactory.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);", "EventHooks.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);", "NeoForge craft event")
+          replace_once(
+              "this.setItem(TINKER_SLOT, ItemHandlerHelper.copyStackWithSize(tinkerable, tinkerable.getCount() - shrinkToolSlot));",
+              "this.setItem(TINKER_SLOT, tinkerable.copyWithCount(tinkerable.getCount() - shrinkToolSlot));",
+              "1.21 stack copy")
 
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/PartBuilderContainerWrapper.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(
-              text,
-              "this.material = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), this, world).orElse(null);",
-              "this.material = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), this, world).map(holder -> holder.value()).orElse(null);",
-              "material recipe holder")
+          for legacy in ("LazyOptional", "itemHandlerCap", "isSameItemSameTags", "ForgeEventFactory", "ItemHandlerHelper.copyStackWithSize"):
+              if legacy in text:
+                  raise RuntimeError(f"Legacy Modifier Worktable API remains: {legacy}")
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -68,9 +66,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tables/block/entity/table/PartBuilderBlockEntity.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/PartBuilderContainerWrapper.java
-          git commit -m "Port Part Builder recipes and components to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/block/entity/table/ModifierWorktableBlockEntity.java
+          git commit -m "Port Modifier Worktable APIs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
