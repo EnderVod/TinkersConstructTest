@@ -81,6 +81,7 @@ jobs:
             modifiable/durability.json \
             modifiable/melee.json \
             modifiable/melee/weapon.json \
+            modifiable/melee/sword.json \
             modifiable/harvest.json \
             modifiable/harvest/primary.json \
             modifiable/harvest/stone.json; do
@@ -89,7 +90,8 @@ jobs:
 
           grep -q 'tconstruct:pickaxe' "$new_root/modifiable/durability.json"
           grep -q 'tconstruct:pickaxe' "$new_root/modifiable/harvest/primary.json"
-          grep -q 'tconstruct:sword' "$new_root/modifiable/melee/weapon.json"
+          grep -q '#tconstruct:modifiable/melee/sword' "$new_root/modifiable/melee/weapon.json"
+          grep -q 'tconstruct:sword' "$new_root/modifiable/melee/sword.json"
           grep -q '#tconstruct:modifiable/durability' "$new_root/modifiable.json"
           grep -q '#tconstruct:modifiable/melee' "$new_root/modifiable.json"
           grep -q '#tconstruct:modifiable/harvest' "$new_root/modifiable.json"
