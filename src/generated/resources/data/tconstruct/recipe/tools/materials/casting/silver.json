@@ -11,5 +11,6 @@
     "tag": "c:molten_silver"
   },
   "output": "tconstruct:silver",
-  "temperature": 790
+  "temperature": 790,
+  "mantle_id": "tconstruct:tools/materials/casting/silver"
 }

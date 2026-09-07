@@ -20,5 +20,6 @@
     "tag": "c:molten_bronze"
   },
   "output": "tconstruct:bronze",
-  "temperature": 700
+  "temperature": 700,
+  "mantle_id": "tconstruct:tools/materials/casting/bronze"
 }

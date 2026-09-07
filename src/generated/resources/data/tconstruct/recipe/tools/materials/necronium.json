@@ -20,5 +20,6 @@
   },
   "material": "tconstruct:necronium",
   "needed": 1,
-  "value": 1
+  "value": 1,
+  "mantle_id": "tconstruct:tools/materials/necronium"
 }

@@ -9,5 +9,6 @@
   },
   "material": "tconstruct:cinderslime",
   "needed": 1,
-  "value": 9
+  "value": 9,
+  "mantle_id": "tconstruct:tools/materials/cinderslime/block"
 }

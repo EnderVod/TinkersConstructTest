@@ -12,5 +12,6 @@
   },
   "input": "tconstruct:rock",
   "output": "tconstruct:whitestone#composite",
-  "temperature": 420
+  "temperature": 420,
+  "mantle_id": "tconstruct:tools/materials/composite/whitestone_from_zinc"
 }

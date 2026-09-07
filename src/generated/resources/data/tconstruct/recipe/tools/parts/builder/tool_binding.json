@@ -12,5 +12,6 @@
   ],
   "result": {
     "item": "tconstruct:tool_binding"
-  }
+  },
+  "mantle_id": "tconstruct:tools/parts/builder/tool_binding"
 }

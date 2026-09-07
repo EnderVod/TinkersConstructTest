@@ -5,5 +5,6 @@
     "amount": 90,
     "fluid": "tconstruct:molten_debris"
   },
-  "temperature": 1175
+  "temperature": 1175,
+  "mantle_id": "tconstruct:tools/materials/melting/ancient_hide"
 }

@@ -12,5 +12,6 @@
   },
   "input": "tconstruct:rock",
   "output": "tconstruct:whitestone#composite",
-  "temperature": 225
+  "temperature": 225,
+  "mantle_id": "tconstruct:tools/materials/composite/whitestone_from_tin"
 }

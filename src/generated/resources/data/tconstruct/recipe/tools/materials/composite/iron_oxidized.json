@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:iron",
   "output": "tconstruct:iron#oxidized",
-  "temperature": 1
+  "temperature": 1,
+  "mantle_id": "tconstruct:tools/materials/composite/iron_oxidized"
 }

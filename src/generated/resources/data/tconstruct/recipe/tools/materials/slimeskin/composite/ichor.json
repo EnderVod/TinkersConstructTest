@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:leather",
   "output": "tconstruct:ichorskin",
-  "temperature": 700
+  "temperature": 700,
+  "mantle_id": "tconstruct:tools/materials/slimeskin/composite/ichor"
 }

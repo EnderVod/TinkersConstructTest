@@ -21,5 +21,6 @@
   },
   "input": "tconstruct:slimewood",
   "output": "tconstruct:plated_slimewood",
-  "temperature": 605
+  "temperature": 605,
+  "mantle_id": "tconstruct:tools/materials/composite/plated_slimewood"
 }

@@ -11,5 +11,6 @@
     "amount": 90,
     "tag": "c:molten_aluminum"
   },
-  "temperature": 425
+  "temperature": 425,
+  "mantle_id": "tconstruct:tools/materials/melting/aluminum"
 }

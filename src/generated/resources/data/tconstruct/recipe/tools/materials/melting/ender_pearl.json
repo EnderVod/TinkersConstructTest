@@ -5,5 +5,6 @@
     "amount": 250,
     "tag": "c:ender"
   },
-  "temperature": 477
+  "temperature": 477,
+  "mantle_id": "tconstruct:tools/materials/melting/ender_pearl"
 }

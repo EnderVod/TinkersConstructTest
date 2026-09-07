@@ -12,5 +12,6 @@
   ],
   "result": {
     "item": "tconstruct:repair_kit"
-  }
+  },
+  "mantle_id": "tconstruct:tools/parts/builder/repair_kit"
 }

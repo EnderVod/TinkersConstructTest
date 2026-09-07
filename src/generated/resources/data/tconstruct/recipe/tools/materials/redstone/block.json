@@ -9,5 +9,6 @@
   },
   "material": "tconstruct:redstone",
   "needed": 4,
-  "value": 9
+  "value": 9,
+  "mantle_id": "tconstruct:tools/materials/redstone/block"
 }

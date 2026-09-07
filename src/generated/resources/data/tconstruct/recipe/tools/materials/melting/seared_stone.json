@@ -5,5 +5,6 @@
     "amount": 250,
     "fluid": "tconstruct:seared_stone"
   },
-  "temperature": 600
+  "temperature": 600,
+  "mantle_id": "tconstruct:tools/materials/melting/seared_stone"
 }

@@ -5,5 +5,6 @@
     "amount": 90,
     "fluid": "tconstruct:molten_slimesteel"
   },
-  "temperature": 900
+  "temperature": 900,
+  "mantle_id": "tconstruct:tools/materials/melting/slimesteel"
 }

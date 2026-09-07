@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:leather",
   "output": "tconstruct:slimeskin",
-  "temperature": 50
+  "temperature": 50,
+  "mantle_id": "tconstruct:tools/materials/slimeskin/composite/earth"
 }

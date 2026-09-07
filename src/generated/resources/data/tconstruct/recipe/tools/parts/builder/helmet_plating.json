@@ -11,5 +11,6 @@
       "item": "tconstruct:helmet_plating_cast"
     }
   ],
-  "result": "tconstruct:helmet_plating_dummy"
+  "result": "tconstruct:helmet_plating_dummy",
+  "mantle_id": "tconstruct:tools/parts/builder/helmet_plating"
 }

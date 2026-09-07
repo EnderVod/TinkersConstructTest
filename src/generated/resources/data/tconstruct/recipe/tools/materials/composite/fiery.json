@@ -12,5 +12,6 @@
   },
   "input": "tconstruct:iron",
   "output": "tconstruct:fiery",
-  "temperature": 1500
+  "temperature": 1500,
+  "mantle_id": "tconstruct:tools/materials/composite/fiery"
 }

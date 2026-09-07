@@ -5,5 +5,6 @@
     "amount": 250,
     "tag": "c:magma"
   },
-  "temperature": 300
+  "temperature": 300,
+  "mantle_id": "tconstruct:tools/materials/melting/magma"
 }

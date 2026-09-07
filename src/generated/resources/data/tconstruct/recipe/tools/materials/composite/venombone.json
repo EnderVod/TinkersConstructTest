@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:bone",
   "output": "tconstruct:venombone",
-  "temperature": 10
+  "temperature": 10,
+  "mantle_id": "tconstruct:tools/materials/composite/venombone"
 }

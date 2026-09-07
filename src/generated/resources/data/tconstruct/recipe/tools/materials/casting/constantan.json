@@ -20,5 +20,6 @@
     "tag": "c:molten_constantan"
   },
   "output": "tconstruct:constantan",
-  "temperature": 920
+  "temperature": 920,
+  "mantle_id": "tconstruct:tools/materials/casting/constantan"
 }

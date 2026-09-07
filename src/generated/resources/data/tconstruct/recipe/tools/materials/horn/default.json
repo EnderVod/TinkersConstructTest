@@ -15,5 +15,6 @@
   },
   "material": "tconstruct:horn",
   "needed": 1,
-  "value": 4
+  "value": 4,
+  "mantle_id": "tconstruct:tools/materials/horn/default"
 }

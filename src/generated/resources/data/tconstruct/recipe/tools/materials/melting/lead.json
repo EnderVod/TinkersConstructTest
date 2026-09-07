@@ -11,5 +11,6 @@
     "amount": 90,
     "tag": "c:molten_lead"
   },
-  "temperature": 330
+  "temperature": 330,
+  "mantle_id": "tconstruct:tools/materials/melting/lead"
 }

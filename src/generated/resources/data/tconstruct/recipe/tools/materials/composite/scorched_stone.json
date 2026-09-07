@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:flint",
   "output": "tconstruct:scorched_stone",
-  "temperature": 300
+  "temperature": 300,
+  "mantle_id": "tconstruct:tools/materials/composite/scorched_stone"
 }

@@ -28,5 +28,6 @@
     "tag": "c:molten_nicrosil"
   },
   "output": "tconstruct:nicrosil",
-  "temperature": 1100
+  "temperature": 1100,
+  "mantle_id": "tconstruct:tools/materials/casting/nicrosil"
 }

@@ -11,5 +11,6 @@
       "item": "tconstruct:leggings_plating_cast"
     }
   ],
-  "result": "tconstruct:leggings_plating_dummy"
+  "result": "tconstruct:leggings_plating_dummy",
+  "mantle_id": "tconstruct:tools/parts/builder/leggings_plating"
 }

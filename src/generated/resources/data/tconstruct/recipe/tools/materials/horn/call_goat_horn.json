@@ -7,5 +7,6 @@
   },
   "material": "tconstruct:horn#minecraft.call_goat_horn",
   "needed": 1,
-  "value": 4
+  "value": 4,
+  "mantle_id": "tconstruct:tools/materials/horn/call_goat_horn"
 }

@@ -22,5 +22,6 @@
   },
   "material": "tconstruct:wood",
   "needed": 1,
-  "value": 4
+  "value": 4,
+  "mantle_id": "tconstruct:tools/materials/wood/logs/default"
 }

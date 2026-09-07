@@ -13,5 +13,6 @@
   },
   "input": "tconstruct:wood",
   "output": "tconstruct:treated_wood",
-  "temperature": 600
+  "temperature": 600,
+  "mantle_id": "tconstruct:tools/materials/composite/treated_wood"
 }

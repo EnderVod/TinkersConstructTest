@@ -20,5 +20,6 @@
     "amount": 90,
     "tag": "c:molten_bronze"
   },
-  "temperature": 700
+  "temperature": 700,
+  "mantle_id": "tconstruct:tools/materials/melting/bronze"
 }

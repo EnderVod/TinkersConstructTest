@@ -5,5 +5,6 @@
     "tag": "c:molten_manyullyn"
   },
   "output": "tconstruct:manyullyn",
-  "temperature": 1200
+  "temperature": 1200,
+  "mantle_id": "tconstruct:tools/materials/casting/manyullyn"
 }

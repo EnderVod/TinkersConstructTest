@@ -6,5 +6,6 @@
   "leftover": "tconstruct:skyroot_planks",
   "material": "tconstruct:slimewood#skyroot",
   "needed": 1,
-  "value": 4
+  "value": 4,
+  "mantle_id": "tconstruct:tools/materials/slimewood/skyroot_logs"
 }

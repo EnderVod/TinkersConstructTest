@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:rock",
   "output": "tconstruct:seared_stone",
-  "temperature": 450
+  "temperature": 450,
+  "mantle_id": "tconstruct:tools/materials/composite/seared_stone"
 }

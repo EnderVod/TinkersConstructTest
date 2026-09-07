@@ -11,5 +11,6 @@
     "tag": "tconstruct:molten_steeleaf"
   },
   "output": "tconstruct:steeleaf",
-  "temperature": 934
+  "temperature": 934,
+  "mantle_id": "tconstruct:tools/materials/casting/steeleaf"
 }

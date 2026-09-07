@@ -9,5 +9,6 @@
   },
   "material": "tconstruct:queens_slime",
   "needed": 1,
-  "value": 9
+  "value": 9,
+  "mantle_id": "tconstruct:tools/materials/queens_slime/block"
 }

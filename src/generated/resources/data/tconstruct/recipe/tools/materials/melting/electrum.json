@@ -20,5 +20,6 @@
     "amount": 90,
     "tag": "c:molten_electrum"
   },
-  "temperature": 760
+  "temperature": 760,
+  "mantle_id": "tconstruct:tools/materials/melting/electrum"
 }

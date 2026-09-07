@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:necrotic_bone",
   "output": "tconstruct:blazing_bone",
-  "temperature": 1500
+  "temperature": 1500,
+  "mantle_id": "tconstruct:tools/materials/composite/blazing_bone"
 }

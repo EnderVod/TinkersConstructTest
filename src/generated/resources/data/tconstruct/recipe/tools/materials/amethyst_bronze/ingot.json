@@ -5,5 +5,6 @@
   },
   "material": "tconstruct:amethyst_bronze",
   "needed": 1,
-  "value": 1
+  "value": 1,
+  "mantle_id": "tconstruct:tools/materials/amethyst_bronze/ingot"
 }

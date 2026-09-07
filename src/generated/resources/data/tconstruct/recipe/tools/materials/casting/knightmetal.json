@@ -5,5 +5,6 @@
     "tag": "tconstruct:molten_knightmetal"
   },
   "output": "tconstruct:knightmetal",
-  "temperature": 1300
+  "temperature": 1300,
+  "mantle_id": "tconstruct:tools/materials/casting/knightmetal"
 }

@@ -5,5 +5,6 @@
     "amount": 90,
     "fluid": "tconstruct:molten_knightmetal"
   },
-  "temperature": 1300
+  "temperature": 1300,
+  "mantle_id": "tconstruct:tools/materials/melting/knightmetal"
 }

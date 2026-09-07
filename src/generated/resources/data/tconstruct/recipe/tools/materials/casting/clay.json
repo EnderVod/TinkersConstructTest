@@ -5,5 +5,6 @@
     "tag": "tconstruct:molten_clay"
   },
   "output": "tconstruct:clay",
-  "temperature": 450
+  "temperature": 450,
+  "mantle_id": "tconstruct:tools/materials/casting/clay"
 }

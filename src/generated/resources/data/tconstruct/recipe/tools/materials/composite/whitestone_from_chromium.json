@@ -12,5 +12,6 @@
   },
   "input": "tconstruct:rock",
   "output": "tconstruct:whitestone#composite",
-  "temperature": 900
+  "temperature": 900,
+  "mantle_id": "tconstruct:tools/materials/composite/whitestone_from_chromium"
 }

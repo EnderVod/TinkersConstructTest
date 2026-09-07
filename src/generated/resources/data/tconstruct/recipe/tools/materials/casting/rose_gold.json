@@ -5,5 +5,6 @@
     "tag": "c:molten_rose_gold"
   },
   "output": "tconstruct:rose_gold",
-  "temperature": 550
+  "temperature": 550,
+  "mantle_id": "tconstruct:tools/materials/casting/rose_gold"
 }

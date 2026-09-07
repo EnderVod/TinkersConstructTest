@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:string",
   "output": "tconstruct:rose_gold",
-  "temperature": 550
+  "temperature": 550,
+  "mantle_id": "tconstruct:tools/materials/composite/rose_gold"
 }

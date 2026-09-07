@@ -20,5 +20,6 @@
     "tag": "c:molten_electrum"
   },
   "output": "tconstruct:electrum",
-  "temperature": 760
+  "temperature": 760,
+  "mantle_id": "tconstruct:tools/materials/casting/electrum"
 }

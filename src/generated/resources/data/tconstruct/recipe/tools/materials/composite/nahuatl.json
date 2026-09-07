@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:wood",
   "output": "tconstruct:nahuatl",
-  "temperature": 1000
+  "temperature": 1000,
+  "mantle_id": "tconstruct:tools/materials/composite/nahuatl"
 }

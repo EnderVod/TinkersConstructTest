@@ -5,5 +5,6 @@
     "tag": "c:magma"
   },
   "output": "tconstruct:magma",
-  "temperature": 300
+  "temperature": 300,
+  "mantle_id": "tconstruct:tools/materials/casting/magma"
 }

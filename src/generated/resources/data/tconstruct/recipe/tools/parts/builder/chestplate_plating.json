@@ -11,5 +11,6 @@
       "item": "tconstruct:chestplate_plating_cast"
     }
   ],
-  "result": "tconstruct:chestplate_plating_dummy"
+  "result": "tconstruct:chestplate_plating_dummy",
+  "mantle_id": "tconstruct:tools/parts/builder/chestplate_plating"
 }

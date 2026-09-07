@@ -24,5 +24,6 @@
     "amount": 90,
     "tag": "c:molten_pewter"
   },
-  "temperature": 400
+  "temperature": 400,
+  "mantle_id": "tconstruct:tools/materials/melting/pewter"
 }

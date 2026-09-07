@@ -5,5 +5,6 @@
     "tag": "c:molten_iron"
   },
   "output": "tconstruct:iron",
-  "temperature": 800
+  "temperature": 800,
+  "mantle_id": "tconstruct:tools/materials/casting/iron"
 }

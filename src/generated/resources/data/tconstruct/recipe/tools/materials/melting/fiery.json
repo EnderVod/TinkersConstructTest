@@ -17,5 +17,6 @@
     "amount": 250,
     "fluid": "tconstruct:fiery_liquid"
   },
-  "temperature": 1500
+  "temperature": 1500,
+  "mantle_id": "tconstruct:tools/materials/melting/fiery"
 }

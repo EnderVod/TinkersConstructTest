@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:blaze",
   "output": "tconstruct:jadeite",
-  "temperature": 934
+  "temperature": 934,
+  "mantle_id": "tconstruct:tools/materials/composite/jadeite"
 }

@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:leather",
   "output": "tconstruct:jeweled_hide",
-  "temperature": 1450
+  "temperature": 1450,
+  "mantle_id": "tconstruct:tools/materials/composite/jeweled_hide"
 }

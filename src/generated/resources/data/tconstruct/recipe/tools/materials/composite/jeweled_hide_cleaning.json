@@ -7,5 +7,6 @@
   "hide_in_book": true,
   "input": "tconstruct:jeweled_hide",
   "output": "tconstruct:leather",
-  "temperature": 10
+  "temperature": 10,
+  "mantle_id": "tconstruct:tools/materials/composite/jeweled_hide_cleaning"
 }

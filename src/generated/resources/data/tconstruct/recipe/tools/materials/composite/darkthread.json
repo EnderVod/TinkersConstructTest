@@ -6,5 +6,6 @@
   },
   "input": "tconstruct:string",
   "output": "tconstruct:darkthread",
-  "temperature": 1000
+  "temperature": 1000,
+  "mantle_id": "tconstruct:tools/materials/composite/darkthread"
 }

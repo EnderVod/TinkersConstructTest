@@ -12,5 +12,6 @@
   },
   "input": "tconstruct:necrotic_bone",
   "output": "tconstruct:necronium",
-  "temperature": 830
+  "temperature": 830,
+  "mantle_id": "tconstruct:tools/materials/composite/necronium"
 }

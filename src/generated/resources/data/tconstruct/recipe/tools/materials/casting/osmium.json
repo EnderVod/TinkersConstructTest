@@ -11,5 +11,6 @@
     "tag": "c:molten_osmium"
   },
   "output": "tconstruct:osmium",
-  "temperature": 975
+  "temperature": 975,
+  "mantle_id": "tconstruct:tools/materials/casting/osmium"
 }

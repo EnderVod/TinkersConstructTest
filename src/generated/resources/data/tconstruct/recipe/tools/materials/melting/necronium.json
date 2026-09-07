@@ -11,5 +11,6 @@
     "amount": 90,
     "tag": "c:molten_uranium"
   },
-  "temperature": 830
+  "temperature": 830,
+  "mantle_id": "tconstruct:tools/materials/melting/necronium"
 }

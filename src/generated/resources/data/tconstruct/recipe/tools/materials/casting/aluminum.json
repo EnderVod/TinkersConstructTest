@@ -11,5 +11,6 @@
     "tag": "c:molten_aluminum"
   },
   "output": "tconstruct:aluminum",
-  "temperature": 425
+  "temperature": 425,
+  "mantle_id": "tconstruct:tools/materials/casting/aluminum"
 }

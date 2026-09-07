@@ -11,5 +11,6 @@
       "item": "tconstruct:boots_plating_cast"
     }
   ],
-  "result": "tconstruct:boots_plating_dummy"
+  "result": "tconstruct:boots_plating_dummy",
+  "mantle_id": "tconstruct:tools/parts/builder/boots_plating"
 }

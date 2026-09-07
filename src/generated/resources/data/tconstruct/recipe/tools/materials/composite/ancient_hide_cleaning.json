@@ -7,5 +7,6 @@
   "hide_in_book": true,
   "input": "tconstruct:ancient_hide",
   "output": "tconstruct:leather",
-  "temperature": 10
+  "temperature": 10,
+  "mantle_id": "tconstruct:tools/materials/composite/ancient_hide_cleaning"
 }
