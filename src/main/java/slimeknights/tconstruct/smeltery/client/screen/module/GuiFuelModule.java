@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.smeltery.client.screen.module;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -171,7 +172,7 @@ public class GuiFuelModule implements IScreenWithFluidTank, ClickableTankModule 
         tooltip = hasTank ? TOOLTIP_NO_FUEL : TOOLTIP_NO_TANK;
       }
 
-      graphics.renderComponentTooltip(screen.font, tooltip, mouseX, mouseY);
+      graphics.renderComponentTooltip(Minecraft.getInstance().font, tooltip, mouseX, mouseY);
     }
   }
 

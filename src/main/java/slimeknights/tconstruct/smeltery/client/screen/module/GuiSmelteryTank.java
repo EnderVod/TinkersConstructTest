@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.smeltery.client.screen.module;
 
+import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -181,7 +182,7 @@ public class GuiSmelteryTank implements IScreenWithFluidTank {
       else {
         tooltip = FluidTooltipHandler.getFluidTooltip(tank.getFluidInTank(hovered));
       }
-      graphics.renderComponentTooltip(parent.font, tooltip, mouseX, mouseY);
+      graphics.renderComponentTooltip(Minecraft.getInstance().font, tooltip, mouseX, mouseY);
     }
   }
 

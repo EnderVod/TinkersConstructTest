@@ -1,5 +1,6 @@
 package slimeknights.tconstruct.smeltery.client.screen.module;
 
+import net.minecraft.client.Minecraft;
 import lombok.AllArgsConstructor;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -107,7 +108,7 @@ public class GuiMeltingModule {
 
           // draw tooltip if relevant
           if (tooltip != null) {
-            graphics.renderTooltip(screen.font, tooltip, mouseX, mouseY);
+            graphics.renderTooltip(Minecraft.getInstance().font, tooltip, mouseX, mouseY);
           }
 
           // cannot hover two slots, so done
