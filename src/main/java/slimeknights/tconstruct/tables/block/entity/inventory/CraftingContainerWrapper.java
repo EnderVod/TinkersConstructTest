@@ -7,6 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.StackedContents;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingInput;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +81,11 @@ public class CraftingContainerWrapper implements CraftingContainer {
     for (int i = 0; i < crafter.getContainerSize(); i++) {
       helper.accountSimpleStack(crafter.getItem(i));
     }
+  }
+
+  /** Creates the immutable 1.21 recipe input snapshot for the current grid. */
+  public CraftingInput asInput() {
+    return CraftingInput.of(width, height, getItems());
   }
 
   @Override

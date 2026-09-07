@@ -18,9 +18,9 @@ import slimeknights.tconstruct.tables.block.entity.table.CraftingStationBlockEnt
 public class UpdateCraftingRecipePacket implements BlockEntityPacket<CraftingStationBlockEntity> {
   private final BlockPos pos;
   private final ResourceLocation recipe;
-  public UpdateCraftingRecipePacket(BlockPos pos, CraftingRecipe recipe) {
+  public UpdateCraftingRecipePacket(BlockPos pos, ResourceLocation recipe) {
     this.pos = pos;
-    this.recipe = recipe.getId();
+    this.recipe = recipe;
   }
 
   public UpdateCraftingRecipePacket(FriendlyByteBuf buffer) {
@@ -50,7 +50,7 @@ public class UpdateCraftingRecipePacket implements BlockEntityPacket<CraftingSta
     assert level != null;
     CraftingRecipe recipe = RecipeHelper.getRecipe(level.getRecipeManager(), this.recipe, CraftingRecipe.class).orElse(null);
     if (recipe != null) {
-      be.updateRecipe(recipe);
+      be.updateRecipe(recipe, this.recipe);
     } else {
       TConstruct.LOG.error("Failed to update Crafting Station Recipe at {}: unknown recipe {}", pos, this.recipe);
     }
