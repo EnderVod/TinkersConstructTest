@@ -28,10 +28,10 @@ public class BlockEntityTypeTagProvider extends IntrinsicHolderTagsProvider<Bloc
 
   /** Creates a RL for iron chests */
   private static void ironchest(IntrinsicTagAppender<BlockEntityType<?>> appender, String name) {
-    ResourceLocation chest = new ResourceLocation("ironchest", name + "_chest");
+    ResourceLocation chest = ResourceLocation.fromNamespaceAndPath("ironchest", name + "_chest");
     appender.addOptional(chest).addOptional(chest.withPrefix("trapped_"));
     if (!"dirt".equals(name)) {
-      appender.addOptional(new ResourceLocation("ironshulkerbox", name + "_shulker_box"));
+      appender.addOptional(ResourceLocation.fromNamespaceAndPath("ironshulkerbox", name + "_shulker_box"));
     }
   }
 

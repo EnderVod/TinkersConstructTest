@@ -545,7 +545,7 @@ public class ItemTagProvider extends ItemTagsProvider {
       TinkerTables.tinkersAnvil.asItem(), TinkerTables.scorchedAnvil.asItem(), TinkerTables.modifierWorktable.asItem()
     );
     String tf = "twilightforest";
-    Function<String,ResourceLocation> trophy = name -> new ResourceLocation(tf, name + "_trophy");
+    Function<String,ResourceLocation> trophy = name -> ResourceLocation.fromNamespaceAndPath(tf, name + "_trophy");
     this.tag(TinkerTags.Items.BOSS_TROPHIES)
       .addOptional(trophy.apply("naga"))
       .addOptional(trophy.apply("lich"))
@@ -557,8 +557,8 @@ public class ItemTagProvider extends ItemTagsProvider {
       .addOptional(trophy.apply("snow_queen"))
       .addOptional(trophy.apply("quest_ram"));
     this.tag(TinkerTags.Items.THROWABLE)
-      .addOptional(new ResourceLocation(tf, "ice_bomb"));
-    this.tag(TinkerTags.Items.KNIGHTMETAL_SHARD).addOptional(new ResourceLocation(tf, "armor_shard"));
+      .addOptional(ResourceLocation.fromNamespaceAndPath(tf, "ice_bomb"));
+    this.tag(TinkerTags.Items.KNIGHTMETAL_SHARD).addOptional(ResourceLocation.fromNamespaceAndPath(tf, "armor_shard"));
   }
 
   private void addSmeltery() {
@@ -673,7 +673,7 @@ public class ItemTagProvider extends ItemTagsProvider {
 
     // melting tags //
     // ores
-    Function<String,ResourceLocation> ie = path -> new ResourceLocation("immersiveengineering", path);
+    Function<String,ResourceLocation> ie = path -> ResourceLocation.fromNamespaceAndPath("immersiveengineering", path);
     String tf = "twilightforest";
     moltenTools(TinkerFluids.moltenCopper).add(1, Items.BRUSH).toolTags().toolsComplement();
     moltenTools(TinkerFluids.moltenIron).minecraft()
@@ -683,8 +683,8 @@ public class ItemTagProvider extends ItemTagsProvider {
       .crowbar().excavatorSpikeMaul();
     moltenTools(TinkerFluids.moltenGold).minecraft("golden")
       .add(1, true,  ResourceLocation.fromNamespaceAndPath("farmersdelight", "golden_knife"))
-      .add(4, false, new ResourceLocation("golden_boots"))
-      .add(4, true,  new ResourceLocation(tf, "gold_minotaur_axe"));
+      .add(4, false, ResourceLocation.parse("golden_boots"))
+      .add(4, true,  ResourceLocation.fromNamespaceAndPath(tf, "gold_minotaur_axe"));
     moltenTools(TinkerFluids.moltenSteel).toolTags().leggingsPaxel().crowbar()
       .toolTag(1, "shovel")
       .add(1, true, ie.apply("shovel_steel"))
@@ -700,8 +700,8 @@ public class ItemTagProvider extends ItemTagsProvider {
       .optionalMetal(7, tf, "leggings", "shield");
     // gems
     moltenTools(TinkerFluids.moltenDiamond).minecraft().excavatorSpikeMaul().crowbar().fdKnife()
-      .add(4, false, new ResourceLocation("diamond_boots"))
-      .add(4, true,  new ResourceLocation(tf, "diamond_minotaur_axe"));
+      .add(4, false, ResourceLocation.parse("diamond_boots"))
+      .add(4, true,  ResourceLocation.fromNamespaceAndPath(tf, "diamond_minotaur_axe"));
     // mod ores
     moltenTools(TinkerFluids.moltenTin).toolTags().toolsComplement();
     moltenTools(TinkerFluids.moltenLead).toolTags().toolsComplement();
