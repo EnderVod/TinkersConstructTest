@@ -1,0 +1,169 @@
+name: Port Runtime Basics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-runtime-basics.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Migrate runtime basics to 1.21
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          import shutil
+
+          root = Path('src/generated/resources/data/tconstruct')
+
+          # 1.21 NeoForge makes ItemStack damageability stack-sensitive. Tinkers keeps
+          # durability in its own tool component, so explicitly tell NeoForge which
+          # Tinkers stacks are durability-bearing instead of relying on MAX_DAMAGE.
+          item_path = Path('src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java')
+          text = item_path.read_text(encoding='utf-8')
+          marker = '''  /* Damage/Durability */\n\n  @Override\n  public boolean isRepairable(ItemStack stack) {'''
+          replacement = '''  /* Damage/Durability */\n\n  /**\n   * 1.21 NeoForge uses a stack-sensitive damageability check before invoking the\n   * item damage hook. Tinkers stores dynamic durability in tool data instead of\n   * vanilla MAX_DAMAGE, so mark durability-tagged tools as damageable here.\n   */\n  @Override\n  public boolean isDamageable(ItemStack stack) {\n    return stack.getCount() == 1 && stack.is(TinkerTags.Items.DURABILITY);\n  }\n\n  @Override\n  public boolean isRepairable(ItemStack stack) {'''
+          if 'public boolean isDamageable(ItemStack stack)' not in text:
+              if marker not in text:
+                  raise SystemExit('Could not locate ModifiableItem durability section')
+              text = text.replace(marker, replacement, 1)
+              item_path.write_text(text, encoding='utf-8')
+
+          # The three core table loot tables are still in the pre-1.21 plural path,
+          # which makes the blocks silently have no loaded loot table when broken.
+          old_loot = root / 'loot_tables/blocks'
+          new_loot = root / 'loot_table/blocks'
+          new_loot.mkdir(parents=True, exist_ok=True)
+          for name in ('crafting_station', 'part_builder', 'tinker_station'):
+              src = old_loot / f'{name}.json'
+              if not src.exists():
+                  raise SystemExit(f'Missing legacy table loot table: {src}')
+              shutil.copyfile(src, new_loot / src.name)
+
+          # The old Forge normal_stone convention no longer maps to c:normal_stone.
+          # Use NeoForge's 1.21 common stone tag, and explicitly accept normal cobble.
+          rock_dir = root / 'recipe/tools/materials/rock'
+          stone_path = rock_dir / 'stone.json'
+          stone = json.loads(stone_path.read_text(encoding='utf-8'))
+          stone['ingredient'] = {'tag': 'c:stones'}
+          stone_path.write_text(json.dumps(stone, indent=2) + '\n', encoding='utf-8')
+
+          cobble_path = rock_dir / 'cobblestone.json'
+          cobble = {
+              'type': 'tconstruct:material',
+              'ingredient': {'tag': 'c:cobblestones/normal'},
+              'material': 'tconstruct:rock#stone',
+              'needed': 1,
+              'value': 1,
+              'mantle_id': 'tconstruct:tools/materials/rock/cobblestone',
+          }
+          cobble_path.write_text(json.dumps(cobble, indent=2) + '\n', encoding='utf-8')
+
+          # Recipe-unlock advancements are also still in the old plural directory.
+          # In 1.21 ItemPredicate replaced the old `tag` member with an `items`
+          # holder-set value; tags are represented as strings prefixed with '#'.
+          old_adv = root / 'advancements/recipes'
+          new_adv = root / 'advancement/recipes'
+          if not old_adv.exists():
+              raise SystemExit(f'Missing legacy recipe advancements: {old_adv}')
+
+          def common_id(value: str) -> str:
+              return 'c:' + value[len('forge:'):] if value.startswith('forge:') else value
+
+          def migrate_predicates(value):
+              if isinstance(value, list):
+                  return [migrate_predicates(v) for v in value]
+              if not isinstance(value, dict):
+                  return common_id(value) if isinstance(value, str) else value
+
+              out = {}
+              old_tag = value.get('tag')
+              for key, child in value.items():
+                  if key == 'tag' and isinstance(child, str):
+                      # 1.21 ItemPredicate holder-set syntax.
+                      out['items'] = '#' + common_id(child)
+                  else:
+                      out[key] = migrate_predicates(child)
+              return out
+
+          adv_count = 0
+          for src in sorted(old_adv.rglob('*.json')):
+              dst = new_adv / src.relative_to(old_adv)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              data = migrate_predicates(json.loads(src.read_text(encoding='utf-8')))
+              dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+              adv_count += 1
+
+          print(f'Migrated {adv_count} recipe unlock advancements')
+          print('Migrated core table loot tables and stone/cobblestone material recipes')
+          print('Added 1.21 stack-sensitive durability declaration')
+
+      - name: Validate migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=src/generated/resources/data/tconstruct
+
+          grep -q 'public boolean isDamageable(ItemStack stack)' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java
+          grep -q 'stack.is(TinkerTags.Items.DURABILITY)' src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java
+
+          for name in crafting_station part_builder tinker_station; do
+            file="$root/loot_table/blocks/$name.json"
+            test -f "$file"
+            grep -q '"type": "minecraft:block"' "$file"
+            grep -q "\"name\": \"tconstruct:$name\"" "$file"
+          done
+
+          grep -q '"tag": "c:stones"' "$root/recipe/tools/materials/rock/stone.json"
+          test -f "$root/recipe/tools/materials/rock/cobblestone.json"
+          grep -q '"tag": "c:cobblestones/normal"' "$root/recipe/tools/materials/rock/cobblestone.json"
+          grep -q '"mantle_id": "tconstruct:tools/materials/rock/cobblestone"' "$root/recipe/tools/materials/rock/cobblestone.json"
+
+          old_count=$(find "$root/advancements/recipes" -type f -name '*.json' | wc -l)
+          new_count=$(find "$root/advancement/recipes" -type f -name '*.json' | wc -l)
+          if [ "$old_count" -eq 0 ] || [ "$old_count" -ne "$new_count" ]; then
+            echo "Recipe advancement migration count mismatch: old=$old_count new=$new_count"
+            exit 1
+          fi
+
+          pattern_adv="$root/advancement/recipes/misc/tables/pattern.json"
+          test -f "$pattern_adv"
+          grep -q '"items": "#c:rods/wooden"' "$pattern_adv"
+          if grep -R -q '"tag": "forge:' "$root/advancement/recipes"; then
+            echo 'Stale Forge item-predicate tag remains in migrated recipe advancements.'
+            exit 1
+          fi
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/main/java/slimeknights/tconstruct/library/tools/item/ModifiableItem.java \
+            src/generated/resources/data/tconstruct/loot_table/blocks/crafting_station.json \
+            src/generated/resources/data/tconstruct/loot_table/blocks/part_builder.json \
+            src/generated/resources/data/tconstruct/loot_table/blocks/tinker_station.json \
+            src/generated/resources/data/tconstruct/recipe/tools/materials/rock/stone.json \
+            src/generated/resources/data/tconstruct/recipe/tools/materials/rock/cobblestone.json \
+            src/generated/resources/data/tconstruct/advancement/recipes
+          if git diff --cached --quiet; then
+            echo 'No runtime basics changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Fix durability drops cobblestone and recipe unlocks'
+          git push
