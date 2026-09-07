@@ -10,7 +10,6 @@ import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.client.renderer.texture.atlas.SpriteSourceType;
 import net.minecraft.client.renderer.texture.atlas.SpriteResourceLoader;
-import net.minecraft.client.renderer.texture.atlas.SpriteSources;
 import net.minecraft.client.renderer.texture.atlas.sources.LazyLoadedImage;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
 import net.minecraft.resources.ResourceLocation;
@@ -18,6 +17,7 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.ResourceMetadata;
 import net.minecraft.util.ExtraCodecs;
+import net.neoforged.neoforge.client.event.RegisterSpriteSourceTypesEvent;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.client.materials.MaterialRenderInfo;
@@ -25,7 +25,6 @@ import slimeknights.tconstruct.library.client.materials.MaterialRenderInfo;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Map.Entry;
-import java.util.Optional;
 
 /** Sprite source creating modifier textures for banners using shield banner textures */
 public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWidth, int cropHeight, ResourceLocation destinationPrefix, int offsetX, int offsetY, int outSize) implements SpriteSource {
@@ -48,16 +47,13 @@ public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWid
     }
     return DataResult.success(source);
   });
-  /** Registered type set on init */
-  private static SpriteSourceType TYPE = null;
+  /** Sprite source type registered through NeoForge's client registration event. */
+  private static final SpriteSourceType TYPE = new SpriteSourceType(CODEC);
 
-  /** Registers this sprite source */
+  /** Registers this sprite source through the supported NeoForge lifecycle. */
   @Internal
-  public static SpriteSourceType register() {
-    if (TYPE == null) {
-      TYPE = SpriteSources.register(TConstruct.getResource("shield_banner_to_modifier").toString(), CODEC);
-    }
-    return TYPE;
+  public static void register(RegisterSpriteSourceTypesEvent event) {
+    event.register(TConstruct.getResource("shield_banner_to_modifier"), TYPE);
   }
 
   @Override
@@ -79,7 +75,7 @@ public record ShieldBannerModifierSpriteSource(int cropX, int cropY, int cropWid
 
   @Override
   public SpriteSourceType type() {
-    return register();
+    return TYPE;
   }
 
   /** Generates a cropped sprite lazily */
