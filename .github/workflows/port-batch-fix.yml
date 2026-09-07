@@ -1,4 +1,4 @@
-name: Tinkers one-shot modifier events 1.21 batch
+name: Tinkers one-shot arrow and world 1.21 batch
 
 on:
   push:
@@ -21,74 +21,33 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified ModifierEvents migrations
+      - name: Apply verified arrow and world migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java")
-          text = path.read_text(encoding="utf-8")
-
-          def replace_once(old, new):
-              global text
+          def replace_once(path, old, new):
+              text = path.read_text(encoding="utf-8")
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"Expected exactly one match, found {count}: {old[:120]!r}")
-              text = text.replace(old, new, 1)
+                  raise RuntimeError(f"{path}: expected exactly one match, found {count}: {old[:140]!r}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          # Dynamic enchantment registry + item data components.
+          # 1.21 moved arrow knockback into a protected vanilla helper that accounts for
+          # the weapon's enchantment components. The port AT exposes the helper so the
+          # enderference reimplementation can preserve exact vanilla knockback behavior.
+          modifier_events = Path("src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java")
           replace_once(
-              "import net.minecraft.core.registries.BuiltInRegistries;",
-              "import net.minecraft.core.component.DataComponents;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.core.registries.Registries;")
-          replace_once(
-              "import net.minecraft.server.level.ServerPlayer;",
-              "import net.minecraft.server.level.ServerLevel;\nimport net.minecraft.server.level.ServerPlayer;")
-          replace_once(
-              "import net.minecraft.world.item.ItemStack;",
-              "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.component.CustomData;")
-          replace_once(
-              "import net.minecraft.world.item.enchantment.EnchantmentHelper;",
-              "import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;")
-          replace_once(
-              "import net.neoforged.neoforge.event.level.BlockEvent.BreakEvent;",
-              "import net.neoforged.neoforge.event.level.BlockDropsEvent;")
+              modifier_events,
+              """          // knockback from punch\n          int knockback = arrow.getKnockback();\n          if (knockback > 0) {\n            Vec3 knockbackVec = arrow.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D).normalize().scale(knockback * 0.6D);\n            if (knockbackVec.lengthSqr() > 0.0D) {\n              target.push(knockbackVec.x, 0.1D, knockbackVec.z);\n            }\n          }""",
+              """          // use vanilla's 1.21 weapon/enchantment-aware arrow knockback path\n          arrow.doKnockback(target, damageSource);""")
 
-          # Vanishing is holder-backed in 1.21.
-          replace_once(
-              """        LivingEntity target = event.getEntity();\n        // check each slot for gold""",
-              """        LivingEntity target = event.getEntity();\n        var vanishing = target.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.VANISHING_CURSE);\n        // check each slot for gold""")
-          replace_once(
-              "!EnchantmentHelper.hasVanishingCurse(stack)",
-              "EnchantmentHelper.getItemEnchantmentLevel(vanishing, stack) <= 0")
-
-          # Mantle 1.21 reads the soulbound slot marker from CUSTOM_DATA.
-          old = "stack.getOrCreateTag().putInt(MantleEvents.SOULBOUND_SLOT, i);"
-          if text.count(old) != 2:
-              raise RuntimeError(f"Expected two soulbound NBT writes, found {text.count(old)}")
-          text = text.replace(old, "int slot = i;\n          CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> tag.putInt(MantleEvents.SOULBOUND_SLOT, slot));", 2)
-
-          # Block experience is mutable on BlockDropsEvent in current NeoForge.
-          replace_once(
-              """  static void beforeBlockBreak(BreakEvent event) {\n    Player player = event.getPlayer();""",
-              """  static void beforeBlockBreak(BlockDropsEvent event) {\n    if (!(event.getBreaker() instanceof Player player)) {\n      return;\n    }""")
-          replace_once(
-              "event.setExpToDrop((int)(event.getExpToDrop() * bonus));",
-              "event.setDroppedExperience((int)(event.getDroppedExperience() * bonus));")
-
-          # 1.21 collapsed directional fireball power into a scalar acceleration value.
-          replace_once(
-              """                if (projectile instanceof AbstractHurtingProjectile hurting) {\n                  hurting.xPower = reboundAngle.x * 0.1;\n                  hurting.yPower = reboundAngle.y * 0.1;\n                  hurting.zPower = reboundAngle.z * 0.1;\n                }""",
-              """                if (projectile instanceof AbstractHurtingProjectile hurting) {\n                  hurting.accelerationPower = 0.1;\n                }""")
-
-          replace_once("target.setSecondsOnFire(5);", "target.igniteForSeconds(5);")
-
-          # Vanilla 1.21 combines post-hurt and post-damage enchantment callbacks.
-          replace_once(
-              """          if (!level.isClientSide && livingOwner != null) {\n            EnchantmentHelper.doPostHurtEffects(target, livingOwner);\n            EnchantmentHelper.doPostDamageEffects(livingOwner, target);\n          }""",
-              """          if (level instanceof ServerLevel serverLevel && livingOwner != null) {\n            EnchantmentHelper.doPostAttackEffects(serverLevel, target, damageSource);\n          }""")
-
-          path.write_text(text, encoding="utf-8")
+          # EnumObject has both one- and two-argument forEach overloads; method references
+          # became ambiguous under the current generics. Make the intended value callback explicit.
+          tinker_world = Path("src/main/java/slimeknights/tconstruct/world/TinkerWorld.java")
+          replace_once(tinker_world, "TinkerWorld.heads.forEach(blocks::add);", "TinkerWorld.heads.forEach((type, block) -> blocks.add(block));")
+          replace_once(tinker_world, "TinkerWorld.wallHeads.forEach(blocks::add);", "TinkerWorld.wallHeads.forEach((type, block) -> blocks.add(block));")
           PY
 
       - name: Commit verified batch
@@ -100,8 +59,9 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java
-          git commit -m "Port modifier event APIs to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java \
+                  src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
+          git commit -m "Port arrow knockback and skull registration to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
