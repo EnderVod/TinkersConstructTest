@@ -1,0 +1,80 @@
+name: Tinkers Living Walk Position Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-living-walk-public-position.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Replace private LivingEntity lastPos access
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          tool_events = Path('src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java')
+          text = tool_events.read_text(encoding='utf-8')
+          old = '''    // this event runs before vanilla updates prevBlockPos
+              BlockPos pos = living.blockPosition();
+              if (!living.isSpectator() && !living.level().isClientSide() && living.isAlive() && !Objects.equals(living.lastPos, pos)) {
+                ItemStack boots = living.getItemBySlot(EquipmentSlot.FEET);
+                if (!boots.isEmpty() && boots.is(TinkerTags.Items.BOOTS)) {
+                  ToolStack tool = ToolStack.from(boots);
+                  for (ModifierEntry entry : tool.getModifierList()) {
+                    entry.getHook(ModifierHooks.BOOT_WALK).onWalk(tool, entry, living, living.lastPos, pos);
+                  }
+                }
+              }
+          '''
+          new = '''    // this event runs before vanilla updates the entity's old position fields for the current tick
+              BlockPos pos = living.blockPosition();
+              BlockPos previousPos = BlockPos.containing(living.xOld, living.yOld, living.zOld);
+              if (!living.isSpectator() && !living.level().isClientSide() && living.isAlive() && !Objects.equals(previousPos, pos)) {
+                ItemStack boots = living.getItemBySlot(EquipmentSlot.FEET);
+                if (!boots.isEmpty() && boots.is(TinkerTags.Items.BOOTS)) {
+                  ToolStack tool = ToolStack.from(boots);
+                  for (ModifierEntry entry : tool.getModifierList()) {
+                    entry.getHook(ModifierHooks.BOOT_WALK).onWalk(tool, entry, living, previousPos, pos);
+                  }
+                }
+              }
+          '''
+          if old not in text:
+              raise SystemExit('Expected livingWalk block was not found')
+          tool_events.write_text(text.replace(old, new), encoding='utf-8')
+
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = at.read_text(encoding='utf-8')
+          stale = '# Walk based modifiers\npublic net.minecraft.world.entity.LivingEntity f_20956_ # prevBlockpos\n'
+          if stale not in text:
+              raise SystemExit('Expected stale lastPos access transformer was not found')
+          at.write_text(text.replace(stale, '# Walk based modifiers now use Entity xOld/yOld/zOld; no LivingEntity private-field access needed.\n'), encoding='utf-8')
+          PY
+
+      - name: Commit walking hook migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No walking hook changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tools/logic/ToolEvents.java \
+                  src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Use public previous position for walking modifiers'
+          git push origin HEAD:1.21.1-neoforge
