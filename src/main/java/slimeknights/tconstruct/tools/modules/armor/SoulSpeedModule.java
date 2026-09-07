@@ -13,6 +13,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import slimeknights.mantle.client.TooltipKey;
+import slimeknights.mantle.data.loadable.Loadables;
 import slimeknights.mantle.data.loadable.record.RecordLoadable;
 import slimeknights.tconstruct.library.json.LevelingInt;
 import slimeknights.tconstruct.library.modifiers.Modifier;
@@ -46,9 +47,19 @@ public record SoulSpeedModule(LevelingInt level, ModifierCondition<IToolStackVie
     return DEFAULT_HOOKS;
   }
 
+  /** Checks the runtime enchantment against the datapack-backed soul speed registry key. */
+  private static boolean isSoulSpeed(Enchantment enchantment) {
+    return Enchantments.SOUL_SPEED.location().equals(Loadables.ENCHANTMENT.getKey(enchantment));
+  }
+
+  /** Resolves soul speed from the active dynamic enchantment registry. */
+  private static Enchantment soulSpeed() {
+    return Loadables.ENCHANTMENT.fromKey(Enchantments.SOUL_SPEED.location(), "soul_speed");
+  }
+
   @Override
   public int updateEnchantmentLevel(IToolStackView tool, ModifierEntry modifier, Enchantment enchantment, int level) {
-    if (enchantment == Enchantments.SOUL_SPEED && condition.matches(tool, modifier)) {
+    if (isSoulSpeed(enchantment) && condition.matches(tool, modifier)) {
       level += this.level.compute(modifier);
     }
     return level;
@@ -57,7 +68,7 @@ public record SoulSpeedModule(LevelingInt level, ModifierCondition<IToolStackVie
   @Override
   public void updateEnchantments(IToolStackView tool, ModifierEntry modifier, Map<Enchantment, Integer> map) {
     if (condition.matches(tool, modifier)) {
-      EnchantmentModifierHook.addEnchantment(map, Enchantments.SOUL_SPEED, this.level.compute(modifier));
+      EnchantmentModifierHook.addEnchantment(map, soulSpeed(), this.level.compute(modifier));
     }
   }
 
