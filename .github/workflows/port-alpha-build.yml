@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 92eb826d with Mantle c7c47df: 23 station layouts load and preview tool data is bridged to 1.21 components.
+# Runtime source validated through f1490329 with latest green Mantle: positioned crafting consumption, 1.21 table tags/recipes, and extended display-context parsing.
 on:
   push:
     branches:
