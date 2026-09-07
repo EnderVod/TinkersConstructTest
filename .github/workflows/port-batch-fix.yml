@@ -1,4 +1,4 @@
-name: Tinkers one-shot arrow and world 1.21 batch
+name: Tinkers one-shot frypan smelting 1.21 batch
 
 on:
   push:
@@ -21,33 +21,51 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified arrow and world migrations
+      - name: Apply verified frypan smelting migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new):
-              text = path.read_text(encoding="utf-8")
+          path = Path("src/main/java/slimeknights/tconstruct/tools/modules/SmeltingModule.java")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_once(old, new):
+              global text
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{path}: expected exactly one match, found {count}: {old[:140]!r}")
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise RuntimeError(f"Expected exactly one match, found {count}: {old[:140]!r}")
+              text = text.replace(old, new, 1)
 
-          # 1.21 moved arrow knockback into a protected vanilla helper that accounts for
-          # the weapon's enchantment components. The port AT exposes the helper so the
-          # enderference reimplementation can preserve exact vanilla knockback behavior.
-          modifier_events = Path("src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java")
           replace_once(
-              modifier_events,
-              """          // knockback from punch\n          int knockback = arrow.getKnockback();\n          if (knockback > 0) {\n            Vec3 knockbackVec = arrow.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D).normalize().scale(knockback * 0.6D);\n            if (knockbackVec.lengthSqr() > 0.0D) {\n              target.push(knockbackVec.x, 0.1D, knockbackVec.z);\n            }\n          }""",
-              """          // use vanilla's 1.21 weapon/enchantment-aware arrow knockback path\n          arrow.doKnockback(target, damageSource);""")
+              "import net.minecraft.world.item.crafting.RecipeType;",
+              "import net.minecraft.world.item.crafting.RecipeHolder;\nimport net.minecraft.world.item.crafting.RecipeType;")
+          replace_once(
+              "private static AbstractCookingRecipe lastRecipe = null;",
+              "private static RecipeHolder<? extends AbstractCookingRecipe> lastRecipe = null;")
 
-          # EnumObject has both one- and two-argument forEach overloads; method references
-          # became ambiguous under the current generics. Make the intended value callback explicit.
-          tinker_world = Path("src/main/java/slimeknights/tconstruct/world/TinkerWorld.java")
-          replace_once(tinker_world, "TinkerWorld.heads.forEach(blocks::add);", "TinkerWorld.heads.forEach((type, block) -> blocks.add(block));")
-          replace_once(tinker_world, "TinkerWorld.wallHeads.forEach(blocks::add);", "TinkerWorld.wallHeads.forEach((type, block) -> blocks.add(block));")
+          replace_once(
+              """  private static AbstractCookingRecipe findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {\n    SingleRecipeInput input = new SingleRecipeInput(stack);\n    try {\n      // first, try the cached recipe\n      if (lastRecipe != null && lastRecipe.matches(input, level)) {\n        return lastRecipe;\n      }\n      // if that failed, do a recipe lookup\n      AbstractCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);\n      if (recipe != null) {\n        lastRecipe = recipe;\n      }\n      return recipe;""",
+              """  private static RecipeHolder<? extends AbstractCookingRecipe> findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {\n    SingleRecipeInput input = new SingleRecipeInput(stack);\n    try {\n      // first, try the cached recipe\n      if (lastRecipe != null && lastRecipe.value().matches(input, level)) {\n        return lastRecipe;\n      }\n      // if that failed, do a recipe lookup\n      RecipeHolder<? extends AbstractCookingRecipe> recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);\n      if (recipe != null) {\n        lastRecipe = recipe;\n      }\n      return recipe;""")
+
+          replace_once(
+              """        // lazily load a few pieces of data\n        AbstractCookingRecipe recipe = null;\n        ItemStack stack = null;""",
+              """        // lazily load a few pieces of data\n        RecipeHolder<? extends AbstractCookingRecipe> recipeHolder = null;\n        AbstractCookingRecipe recipe = null;\n        ItemStack stack = null;""")
+
+          replace_once(
+              """          stack = ItemStack.of(entry);\n          recipe = findRecipe(recipeType, stack, level, modifier.getId());\n          if (recipe != null) {\n            time = recipe.getCookingTime();\n          }""",
+              """          stack = ItemStack.parseOptional(level.registryAccess(), entry);\n          recipeHolder = findRecipe(recipeType, stack, level, modifier.getId());\n          if (recipeHolder != null) {\n            recipe = recipeHolder.value();\n            time = recipe.getCookingTime();\n          }""")
+
+          replace_once(
+              """              stack = ItemStack.of(entry);\n              if (!stack.isEmpty()) {\n                recipe = findRecipe(recipeType, stack, level, modifier.getId());\n              }""",
+              """              stack = ItemStack.parseOptional(level.registryAccess(), entry);\n              if (!stack.isEmpty()) {\n                recipeHolder = findRecipe(recipeType, stack, level, modifier.getId());\n                recipe = recipeHolder == null ? null : recipeHolder.value();\n              }""")
+
+          replace_once("ItemStack.isSameItemSameTags(currentResult, result)", "ItemStack.isSameItemSameComponents(currentResult, result)")
+          replace_once(
+              "TConstruct.LOG.error(\"Error getting result of recipe {} on modifier {}, this usually indicates a broken recipe\", recipe.getId(), modifier, e);",
+              "TConstruct.LOG.error(\"Error getting result of recipe {} on modifier {}, this usually indicates a broken recipe\", recipeHolder != null ? recipeHolder.id() : recipe, modifier, e);")
+
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Commit verified batch
@@ -59,9 +77,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tools/logic/ModifierEvents.java \
-                  src/main/java/slimeknights/tconstruct/world/TinkerWorld.java
-          git commit -m "Port arrow knockback and skull registration to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tools/modules/SmeltingModule.java
+          git commit -m "Port frypan smelting recipes and components to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
