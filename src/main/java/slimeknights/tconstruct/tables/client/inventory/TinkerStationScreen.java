@@ -259,7 +259,7 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
       textField.setEditable(false);
       textField.setValue("");
       textField.visible = false;
-    } else if (!textField.isEditable()) {
+    } else if (!textField.visible) {
       textField.setEditable(true);
       textField.setValue("");
       textField.visible = true;
@@ -635,7 +635,6 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
   @Override
   public void containerTick() {
     super.containerTick();
-    this.textField.tick();
   }
 
   @Override
