@@ -348,8 +348,8 @@ public final class TinkerWorld extends TinkerModule {
   @SubscribeEvent
   void addSkullBlockEntityBlocks(BlockEntityTypeAddBlocksEvent event) {
     java.util.List<Block> blocks = new java.util.ArrayList<>();
-    TinkerWorld.heads.forEach(blocks::add);
-    TinkerWorld.wallHeads.forEach(blocks::add);
+    TinkerWorld.heads.forEach((type, block) -> blocks.add(block));
+    TinkerWorld.wallHeads.forEach((type, block) -> blocks.add(block));
     event.modify(BlockEntityType.SKULL, blocks.toArray(Block[]::new));
   }
 

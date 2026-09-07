@@ -516,14 +516,8 @@ public class ModifierEvents {
             target.setArrowCount(target.getArrowCount() + 1);
           }
 
-          // knockback from punch
-          int knockback = arrow.getKnockback();
-          if (knockback > 0) {
-            Vec3 knockbackVec = arrow.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D).normalize().scale(knockback * 0.6D);
-            if (knockbackVec.lengthSqr() > 0.0D) {
-              target.push(knockbackVec.x, 0.1D, knockbackVec.z);
-            }
-          }
+          // use vanilla's 1.21 weapon/enchantment-aware arrow knockback path
+          arrow.doKnockback(target, damageSource);
 
           if (level instanceof ServerLevel serverLevel && livingOwner != null) {
             EnchantmentHelper.doPostAttackEffects(serverLevel, target, damageSource);
