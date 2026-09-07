@@ -8,7 +8,7 @@
     }
   ],
   "ingredient": {
-    "type": "forge:difference",
+    "type": "neoforge:difference",
     "base": {
       "tag": "minecraft:planks"
     },
