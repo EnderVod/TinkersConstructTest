@@ -28,6 +28,20 @@ jobs:
 
           root = Path('src/generated/resources/data/tconstruct')
 
+          def migrate_common_tags(value):
+              if isinstance(value, dict):
+                  out = {}
+                  for key, item in value.items():
+                      if key == 'tag' and isinstance(item, str) and item.startswith('forge:'):
+                          item = 'c:' + item[len('forge:'):]
+                      else:
+                          item = migrate_common_tags(item)
+                      out[key] = item
+                  return out
+              if isinstance(value, list):
+                  return [migrate_common_tags(item) for item in value]
+              return value
+
           # Tool building recipes are still under the pre-1.21 plural directory.
           # Mantle's 1.21 codec bridge also needs the recipe ID embedded in loadable recipes.
           old_building = root / 'recipes/tools/building'
@@ -39,14 +53,14 @@ jobs:
           for src in sorted(old_building.rglob('*.json')):
               dst = new_building / src.relative_to(old_building)
               dst.parent.mkdir(parents=True, exist_ok=True)
-              data = json.loads(src.read_text(encoding='utf-8'))
+              data = migrate_common_tags(json.loads(src.read_text(encoding='utf-8')))
               recipe_path = dst.relative_to(root / 'recipe').with_suffix('').as_posix()
               data['mantle_id'] = f'tconstruct:{recipe_path}'
               dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
               tool_count += 1
 
           # These six guide-book recipes are referenced directly by Mantle book pages.
-          # In 1.21 they need the singular recipe directory and vanilla result.id.
+          # Vanilla crafting recipes need result.id, while loadable TConstruct recipes need mantle_id.
           book_names = [
               'materials_and_you',
               'puny_smelting',
@@ -62,10 +76,13 @@ jobs:
               src = old_common / f'{name}.json'
               if not src.exists():
                   raise SystemExit(f'Missing book recipe source: {src}')
-              data = json.loads(src.read_text(encoding='utf-8'))
+              data = migrate_common_tags(json.loads(src.read_text(encoding='utf-8')))
               result = data.get('result')
+              recipe_type = data.get('type', '')
               if isinstance(result, dict) and 'item' in result and 'id' not in result:
                   result['id'] = result.pop('item')
+              if isinstance(recipe_type, str) and recipe_type.startswith('tconstruct:'):
+                  data['mantle_id'] = f'tconstruct:common/{name}'
               (new_common / f'{name}.json').write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
 
           # The automatic first Materials and You book is a conditional tick advancement
@@ -122,22 +139,34 @@ jobs:
           from pathlib import Path
           import json
           root = Path('src/generated/resources/data/tconstruct/recipe/common')
-          expected = {
+          vanilla = {
               'materials_and_you': 'tconstruct:materials_and_you',
               'puny_smelting': 'tconstruct:puny_smelting',
-              'mighty_smelting': 'tconstruct:mighty_smelting',
               'fantastic_foundry': 'tconstruct:fantastic_foundry',
               'tinkers_gadgetry': 'tconstruct:tinkers_gadgetry',
+          }
+          custom = {
+              'mighty_smelting': 'tconstruct:mighty_smelting',
               'encyclopedia': 'tconstruct:encyclopedia',
           }
-          for name, item in expected.items():
+          for name, item in vanilla.items():
               path = root / f'{name}.json'
               data = json.loads(path.read_text(encoding='utf-8'))
-              result = data.get('result', {})
-              if result.get('id') != item:
-                  raise SystemExit(f'{path}: expected result.id {item}, got {result!r}')
-              if 'item' in result:
-                  raise SystemExit(f'{path}: stale result.item remains')
+              result = data.get('result')
+              if not isinstance(result, dict) or result.get('id') != item or 'item' in result:
+                  raise SystemExit(f'{path}: bad 1.21 vanilla result {result!r}')
+          for name, item in custom.items():
+              path = root / f'{name}.json'
+              data = json.loads(path.read_text(encoding='utf-8'))
+              if data.get('result') != item:
+                  raise SystemExit(f'{path}: unexpected custom result {data.get("result")!r}')
+              if data.get('mantle_id') != f'tconstruct:common/{name}':
+                  raise SystemExit(f'{path}: missing/incorrect mantle_id')
+          for path in root.glob('*.json'):
+              data = json.loads(path.read_text(encoding='utf-8'))
+              text = json.dumps(data)
+              if '"tag": "forge:' in text:
+                  raise SystemExit(f'{path}: stale Forge tag remains')
           PY
 
           adv="$root/advancement/internal/starting_book.json"
