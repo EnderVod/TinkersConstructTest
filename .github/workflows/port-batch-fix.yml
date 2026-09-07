@@ -1,4 +1,4 @@
-name: Tinkers one-shot table APIs 1.21 batch
+name: Tinkers one-shot crafting input 1.21 batch
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified table migrations
+      - name: Apply verified crafting input migrations
         shell: bash
         run: |
           python - <<'PY'
@@ -31,60 +31,72 @@ jobs:
               text = path.read_text(encoding="utf-8")
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{path}: expected exactly one match, found {count}: {old[:160]!r}")
+                  raise RuntimeError(f"{path}: expected exactly one match, found {count}: {old[:180]!r}")
               path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          # Block-entity capabilities moved from per-BE LazyOptional lookups to Level capability queries.
-          tabbed = Path("src/main/java/slimeknights/tconstruct/tables/menu/TabbedContainerMenu.java")
-          replace_once(tabbed,
-              "import net.minecraftforge.common.capabilities.ForgeCapabilities;",
-              "import net.neoforged.neoforge.capabilities.Capabilities;")
-          replace_once(tabbed,
-              "import net.neoforged.neoforge.items.IItemHandlerModifiable;",
-              "import net.neoforged.neoforge.items.IItemHandler;\nimport net.neoforged.neoforge.items.IItemHandlerModifiable;")
-          replace_once(tabbed,
-              "int invSlots = inventoryTE.getCapability(ForgeCapabilities.ITEM_HANDLER, accessDir).orElse(EmptyItemHandler.INSTANCE).getSlots();",
-              "IItemHandler handler = world.getCapability(Capabilities.ItemHandler.BLOCK, inventoryTE.getBlockPos(), inventoryTE.getBlockState(), inventoryTE, accessDir);\n        int invSlots = (handler == null ? EmptyItemHandler.INSTANCE : handler).getSlots();")
-          replace_once(tabbed,
-              "return tileEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, direction).filter(cap -> cap instanceof IItemHandlerModifiable).isPresent();",
-              "Level level = tileEntity.getLevel();\n    return level != null && level.getCapability(Capabilities.ItemHandler.BLOCK, tileEntity.getBlockPos(), tileEntity.getBlockState(), tileEntity, direction) instanceof IItemHandlerModifiable;")
-
-          # RecipeManager now returns RecipeHolder.
-          wrapper = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/TinkerStationContainerWrapper.java")
+          wrapper = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/CraftingContainerWrapper.java")
           replace_once(wrapper,
-              "Optional<MaterialRecipe> newRecipe = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), inv, world);",
-              "Optional<MaterialRecipe> newRecipe = world.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MATERIAL.get(), inv, world).map(holder -> holder.value());")
+              "import net.minecraft.world.item.ItemStack;",
+              "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.crafting.CraftingInput;")
+          replace_once(wrapper,
+              """  @Override\n  public List<ItemStack> getItems() {""",
+              """  /** Creates the immutable 1.21 recipe input snapshot for the current grid. */\n  public CraftingInput asInput() {\n    return CraftingInput.of(width, height, getItems());\n  }\n\n  @Override\n  public List<ItemStack> getItems() {""")
 
-          # Preserve Tinkers' custom enlarged render bounds, but it is no longer a vanilla override in 1.21.
-          retextured = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/RetexturedTableBlockEntity.java")
-          replace_once(retextured,
-              """  @Override\n  public AABB getRenderBoundingBox() {\n    return new AABB(worldPosition, worldPosition.offset(1, 2, 1));\n  }""",
-              """  public AABB getRenderBoundingBox() {\n    return new AABB(\n      worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(),\n      worldPosition.getX() + 1, worldPosition.getY() + 2, worldPosition.getZ() + 1);\n  }""")
-
-          station = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/TinkerStationBlockEntity.java")
+          station = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/CraftingStationBlockEntity.java")
+          replace_once(station,
+              "import net.minecraft.core.NonNullList;",
+              "import net.minecraft.core.NonNullList;\nimport net.minecraft.resources.ResourceLocation;")
+          replace_once(station,
+              "import net.minecraft.world.item.crafting.CraftingRecipe;",
+              "import net.minecraft.world.item.crafting.CraftingInput;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;")
           replace_once(station, "import net.minecraftforge.common.util.LazyOptional;\n", "")
           replace_once(station, "import net.neoforged.neoforge.items.ItemHandlerHelper;\n", "")
           replace_once(station,
-              "    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n",
-              "")
+              """  @Nullable\n  private CraftingRecipe lastRecipe;""",
+              """  @Nullable\n  private CraftingRecipe lastRecipe;\n  /** Recipe ID is stored separately in 1.21 as IDs belong to RecipeHolder. */\n  @Nullable\n  private ResourceLocation lastRecipeId;""")
+          replace_once(station, "    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "")
           replace_once(station,
-              "recipe = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).orElse(null);",
-              "recipe = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).map(holder -> holder.value()).orElse(null);")
+              """  @Override\n  public AABB getRenderBoundingBox() {\n    return new AABB(worldPosition, worldPosition.offset(1, 2, 1));\n  }""",
+              """  @Override\n  public AABB getRenderBoundingBox() {\n    return new AABB(\n      worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(),\n      worldPosition.getX() + 1, worldPosition.getY() + 2, worldPosition.getZ() + 1);\n  }""")
           replace_once(station,
-              "ForgeEventFactory.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);",
-              "EventHooks.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);")
+              """      // first, try the cached recipe\n      CommonHooks.setCraftingPlayer(player);\n      CraftingRecipe recipe = lastRecipe;\n      // if it does not match, find a new recipe\n      // note we intentionally have no player access during matches, that could lead to an unstable recipe\n      if (recipe == null || !recipe.matches(this.craftingInventory, this.level)) {\n        recipe = manager.getRecipeFor(RecipeType.CRAFTING, this.craftingInventory, this.level).orElse(null);\n      }\n\n      // if we have a recipe, fetch its result\n      if (recipe != null) {\n        result = recipe.assemble(this.craftingInventory, level.registryAccess());\n\n        // sync if the recipe is different\n        if (recipe != lastRecipe) {\n          this.lastRecipe = recipe;\n          this.syncToRelevantPlayers(this::syncRecipe);\n        }\n      }""",
+              """      // first, try the cached recipe against a 1.21 CraftingInput snapshot\n      CommonHooks.setCraftingPlayer(player);\n      CraftingInput input = craftingInventory.asInput();\n      CraftingRecipe recipe = lastRecipe;\n      ResourceLocation recipeId = lastRecipeId;\n      // if it does not match, find a new recipe\n      // note we intentionally have no player access during matches, that could lead to an unstable recipe\n      if (recipe == null || !recipe.matches(input, this.level)) {\n        RecipeHolder<CraftingRecipe> holder = manager.getRecipeFor(RecipeType.CRAFTING, input, this.level).orElse(null);\n        recipe = holder == null ? null : holder.value();\n        recipeId = holder == null ? null : holder.id();\n      }\n\n      // if we have a recipe, fetch its result\n      if (recipe != null) {\n        result = recipe.assemble(input, level.registryAccess());\n\n        // sync if the recipe is different\n        if (recipe != lastRecipe || !java.util.Objects.equals(recipeId, lastRecipeId)) {\n          this.lastRecipe = recipe;\n          this.lastRecipeId = recipeId;\n          this.syncToRelevantPlayers(this::syncRecipe);\n        }\n      }""")
           replace_once(station,
-              "this.setItem(TINKER_SLOT, ItemHandlerHelper.copyStackWithSize(tinkerable, tinkerable.getCount() - shrinkToolSlot));",
-              "this.setItem(TINKER_SLOT, tinkerable.copyWithCount(tinkerable.getCount() - shrinkToolSlot));")
+              """    else if (this.lastRecipe != null && this.lastRecipe.matches(this.craftingInventory, this.level)) {\n      CommonHooks.setCraftingPlayer(player);\n      result = this.lastRecipe.assemble(this.craftingInventory, level.registryAccess());\n      CommonHooks.setCraftingPlayer(null);\n    }""",
+              """    else if (this.lastRecipe != null) {\n      CommonHooks.setCraftingPlayer(player);\n      CraftingInput input = craftingInventory.asInput();\n      if (this.lastRecipe.matches(input, this.level)) {\n        result = this.lastRecipe.assemble(input, level.registryAccess());\n      }\n      CommonHooks.setCraftingPlayer(null);\n    }""")
+          replace_once(station,
+              """    // try matches again now that we have player access\n    if (recipe == null || this.level == null || !recipe.matches(craftingInventory, level)) {""",
+              """    // try matches again now that we have player access\n    CraftingInput input = craftingInventory.asInput();\n    if (recipe == null || this.level == null || !recipe.matches(input, level)) {""")
+          replace_once(station,
+              "ItemStack result = recipe.assemble(craftingInventory, level.registryAccess());",
+              "ItemStack result = recipe.assemble(input, level.registryAccess());")
+          replace_once(station,
+              "player.awardRecipes(Collections.singleton(recipe));",
+              """if (lastRecipeId != null) {\n        player.awardRecipesByKey(Collections.singletonList(lastRecipeId));\n      }""")
+          replace_once(station,
+              "ForgeEventFactory.firePlayerCraftingEvent(player, result, this.craftingInventory);",
+              "EventHooks.firePlayerCraftingEvent(player, result, this.craftingInventory);")
+          replace_once(station,
+              "NonNullList<ItemStack> remaining = recipe.getRemainingItems(craftingInventory);",
+              "CraftingInput input = craftingInventory.asInput();\n    NonNullList<ItemStack> remaining = recipe.getRemainingItems(input);")
+          replace_once(station,
+              "ItemStack.isSameItemSameTags(original, newStack)",
+              "ItemStack.isSameItemSameComponents(original, newStack)")
+          replace_once(station,
+              "ItemHandlerHelper.copyStackWithSize(original, original.getCount() - 1)",
+              "original.copyWithCount(original.getCount() - 1)")
+          replace_once(station,
+              """    if (this.lastRecipe != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer) {\n      TinkerNetwork.getInstance().sendTo(new UpdateCraftingRecipePacket(this.worldPosition, this.lastRecipe), (ServerPlayer) player);\n    }""",
+              """    if (this.lastRecipe != null && this.lastRecipeId != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer) {\n      TinkerNetwork.getInstance().sendTo(new UpdateCraftingRecipePacket(this.worldPosition, this.lastRecipeId), (ServerPlayer) player);\n    }""")
+          replace_once(station,
+              """  public void updateRecipe(CraftingRecipe recipe) {\n    this.lastRecipe = recipe;\n    this.craftingResult.clearContent();\n  }""",
+              """  public void updateRecipe(CraftingRecipe recipe, ResourceLocation recipeId) {\n    this.lastRecipe = recipe;\n    this.lastRecipeId = recipeId;\n    this.craftingResult.clearContent();\n  }""")
 
-          # Mantle 1.21 exposes the inventory handler directly; register the table block capabilities once.
-          tconstruct = Path("src/main/java/slimeknights/tconstruct/TConstruct.java")
-          replace_once(tconstruct,
-              "import slimeknights.tconstruct.common.TinkerModule;",
-              "import slimeknights.mantle.block.entity.InventoryBlockEntity;\nimport slimeknights.tconstruct.common.TinkerModule;")
-          replace_once(tconstruct,
-              """  static void registerCapabilities(final RegisterCapabilitiesEvent event) {\n    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());""",
-              """  static void registerCapabilities(final RegisterCapabilitiesEvent event) {\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.craftingStationTile.get());\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.tinkerStationTile.get());\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.partBuilderTile.get());\n    InventoryBlockEntity.registerItemHandler(event, TinkerTables.modifierWorktableTile.get());\n\n    event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());""")
+          packet = Path("src/main/java/slimeknights/tconstruct/tables/network/UpdateCraftingRecipePacket.java")
+          replace_once(packet,
+              """  public UpdateCraftingRecipePacket(BlockPos pos, CraftingRecipe recipe) {\n    this.pos = pos;\n    this.recipe = recipe.getId();\n  }""",
+              """  public UpdateCraftingRecipePacket(BlockPos pos, ResourceLocation recipe) {\n    this.pos = pos;\n    this.recipe = recipe;\n  }""")
+          replace_once(packet, "be.updateRecipe(recipe);", "be.updateRecipe(recipe, this.recipe);")
           PY
 
       - name: Commit verified batch
@@ -96,12 +108,10 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/TConstruct.java \
-                  src/main/java/slimeknights/tconstruct/tables/menu/TabbedContainerMenu.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/TinkerStationContainerWrapper.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/entity/table/RetexturedTableBlockEntity.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/entity/table/TinkerStationBlockEntity.java
-          git commit -m "Port table capabilities and recipes to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/CraftingContainerWrapper.java \
+                  src/main/java/slimeknights/tconstruct/tables/block/entity/table/CraftingStationBlockEntity.java \
+                  src/main/java/slimeknights/tconstruct/tables/network/UpdateCraftingRecipePacket.java
+          git commit -m "Port crafting station inputs and recipe IDs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
