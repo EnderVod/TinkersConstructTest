@@ -35,7 +35,7 @@ public class Pattern extends ResourceId {
    * @return  Translation key
    */
   public String getTranslationKey() {
-    return Util.makeTranslationKey("pattern", location());
+    return Util.makeTranslationKey("pattern", this);
   }
 
   /**
