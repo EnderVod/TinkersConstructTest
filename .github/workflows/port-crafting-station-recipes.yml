@@ -1,0 +1,128 @@
+name: Tinkers Crafting Station Recipe Migration
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-crafting-station-recipes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Migrate Crafting Station resources to 1.21.1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          old_root = Path('src/generated/resources/data/tconstruct/recipes/tables')
+          new_root = Path('src/generated/resources/data/tconstruct/recipe/tables')
+          new_root.mkdir(parents=True, exist_ok=True)
+
+          names = (
+              'crafting_station',
+              'crafting_station_from_logs',
+              'crafting_station_from_tables',
+          )
+
+          def migrate(value):
+              if isinstance(value, dict):
+                  out = {}
+                  for key, child in value.items():
+                      if key == 'item' and value is not None:
+                          # Only recipe result stacks changed item -> id in 1.21; ingredient item remains valid.
+                          out[key] = migrate(child)
+                      else:
+                          out[key] = migrate(child)
+                  return out
+              if isinstance(value, list):
+                  return [migrate(v) for v in value]
+              return value
+
+          for name in names:
+              old = old_root / f'{name}.json'
+              data = json.loads(old.read_text(encoding='utf-8'))
+
+              result = data.get('result')
+              if not isinstance(result, dict) or 'item' not in result:
+                  raise SystemExit(f'{old}: expected legacy result.item')
+              result['id'] = result.pop('item')
+              if result.get('id') != 'tconstruct:crafting_station':
+                  raise SystemExit(f'{old}: unexpected result {result!r}')
+
+              def rewrite(node):
+                  if isinstance(node, dict):
+                      for key, value in list(node.items()):
+                          if key == 'type' and value == 'forge:difference':
+                              node[key] = 'neoforge:difference'
+                          elif key == 'tag' and value == 'forge:workbenches':
+                              node[key] = 'c:workbenches'
+                          else:
+                              rewrite(value)
+                  elif isinstance(node, list):
+                      for value in node:
+                          rewrite(value)
+
+              rewrite(data)
+              new = new_root / f'{name}.json'
+              new.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+              print(f'Migrated {old} -> {new}')
+
+          # The from_tables recipe depends on this local item tag, which also moved to singular tags/item in 1.21.
+          old_tag = Path('src/generated/resources/data/tconstruct/tags/items/tables.json')
+          new_tag = Path('src/generated/resources/data/tconstruct/tags/item/tables.json')
+          new_tag.parent.mkdir(parents=True, exist_ok=True)
+          tag_data = json.loads(old_tag.read_text(encoding='utf-8'))
+          expected_tables = {
+              'tconstruct:crafting_station',
+              'tconstruct:part_builder',
+              'tconstruct:tinker_station',
+          }
+          if not expected_tables.issubset(set(tag_data.get('values', []))):
+              raise SystemExit('tables item tag is missing core table entries')
+          new_tag.write_text(json.dumps(tag_data, indent=2) + '\n', encoding='utf-8')
+
+          # Exact validations for the user-visible missing recipe.
+          normal = json.loads((new_root / 'crafting_station.json').read_text(encoding='utf-8'))
+          ingredient = normal['key']['w']
+          if ingredient.get('type') != 'neoforge:difference':
+              raise SystemExit('Crafting Station recipe does not use neoforge:difference')
+          if ingredient.get('base', {}).get('tag') != 'c:workbenches':
+              raise SystemExit('Crafting Station recipe does not use c:workbenches')
+          for name in names:
+              data = json.loads((new_root / f'{name}.json').read_text(encoding='utf-8'))
+              if data.get('result', {}).get('id') != 'tconstruct:crafting_station':
+                  raise SystemExit(f'{name}: missing 1.21 result.id')
+              if 'item' in data.get('result', {}):
+                  raise SystemExit(f'{name}: legacy result.item remains')
+          if not new_tag.is_file():
+              raise SystemExit('Singular tags/item/tables.json was not created')
+          PY
+
+      - name: Commit Crafting Station migration
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo 'No Crafting Station resource changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/data/tconstruct/recipe/tables/crafting_station.json \
+                  src/generated/resources/data/tconstruct/recipe/tables/crafting_station_from_logs.json \
+                  src/generated/resources/data/tconstruct/recipe/tables/crafting_station_from_tables.json \
+                  src/generated/resources/data/tconstruct/tags/item/tables.json
+          git commit -m 'Migrate Crafting Station recipes to 1.21'
+          git push origin HEAD:1.21.1-neoforge
