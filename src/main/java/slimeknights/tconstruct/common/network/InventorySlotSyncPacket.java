@@ -3,6 +3,7 @@ package slimeknights.tconstruct.common.network;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -23,14 +24,14 @@ public class InventorySlotSyncPacket implements IThreadsafePacket {
   }
 
   public InventorySlotSyncPacket(FriendlyByteBuf buffer) {
-    this.itemStack = buffer.readItem();
+    this.itemStack = ItemStack.OPTIONAL_STREAM_CODEC.decode((RegistryFriendlyByteBuf) buffer);
     this.slot = buffer.readShort();
     this.pos = buffer.readBlockPos();
   }
 
   @Override
   public void encode(FriendlyByteBuf packetBuffer) {
-    packetBuffer.writeItem(this.itemStack);
+    ItemStack.OPTIONAL_STREAM_CODEC.encode((RegistryFriendlyByteBuf) packetBuffer, this.itemStack);
     packetBuffer.writeShort(this.slot);
     packetBuffer.writeBlockPos(this.pos);
   }

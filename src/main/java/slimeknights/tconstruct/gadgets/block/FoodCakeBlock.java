@@ -39,7 +39,7 @@ public class FoodCakeBlock extends CakeBlock {
 
   @Override
   public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-    ContainerFoodItem.addEffectTooltip(food, tooltip);
+    ContainerFoodItem.addEffectTooltip(food, tooltip, context.tickRate());
   }
 
   @Override
