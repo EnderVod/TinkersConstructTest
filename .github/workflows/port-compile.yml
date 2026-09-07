@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Verify walking modifier previous-position migration through 87c530b4.
+# Verify Minecraft 1.21 equipment-slot cache migration through 8c0908b0.
 on:
   push:
     branches:
@@ -74,6 +74,21 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew compileJava --no-daemon --stacktrace 2>&1 | tee compile.log
+
+      - name: Verify dynamic EquipmentSlot caches
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          patterns = ('new boolean[6]', 'new IToolStackView[6]', 'new int[6]', 'new UUID[6]', 'new float[6]')
+          bad = []
+          for path in Path('src/main/java').rglob('*.java'):
+              text = path.read_text(encoding='utf-8')
+              if 'getFilterFlag()' in text and any(pattern in text for pattern in patterns):
+                  bad.append(str(path))
+          if bad:
+              raise SystemExit('Hard-coded six-slot EquipmentSlot caches remain:\n' + '\n'.join(bad))
+          print('No hard-coded six-slot caches remain in getFilterFlag()-indexed classes.')
+          PY
 
       - name: Build compact compiler summary
         if: always()
