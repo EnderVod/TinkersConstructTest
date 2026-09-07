@@ -1,4 +1,4 @@
-name: Tinkers one-shot worldgen datagen 1.21 batch
+name: Tinkers one-shot station recipe IDs 1.21 batch
 
 on:
   push:
@@ -21,52 +21,57 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified worldgen and recipe-builder migrations
+      - name: Apply verified Tinker Station recipe ID migration
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new, label):
-              text = path.read_text(encoding="utf-8")
+          def replace_once(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{path}: {label}: expected one match, found {count}: {old[:180]!r}")
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise RuntimeError(f"{label}: expected one match, found {count}: {old[:200]!r}")
+              return text.replace(old, new, 1)
 
-          at = Path("src/main/resources/META-INF/port-accesstransformer.cfg")
-          text = at.read_text(encoding="utf-8")
-          marker = "public net.minecraft.world.item.context.BlockPlaceContext replaceClicked\n"
-          if text.count(marker) != 1:
-              raise RuntimeError("Expected BlockPlaceContext AT anchor exactly once")
-          additions = (
-              "\n# HugeFungusFeature kept these generation helpers in 1.21.1 but made them private. Tinkers' slime\n"
-              "# fungus only changes base validation/height selection, then deliberately delegates stem/hat placement\n"
-              "# to vanilla so behavior stays identical to the active Minecraft implementation.\n"
-              "public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeStem(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V\n"
-              "public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeHat(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V\n"
-          )
-          if "HugeFungusFeature placeStem" in text or "HugeFungusFeature placeHat" in text:
-              raise RuntimeError("Huge fungus AT entries already present unexpectedly")
-          at.write_text(text.replace(marker, marker + additions, 1), encoding="utf-8")
-
-          path = Path("src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationDamagingRecipeBuilder.java")
-          replace_once(
-              path,
-              "consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));",
-              "consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));",
-              "Mantle LoadableFinishedRecipe constructor")
-
-          path = Path("src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationPartSwappingBuilder.java")
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/TinkerStationBlockEntity.java")
           text = path.read_text(encoding="utf-8")
-          old = "consumer.accept(new LoadableFinishedRecipe<>(new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));"
-          if text.count(old) != 1:
-              raise RuntimeError("Tool material swapping finished recipe constructor mismatch")
-          text = text.replace(old, "consumer.accept(new LoadableFinishedRecipe<>(id, new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));", 1)
-          old = "consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));"
-          if text.count(old) != 1:
-              raise RuntimeError("Part swapping finished recipe constructor mismatch")
-          text = text.replace(old, "consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));", 1)
+          text = replace_once(text, "import net.minecraft.network.chat.Component;", "import net.minecraft.network.chat.Component;\nimport net.minecraft.resources.ResourceLocation;", "ResourceLocation import")
+          text = replace_once(
+              text,
+              """  /** Last crafted crafting recipe */\n  @Nullable @Getter\n  private ITinkerStationRecipe lastRecipe;""",
+              """  /** Last crafted crafting recipe */\n  @Nullable @Getter\n  private ITinkerStationRecipe lastRecipe;\n  /** 1.21 stores recipe identity on RecipeHolder rather than Recipe. */\n  @Nullable\n  private ResourceLocation lastRecipeId;""",
+              "cached recipe ID field")
+          text = replace_once(
+              text,
+              """      // first, try the cached recipe\n      ITinkerStationRecipe recipe = lastRecipe;\n      // if it does not match, find a new recipe\n      if (recipe == null || !recipe.matches(this.inventoryWrapper, this.level)) {\n        recipe = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).map(holder -> holder.value()).orElse(null);\n      }\n\n      // if we have a recipe, fetch its result\n      boolean needsSync = true;\n      if (recipe != null) {\n        // sync if the recipe is different\n        if (lastRecipe != recipe) {\n          this.lastRecipe = recipe;\n          this.syncToRelevantPlayers(this::syncRecipe);\n          needsSync = false;\n        }""",
+              """      // first, try the cached recipe and its holder-owned ID\n      ITinkerStationRecipe recipe = lastRecipe;\n      ResourceLocation recipeId = lastRecipeId;\n      // if it does not match, find a new holder so we retain both recipe value and its 1.21 ID\n      if (recipe == null || !recipe.matches(this.inventoryWrapper, this.level)) {\n        var holder = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).orElse(null);\n        if (holder != null) {\n          recipe = holder.value();\n          recipeId = holder.id();\n        } else {\n          recipe = null;\n          recipeId = null;\n        }\n      }\n\n      // if we have a recipe, fetch its result\n      boolean needsSync = true;\n      if (recipe != null) {\n        // sync if either the recipe object or holder identity changed\n        if (lastRecipe != recipe || !Objects.equals(lastRecipeId, recipeId)) {\n          this.lastRecipe = recipe;\n          this.lastRecipeId = recipeId;\n          this.syncToRelevantPlayers(this::syncRecipe);\n          needsSync = false;\n        }""",
+              "retain RecipeHolder ID")
+          text = replace_once(
+              text,
+              """    if (this.lastRecipe != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer server) {\n      TinkerNetwork.getInstance().sendTo(new UpdateTinkerStationRecipePacket(this.worldPosition, this.lastRecipe), server);\n    }""",
+              """    if (this.lastRecipe != null && this.lastRecipeId != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer server) {\n      TinkerNetwork.getInstance().sendTo(new UpdateTinkerStationRecipePacket(this.worldPosition, this.lastRecipeId), server);\n    }""",
+              "sync holder ID")
+          text = replace_once(
+              text,
+              """  public void updateRecipe(ITinkerStationRecipe recipe) {\n    this.lastRecipe = recipe;\n    this.craftingResult.clearContent();\n  }""",
+              """  public void updateRecipe(ITinkerStationRecipe recipe, @Nullable ResourceLocation recipeId) {\n    this.lastRecipe = recipe;\n    this.lastRecipeId = recipeId;\n    this.craftingResult.clearContent();\n  }\n\n  /** Compatibility overload for callers that do not own a RecipeHolder ID. */\n  public void updateRecipe(ITinkerStationRecipe recipe) {\n    updateRecipe(recipe, null);\n  }""",
+              "client recipe ID update")
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("src/main/java/slimeknights/tconstruct/tables/network/UpdateTinkerStationRecipePacket.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              """  public UpdateTinkerStationRecipePacket(BlockPos pos, ITinkerStationRecipe recipe) {\n    this.pos = pos;\n    this.recipe = recipe.getId();\n  }""",
+              """  public UpdateTinkerStationRecipePacket(BlockPos pos, ResourceLocation recipe) {\n    this.pos = pos;\n    this.recipe = recipe;\n  }""",
+              "packet takes holder ID")
+          old = "te.updateRecipe(recipe);"
+          count = text.count(old)
+          if count != 2:
+              raise RuntimeError(f"Expected two client recipe updates, found {count}")
+          text = text.replace(old, "te.updateRecipe(recipe, packet.recipe);", 2)
+          if "recipe.getId()" in text:
+              raise RuntimeError("Obsolete recipe.getId() remains in station sync packet")
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -79,10 +84,9 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/resources/META-INF/port-accesstransformer.cfg \
-                  src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationDamagingRecipeBuilder.java \
-                  src/main/java/slimeknights/tconstruct/tables/recipe/TinkerStationPartSwappingBuilder.java
-          git commit -m "Port slime fungus access and recipe builders to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/block/entity/table/TinkerStationBlockEntity.java \
+                  src/main/java/slimeknights/tconstruct/tables/network/UpdateTinkerStationRecipePacket.java
+          git commit -m "Port Tinker Station recipe holder IDs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
