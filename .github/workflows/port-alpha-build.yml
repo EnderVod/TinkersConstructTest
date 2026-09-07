@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through b30674ac: 1.21 Slot x/y AT and Crafting Station resources compile green.
+# Runtime source validated through ca64b7e9: named 1.21 Slot x/y AT and common Crafting Station tags compile green.
 on:
   push:
     branches:
