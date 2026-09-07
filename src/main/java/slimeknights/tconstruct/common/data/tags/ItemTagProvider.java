@@ -127,7 +127,7 @@ import static slimeknights.tconstruct.common.TinkerTags.Items.WORN_ARMOR;
 @SuppressWarnings({"unchecked", "removal"})
 public class ItemTagProvider extends ItemTagsProvider {
   /** Twlight forest uncrafting table blacklist */
-  private static final TagKey<Item> BANNED_UNCRAFTABLE = ItemTags.create(new ResourceLocation("twilightforest", "banned_uncraftables"));
+  private static final TagKey<Item> BANNED_UNCRAFTABLE = ItemTags.create(ResourceLocation.fromNamespaceAndPath("twilightforest", "banned_uncraftables"));
   private final Function<ResourceLocation,IntrinsicTagAppender<Item>> MAKE_TAG = tag -> tag(ItemTags.create(tag));
 
   public ItemTagProvider(PackOutput output, CompletableFuture<Provider> lookupProvider, CompletableFuture<TagLookup<Block>> blockTagProvider, ExistingFileHelper existingFileHelper) {
@@ -441,13 +441,13 @@ public class ItemTagProvider extends ItemTagsProvider {
     this.tag(UNSWAPPABLE_TOOLS).addTag(UNSWAPPABLE);
     this.tag(UNSWAPPABLE_PARTS).addTag(UNSWAPPABLE);
     // headlight support
-    this.tag(ItemTags.create(new ResourceLocation("headlight", "headlight_helmets"))).addTag(HELMETS);
+    this.tag(ItemTags.create(ResourceLocation.fromNamespaceAndPath("headlight", "headlight_helmets"))).addTag(HELMETS);
 
     // general
     this.tag(MULTIPART_TOOL).addTag(SINGLEPART_TOOL);
     this.tag(MODIFIABLE).addTags(MULTIPART_TOOL, DURABILITY, MELEE, HARVEST, RANGED, AMMO, AOE, HELD, BONUS_SLOTS);
     // disable parry mod on our items, we have our own modifier for that
-    this.tag(TagKey.create(Registries.ITEM, new ResourceLocation("parry", "excluded_shields"))).addTag(HELD);
+    this.tag(TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("parry", "excluded_shields"))).addTag(HELD);
 
     // kamas are a shear type, when broken we don't pass it to loot tables
     this.tag(Tags.Items.SHEARS).add(TinkerTools.kama.get());
@@ -682,7 +682,7 @@ public class ItemTagProvider extends ItemTagsProvider {
       .add(2, true, ie.apply("hammer"))
       .crowbar().excavatorSpikeMaul();
     moltenTools(TinkerFluids.moltenGold).minecraft("golden")
-      .add(1, true,  new ResourceLocation("farmersdelight", "golden_knife"))
+      .add(1, true,  ResourceLocation.fromNamespaceAndPath("farmersdelight", "golden_knife"))
       .add(4, false, new ResourceLocation("golden_boots"))
       .add(4, true,  new ResourceLocation(tf, "gold_minotaur_axe"));
     moltenTools(TinkerFluids.moltenSteel).toolTags().leggingsPaxel().crowbar()
