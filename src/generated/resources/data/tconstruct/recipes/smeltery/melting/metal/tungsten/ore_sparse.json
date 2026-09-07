@@ -49,7 +49,7 @@
     {
       "conditions": [
         {
-          "type": "forge:true"
+          "type": "neoforge:true"
         }
       ],
       "recipe": {

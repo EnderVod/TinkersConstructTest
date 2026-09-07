@@ -38,7 +38,7 @@
       },
       "conditions": [
         {
-          "type": "forge:mod_loaded",
+          "type": "neoforge:mod_loaded",
           "modid": "ceramics"
         }
       ]
@@ -81,7 +81,7 @@
       },
       "conditions": [
         {
-          "type": "forge:true"
+          "type": "neoforge:true"
         }
       ]
     }

@@ -1,16 +1,16 @@
 {
   "type": "forge:add_features",
   "biomes": {
-    "type": "forge:and",
+    "type": "neoforge:and",
     "values": [
       {
-        "type": "forge:or",
+        "type": "neoforge:or",
         "values": [
           "#minecraft:is_end"
         ]
       },
       {
-        "type": "forge:not",
+        "type": "neoforge:not",
         "value": "minecraft:the_end"
       }
     ]

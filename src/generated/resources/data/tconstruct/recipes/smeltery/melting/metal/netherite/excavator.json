@@ -9,7 +9,7 @@
   ],
   "conditions": [
     {
-      "type": "forge:item_exists",
+      "type": "neoforge:item_exists",
       "item": "tools_complement:netherite_excavator"
     }
   ],
