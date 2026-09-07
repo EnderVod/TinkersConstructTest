@@ -1,0 +1,164 @@
+name: Tinkers ResourceLocation Sweep
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-resourcelocation-sweep.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Migrate legacy ResourceLocation constructors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          marker = 'new ResourceLocation('
+          import_marker = 'import net.minecraft.resources.ResourceLocation;'
+
+          def split_args(body):
+              args = []
+              start = 0
+              paren = bracket = brace = 0
+              in_string = in_char = False
+              escape = False
+              for i, ch in enumerate(body):
+                  if escape:
+                      escape = False
+                      continue
+                  if (in_string or in_char) and ch == '\\':
+                      escape = True
+                      continue
+                  if in_string:
+                      if ch == '"': in_string = False
+                      continue
+                  if in_char:
+                      if ch == "'": in_char = False
+                      continue
+                  if ch == '"':
+                      in_string = True
+                  elif ch == "'":
+                      in_char = True
+                  elif ch == '(':
+                      paren += 1
+                  elif ch == ')':
+                      paren -= 1
+                  elif ch == '[':
+                      bracket += 1
+                  elif ch == ']':
+                      bracket -= 1
+                  elif ch == '{':
+                      brace += 1
+                  elif ch == '}':
+                      brace -= 1
+                  elif ch == ',' and paren == 0 and bracket == 0 and brace == 0:
+                      args.append(body[start:i].strip())
+                      start = i + 1
+              args.append(body[start:].strip())
+              return args
+
+          def find_close(text, open_pos):
+              depth = 1
+              in_string = in_char = False
+              escape = False
+              i = open_pos + 1
+              while i < len(text):
+                  ch = text[i]
+                  if escape:
+                      escape = False
+                  elif (in_string or in_char) and ch == '\\':
+                      escape = True
+                  elif in_string:
+                      if ch == '"': in_string = False
+                  elif in_char:
+                      if ch == "'": in_char = False
+                  elif ch == '"':
+                      in_string = True
+                  elif ch == "'":
+                      in_char = True
+                  elif ch == '(':
+                      depth += 1
+                  elif ch == ')':
+                      depth -= 1
+                      if depth == 0:
+                          return i
+                  i += 1
+              return -1
+
+          changed = []
+          total = 0
+          root = Path('src/main/java')
+          for path in root.rglob('*.java'):
+              original = path.read_text(encoding='utf-8')
+              if import_marker not in original or marker not in original:
+                  continue
+
+              text = original
+              cursor = 0
+              replacements = []
+              while True:
+                  start = text.find(marker, cursor)
+                  if start < 0:
+                      break
+                  open_pos = start + len(marker) - 1
+                  close_pos = find_close(text, open_pos)
+                  if close_pos < 0:
+                      raise RuntimeError(f'Unbalanced ResourceLocation constructor in {path}')
+                  body = text[open_pos + 1:close_pos]
+                  args = split_args(body)
+                  if len(args) == 2:
+                      replacement = f'ResourceLocation.fromNamespaceAndPath({args[0]}, {args[1]})'
+                  elif len(args) == 1:
+                      replacement = f'ResourceLocation.parse({args[0]})'
+                  else:
+                      raise RuntimeError(f'Unexpected ResourceLocation constructor with {len(args)} args in {path}: {body}')
+                  replacements.append((start, close_pos + 1, replacement))
+                  cursor = close_pos + 1
+
+              for start, end, replacement in reversed(replacements):
+                  text = text[:start] + replacement + text[end:]
+              if replacements:
+                  path.write_text(text, encoding='utf-8')
+                  changed.append((str(path), len(replacements)))
+                  total += len(replacements)
+
+          print(f'Migrated {total} ResourceLocation constructor call(s) across {len(changed)} file(s).')
+          for path, count in changed:
+              print(f'  {count:3d}  {path}')
+
+          remaining = []
+          for path in root.rglob('*.java'):
+              text = path.read_text(encoding='utf-8')
+              if import_marker in text and marker in text:
+                  remaining.append(str(path))
+          if remaining:
+              print('Remaining legacy constructors:')
+              print('\n'.join(remaining))
+              raise SystemExit(1)
+          PY
+
+      - name: Commit ResourceLocation migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No ResourceLocation constructor changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java
+          git commit -m 'Migrate remaining ResourceLocation constructors for 1.21.1'
+          git push origin HEAD:1.21.1-neoforge
