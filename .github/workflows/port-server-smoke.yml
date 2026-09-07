@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source includes migrated 1.21 Part Builder/material recipes, tool-building recipes, guide-book recipes, and starting-book resources.
+# Smoke source includes corrected 1.21 vanilla/custom tool-building recipes, guide-book recipes, starting-book resources, and Part Builder/material recipes.
 on:
   push:
     branches:
