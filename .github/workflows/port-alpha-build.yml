@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 60f939a4 with migrated Part Builder/material recipes and latest green Mantle.
+# Runtime source validated through 1a687a4f with all 360 Part Builder/material recipes parsing on 1.21 and latest green Mantle.
 on:
   push:
     branches:
