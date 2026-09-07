@@ -12,6 +12,8 @@ import javax.annotation.Nullable;
 public class ModifiableArmorMaterial extends DummyArmorMaterial {
   /** Array of all four armor slot types */
   public static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};
+  /** The four humanoid armor item types. Minecraft 1.21 also has BODY for animal armor, which Tinkers does not model. */
+  public static final ArmorItem.Type[] ARMOR_TYPES = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};
 
   /** Array of slot index to tool definition for the slot */
   private final ToolDefinition[] armorDefinitions;
@@ -26,16 +28,20 @@ public class ModifiableArmorMaterial extends DummyArmorMaterial {
 
   /** Creates a modifiable armor material, creates tool definition for the selected slots */
   public static ModifiableArmorMaterial create(ResourceLocation id, SoundEvent equipSound, ArmorItem.Type... slots) {
-    ToolDefinition[] definitions = new ToolDefinition[4];
+    ToolDefinition[] definitions = new ToolDefinition[ARMOR_TYPES.length];
     for (ArmorItem.Type slot : slots) {
-      definitions[slot.ordinal()] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));
+      int index = slot.ordinal();
+      if (index >= definitions.length) {
+        throw new IllegalArgumentException("Unsupported non-humanoid armor type " + slot);
+      }
+      definitions[index] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));
     }
     return new ModifiableArmorMaterial(id, equipSound, definitions);
   }
 
   /** Creates a modifiable armor material, creates tool definition for all four armor slots */
   public static ModifiableArmorMaterial create(ResourceLocation id, SoundEvent equipSound) {
-    return create(id, equipSound, ArmorItem.Type.values());
+    return create(id, equipSound, ARMOR_TYPES);
   }
 
   /**
@@ -45,6 +51,7 @@ public class ModifiableArmorMaterial extends DummyArmorMaterial {
    */
   @Nullable
   public ToolDefinition getArmorDefinition(ArmorItem.Type slotType) {
-    return armorDefinitions[slotType.ordinal()];
+    int index = slotType.ordinal();
+    return index < armorDefinitions.length ? armorDefinitions[index] : null;
   }
 }

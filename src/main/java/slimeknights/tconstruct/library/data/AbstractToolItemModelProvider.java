@@ -264,7 +264,7 @@ public abstract class AbstractToolItemModelProvider extends GenericDataProvider 
 
   /** Adds broken and blocking models for the armor set */
   protected void armor(String name, EnumObject<ArmorItem.Type,? extends Item> armor, String... textures) throws IOException {
-    armor(name, armor, ArmorItem.Type.values(), textures);
+    armor(name, armor, slimeknights.tconstruct.library.tools.definition.ModifiableArmorMaterial.ARMOR_TYPES, textures);
   }
 
   /** Creates models for fishing rods cast and broken */
