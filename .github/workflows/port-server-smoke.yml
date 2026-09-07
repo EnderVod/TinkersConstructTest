@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source includes migrated 1.21 Part Builder/material recipes and rejects silent custom-recipe parse failures.
+# Smoke source includes migrated 1.21 Part Builder/material recipes, tool-building recipes, guide-book recipes, and starting-book resources.
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ concurrency:
 jobs:
   server-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: Checkout Tinkers port
         uses: actions/checkout@v4
@@ -107,18 +107,18 @@ jobs:
           cat server-console.log run/server/logs/latest.log 2>/dev/null > "$combined_log" || true
 
           if [ "$ready" -eq 1 ]; then
-            # Minecraft can reach the ready state while rejecting individual datapack recipes.
-            # Treat failures in the two recipe families currently under migration as a smoke failure.
-            if grep -E 'Parsing error loading recipe tconstruct:tools/(parts/builder|materials)/' "$combined_log" > migrated-recipe-errors.txt; then
-              echo 'Tinkers server reached ready state but rejected migrated Part Builder/material recipes:'
-              cat migrated-recipe-errors.txt
+            # Minecraft can reach the ready state while rejecting individual datapack entries.
+            # Treat failures in the resource families currently under migration as smoke failures.
+            if grep -E 'Parsing error loading recipe tconstruct:tools/(parts/builder|materials|building)/|Parsing error loading recipe tconstruct:common/(materials_and_you|puny_smelting|mighty_smelting|fantastic_foundry|tinkers_gadgetry|encyclopedia)|([Ee]rror|[Ff]ailed|[Cc]ouldn.t).*tconstruct:(internal/starting_book|gameplay/starting_book)' "$combined_log" > migrated-resource-errors.txt; then
+              echo 'Tinkers server reached ready state but rejected migrated resources:'
+              cat migrated-resource-errors.txt
               kill -TERM "$server_pid" 2>/dev/null || true
               sleep 2
               kill -KILL "$server_pid" 2>/dev/null || true
               exit 1
             fi
 
-            echo 'Tinkers dedicated server reached the ready state with no Part Builder/material recipe parse errors.'
+            echo 'Tinkers dedicated server reached the ready state with no targeted migrated-resource parse errors.'
             grep -E 'Loaded [0-9]+ recipes' "$combined_log" | tail -n 1 || true
             kill -TERM "$server_pid" 2>/dev/null || true
             sleep 2
@@ -143,9 +143,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tinkers-1.21.1-server-smoke-log
+          name: tinkers-server-smoke-log
           path: |
             server-console.log
             run/server/logs/latest.log
-            migrated-recipe-errors.txt
+            migrated-resource-errors.txt
           if-no-files-found: warn
