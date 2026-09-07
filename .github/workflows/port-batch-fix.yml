@@ -1,4 +1,4 @@
-name: Tinkers JEI RecipeHolder runtime batch
+name: Tinkers JEI crafting extension adapter
 
 on:
   push:
@@ -21,109 +21,115 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply RecipeHolder and runtime JEI migrations
+      - name: Adapt per-recipe crafting extensions to JEI 19.42 singletons
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          ROOT=Path('src/main/java')
-          def p(rel): return ROOT/rel
+          ROOT = Path('src/main/java')
+          def p(rel): return ROOT / rel
 
           def replace_once(path, old, new, label):
-              text=path.read_text(encoding='utf-8'); c=text.count(old)
-              if c!=1: raise RuntimeError(f'{path}: {label} expected 1 found {c}')
-              path.write_text(text.replace(old,new,1),encoding='utf-8')
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{path}: {label}: expected one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
           def add_import(path, anchor, imp, label):
-              text=path.read_text(encoding='utf-8')
-              if imp in text: return
-              c=text.count(anchor)
-              if c!=1: raise RuntimeError(f'{path}: {label} anchor {c}')
-              path.write_text(text.replace(anchor,anchor+'\n'+imp,1),encoding='utf-8')
+              text = path.read_text(encoding='utf-8')
+              if imp in text:
+                  return
+              count = text.count(anchor)
+              if count != 1:
+                  raise RuntimeError(f'{path}: {label}: expected one anchor, found {count}')
+              path.write_text(text.replace(anchor, anchor + '\n' + imp, 1), encoding='utf-8')
 
-          # Crafting recipes are holder-owned in 1.21, matching JEI 19.42 RecipeTypes.CRAFTING.
-          path=p('slimeknights/tconstruct/plugin/jei/transfer/ToolInventoryTransferInfo.java')
-          add_import(path,'import net.minecraft.world.item.crafting.CraftingRecipe;','import net.minecraft.world.item.crafting.RecipeHolder;','tool transfer holder import')
-          text=path.read_text(encoding='utf-8')
-          text=text.replace('IRecipeTransferHandler<ToolContainerMenu, CraftingRecipe>, IRecipeTransferInfo<ToolContainerMenu, CraftingRecipe>', 'IRecipeTransferHandler<ToolContainerMenu, RecipeHolder<CraftingRecipe>>, IRecipeTransferInfo<ToolContainerMenu, RecipeHolder<CraftingRecipe>>')
-          text=text.replace('IRecipeTransferHandler<ToolContainerMenu, CraftingRecipe> handler;', 'IRecipeTransferHandler<ToolContainerMenu, RecipeHolder<CraftingRecipe>> handler;')
-          text=text.replace('RecipeType<CraftingRecipe> getRecipeType()', 'RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType()')
-          count=text.count('CraftingRecipe recipe')
-          if count!=4: raise RuntimeError(f'Tool transfer expected 4 CraftingRecipe recipe params, got {count}')
-          text=text.replace('CraftingRecipe recipe','RecipeHolder<CraftingRecipe> recipe')
-          path.write_text(text,encoding='utf-8')
+          # JEI 19.42 registers one extension object per recipe class and passes RecipeHolder to each method.
+          # Tinkers' existing extension classes cache recipe-specific output lists, so preserve them behind a
+          # tiny adapter instead of duplicating their rendering logic.
+          adapter = p('slimeknights/tconstruct/plugin/jei/util/LegacyCraftingExtension.java')
+          if adapter.exists():
+              raise RuntimeError('LegacyCraftingExtension already exists unexpectedly')
+          adapter.write_text('''package slimeknights.tconstruct.plugin.jei.util;\n\nimport mezz.jei.api.gui.builder.IRecipeLayoutBuilder;\nimport mezz.jei.api.gui.ingredient.ICraftingGridHelper;\nimport mezz.jei.api.recipe.IFocusGroup;\nimport mezz.jei.api.recipe.category.extensions.vanilla.crafting.ICraftingCategoryExtension;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\n\nimport javax.annotation.Nullable;\nimport java.util.function.Function;\n\n/**\n * Adapts Tinkers' legacy per-recipe crafting extensions to JEI 19.42's singleton extension API.\n * The factory may return null to let JEI fall back when a recipe cannot be displayed safely.\n */\n@SuppressWarnings({\"removal\", \"deprecation\"})\npublic record LegacyCraftingExtension<R extends CraftingRecipe>(Function<R, ? extends ICraftingCategoryExtension<R>> factory)\n  implements ICraftingCategoryExtension<R> {\n\n  @Nullable\n  private ICraftingCategoryExtension<R> extension(RecipeHolder<R> holder) {\n    return factory.apply(holder.value());\n  }\n\n  @Override\n  public boolean isHandled(RecipeHolder<R> holder) {\n    return extension(holder) != null;\n  }\n\n  @Override\n  public int getWidth(RecipeHolder<R> holder) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    return extension == null ? 0 : extension.getWidth();\n  }\n\n  @Override\n  public int getHeight(RecipeHolder<R> holder) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    return extension == null ? 0 : extension.getHeight();\n  }\n\n  @Override\n  public void setRecipe(RecipeHolder<R> holder, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, IFocusGroup focuses) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    if (extension != null) {\n      extension.setRecipe(builder, craftingGridHelper, focuses);\n    }\n  }\n}\n''', encoding='utf-8')
 
-          path=p('slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java')
-          add_import(path,'import net.minecraft.world.item.crafting.CraftingRecipe;','import net.minecraft.world.item.crafting.RecipeHolder;','station transfer holder import')
-          text=path.read_text(encoding='utf-8')
-          text=text.replace('IRecipeTransferInfo<CraftingStationContainerMenu, CraftingRecipe>', 'IRecipeTransferInfo<CraftingStationContainerMenu, RecipeHolder<CraftingRecipe>>')
-          text=text.replace('RecipeType<CraftingRecipe> getRecipeType()', 'RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType()')
-          count=text.count('CraftingRecipe recipe')
-          if count!=3: raise RuntimeError(f'Station transfer expected 3 CraftingRecipe recipe params, got {count}')
-          text=text.replace('CraftingRecipe recipe','RecipeHolder<CraftingRecipe> recipe')
-          old='''  public boolean canHandle(CraftingStationContainerMenu container, RecipeHolder<CraftingRecipe> recipe) {\n    if (recipe instanceof ShapedRecipe shaped) {\n      return shaped.getWidth() <= 3 && shaped.getHeight() <= 3;\n    }\n    return recipe.getIngredients().size() <= 9;\n  }'''
-          new='''  public boolean canHandle(CraftingStationContainerMenu container, RecipeHolder<CraftingRecipe> recipe) {\n    CraftingRecipe value = recipe.value();\n    if (value instanceof ShapedRecipe shaped) {\n      return shaped.getWidth() <= 3 && shaped.getHeight() <= 3;\n    }\n    return value.getIngredients().size() <= 9;\n  }'''
-          if text.count(old)!=1: raise RuntimeError('Station canHandle holder unwrap mismatch')
-          path.write_text(text.replace(old,new,1),encoding='utf-8')
+          # Give the old per-recipe extensions proper generic types so the adapter remains type-safe.
+          path = p('slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
+          replace_once(path,
+                       'public class ShapedMaterialExtension implements ICraftingCategoryExtension {',
+                       'public class ShapedMaterialExtension implements ICraftingCategoryExtension<ShapedMaterialRecipe> {',
+                       'typed legacy shaped extension')
 
-          # Potion subtype identity moved from raw NBT tags to the POTION_CONTENTS data component.
-          path=p('slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java')
-          path.write_text('''package slimeknights.tconstruct.plugin.jei.util;\n\nimport mezz.jei.api.ingredients.subtypes.IIngredientSubtypeInterpreter;\nimport mezz.jei.api.ingredients.subtypes.UidContext;\nimport net.minecraft.world.effect.MobEffectInstance;\nimport net.minecraft.world.item.alchemy.PotionContents;\n\n/** Common subtype logic for the fluid and item forms of potion fluid. */\npublic interface PotionSubtypeInterpreter<T> extends IIngredientSubtypeInterpreter<T> {\n  PotionContents getPotion(T ingredient);\n\n  @Override\n  default String apply(T ingredient, UidContext context) {\n    PotionContents contents = getPotion(ingredient);\n    if (contents.equals(PotionContents.EMPTY)) {\n      return IIngredientSubtypeInterpreter.NONE;\n    }\n    String potionId = contents.potion()\n      .flatMap(holder -> holder.unwrapKey())\n      .map(key -> key.location().toString())\n      .orElse(\"\");\n    StringBuilder builder = new StringBuilder(potionId);\n    for (MobEffectInstance effect : contents.getAllEffects()) {\n      builder.append(';').append(effect);\n    }\n    return builder.toString();\n  }\n}\n''',encoding='utf-8')
+          path = p('slimeknights/tconstruct/plugin/jei/material/MaterialsCraftingExtension.java')
+          replace_once(path,
+                       'public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension {',
+                       'public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension<T> {',
+                       'typed materials extension')
 
-          # Remaining JEIPlugin changes are 1.21 holder/data-component/runtime API migrations.
-          path=p('slimeknights/tconstruct/plugin/jei/JEIPlugin.java')
-          text=path.read_text(encoding='utf-8')
-          text=text.replace('import mezz.jei.api.runtime.IIngredientVisibility;\n','')
-          text=text.replace('import net.minecraft.core.Holder;\n','import net.minecraft.core.Holder;\nimport net.minecraft.core.component.DataComponents;\n')
-          text=text.replace('import net.minecraft.world.item.alchemy.Potion;\n','')
-          text=text.replace('import net.minecraft.world.item.alchemy.Potions;\n','import net.minecraft.world.item.alchemy.PotionContents;\nimport net.minecraft.world.item.alchemy.Potions;\n')
-          text=text.replace('import net.minecraft.world.item.crafting.CraftingRecipe;\n','import net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\n')
-          text=text.replace('import java.util.Set;\n','')
-          if text.count('.byType(type)')!=1: raise RuntimeError('Expected one private byType call')
-          text=text.replace('.byType(type)', '.getAllRecipesFor(type)',1)
-          if text.count('item.get()')!=3: raise RuntimeError(f'Expected 3 Holder<Item>.get calls, got {text.count("item.get()")}')
-          text=text.replace('item.get()','item.value()')
-          if text.count('item.containsTag(TinkerTags.Items.MELEE)')!=1: raise RuntimeError('Expected melee containsTag')
-          text=text.replace('item.containsTag(TinkerTags.Items.MELEE)','item.is(TinkerTags.Items.MELEE)',1)
-          old='''    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)ItemStack::getTag);\n    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)FluidStack::getTag);'''
-          new='''    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));\n    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));'''
-          if text.count(old)!=1: raise RuntimeError('Potion subtype registration mismatch')
-          text=text.replace(old,new,1)
-          old='''    IIngredientVisibility visibility = jeiRuntime.getJeiHelpers().getIngredientVisibility();\n    if (!hideItems.isEmpty()) {\n      visibility.hideIngredients(VanillaTypes.ITEM_STACK, hideItems, Set.of(UidContext.Ingredient));\n    }\n    if (!showItems.isEmpty()) {\n      visibility.unhideIngredients(VanillaTypes.ITEM_STACK, showItems, Set.of(UidContext.Ingredient));\n    }'''
-          new='''    if (!hideItems.isEmpty()) {\n      manager.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hideItems);\n    }\n    if (!showItems.isEmpty()) {\n      manager.addIngredientsAtRuntime(VanillaTypes.ITEM_STACK, showItems);\n    }'''
-          if text.count(old)!=1: raise RuntimeError('Runtime visibility block mismatch')
-          text=text.replace(old,new,1)
-          old='''                                      BuiltInRegistries.POTION.holders().filter(holder -> {\n                                        Potion potion = holder.get();\n                                        return potion != Potions.EMPTY && potion != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID);\n                                      }).map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());'''
-          new='''                                      BuiltInRegistries.POTION.holders()\n                                        .filter(holder -> holder != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID))\n                                        .map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());'''
-          if text.count(old)!=1: raise RuntimeError('Potion fluid registry filter mismatch')
-          text=text.replace(old,new,1)
-          old='''      List<CraftingRecipe> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)\n        .flatMap(id -> recipes.byKey(id).stream())\n        .filter(recipe -> recipe instanceof CraftingRecipe)\n        .map(recipe -> (CraftingRecipe) recipe)\n        .toList();'''
-          new='''      List<RecipeHolder<CraftingRecipe>> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)\n        .flatMap(id -> recipes.byKey(id).stream())\n        .filter(holder -> holder.value() instanceof CraftingRecipe)\n        .map(holder -> new RecipeHolder<>(holder.id(), (CraftingRecipe) holder.value()))\n        .toList();'''
-          if text.count(old)!=1: raise RuntimeError('Easter egg RecipeHolder migration mismatch')
-          text=text.replace(old,new,1)
-          path.write_text(text,encoding='utf-8')
+          # The shared helper also serves deprecated ShapedMaterialRecipe, which does not implement
+          # MaterialsCraftingTableRecipe. Pass the already-known recipe ID explicitly instead of over-constraining R.
+          replace_once(path,
+                       'public static <R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, R recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {',
+                       'public static void setRecipe(ICraftingCategoryExtension<?> self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, CraftingRecipe recipe, ResourceLocation recipeId, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {',
+                       'shared material helper signature')
+          text = path.read_text(encoding='utf-8')
+          count = text.count('recipe.getId()')
+          if count != 2:
+              raise RuntimeError(f'MaterialsCraftingExtension expected two helper recipe.getId() uses, found {count}')
+          # First use is instance getRegistryName and must stay; second is the helper error log.
+          marker = 'Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipe.getId(), builder.getClass().getName());'
+          if text.count(marker) != 1:
+              raise RuntimeError('Materials helper error log mismatch')
+          text = text.replace(marker, 'Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipeId, builder.getClass().getName());', 1)
+          old = 'setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);'
+          if text.count(old) != 1:
+              raise RuntimeError('Materials instance helper call mismatch')
+          text = text.replace(old, 'setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);', 1)
+          path.write_text(text, encoding='utf-8')
 
-          plugin=path.read_text(encoding='utf-8')
-          for bad in ('item.get()', 'containsTag(TinkerTags.Items.MELEE)', 'ItemStack::getTag', 'FluidStack::getTag', 'hideIngredients(', 'unhideIngredients(', 'Potions.EMPTY', '.byType(type)'):
-              if bad in plugin: raise RuntimeError(f'Obsolete JEI/1.21 API remains: {bad}')
-          for rel in ['slimeknights/tconstruct/plugin/jei/transfer/ToolInventoryTransferInfo.java','slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java']:
-              t=p(rel).read_text(encoding='utf-8')
-              if 'RecipeType<CraftingRecipe>' in t or ('IRecipeTransferInfo<' in t and ', CraftingRecipe>' in t):
-                  raise RuntimeError(f'{rel}: raw CraftingRecipe transfer generic remains')
-          print('JEI RecipeHolder/runtime batch validated')
+          path = p('slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
+          replace_once(path,
+                       'MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);',
+                       'MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);',
+                       'legacy shaped helper call')
+
+          # Register adapters instead of passing factories where JEI 19.42 expects extension instances.
+          path = p('slimeknights/tconstruct/plugin/jei/JEIPlugin.java')
+          add_import(path,
+                     'import slimeknights.tconstruct.plugin.jei.util.GuiContainerTankHandler;',
+                     'import slimeknights.tconstruct.plugin.jei.util.LegacyCraftingExtension;',
+                     'legacy extension adapter import')
+          text = path.read_text(encoding='utf-8')
+          old = '''    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new);\n    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create);\n    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless);'''
+          new = '''    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, new LegacyCraftingExtension<ShapedMaterialRecipe>(ShapedMaterialExtension::new));\n    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, new LegacyCraftingExtension<ShapedMaterialsRecipe>(ShapedMaterialsExtension::create));\n    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, new LegacyCraftingExtension<ShapelessMaterialsRecipe>(MaterialsCraftingExtension::shapeless));'''
+          if text.count(old) != 1:
+              raise RuntimeError('JEI crafting extension registration block mismatch')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Assertions for the exact issues seen in compile #412.
+          plugin = path.read_text(encoding='utf-8')
+          for bad in ('addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new)',
+                      'addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create)',
+                      'addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless)'):
+              if bad in plugin:
+                  raise RuntimeError(f'Unadapted JEI 19.42 factory registration remains: {bad}')
+          materials = p('slimeknights/tconstruct/plugin/jei/material/MaterialsCraftingExtension.java').read_text(encoding='utf-8')
+          if '<R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe' in materials:
+              raise RuntimeError('Over-constrained material helper generic remains')
+          print('JEI crafting extension adapter batch validated')
           PY
 
-      - name: Commit verified RecipeHolder/runtime batch
+      - name: Commit verified crafting extension adapter
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "No JEI RecipeHolder/runtime changes were needed."
+            echo "No crafting extension adapter changes were needed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/main/java/slimeknights/tconstruct/plugin/jei
-          git commit -m "Port JEI RecipeHolder and runtime APIs to 1.21"
+          git commit -m "Adapt Tinkers crafting extensions to JEI 19.42"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
