@@ -27,7 +27,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          root = Path('src/generated/resources')
+          roots = [Path('src/generated/resources'), Path('src/main/resources')]
           replacements = {
               '"type": "forge:mod_loaded"': '"type": "neoforge:mod_loaded"',
               '"type": "forge:item_exists"': '"type": "neoforge:item_exists"',
@@ -41,29 +41,31 @@ jobs:
 
           total = 0
           files = 0
-          for path in root.rglob('*.json'):
-              text = path.read_text(encoding='utf-8')
-              original = text
-              for old, new in replacements.items():
-                  hits = text.count(old)
-                  if hits:
-                      total += hits
-                      text = text.replace(old, new)
-              if text != original:
-                  path.write_text(text, encoding='utf-8')
-                  files += 1
+          for root in roots:
+              for path in root.rglob('*.json'):
+                  text = path.read_text(encoding='utf-8')
+                  original = text
+                  for old, new in replacements.items():
+                      hits = text.count(old)
+                      if hits:
+                          total += hits
+                          text = text.replace(old, new)
+                  if text != original:
+                      path.write_text(text, encoding='utf-8')
+                      files += 1
 
           leftovers = []
-          for path in root.rglob('*.json'):
-              text = path.read_text(encoding='utf-8')
-              for old in replacements:
-                  if old in text:
-                      leftovers.append((str(path), old))
+          for root in roots:
+              for path in root.rglob('*.json'):
+                  text = path.read_text(encoding='utf-8')
+                  for old in replacements:
+                      if old in text:
+                          leftovers.append((str(path), old))
           if leftovers:
               raise RuntimeError(f'Legacy Forge condition IDs remain: {leftovers[:20]}')
-          if total < 500:
+          if total < 550:
               raise RuntimeError(f'Expected a broad stale-condition migration, only replaced {total} values')
-          print(f'Migrated {total} condition codec IDs across {files} generated JSON files')
+          print(f'Migrated {total} condition codec IDs across {files} JSON files')
 
           worldgen = Path('src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java')
           source = worldgen.read_text(encoding='utf-8')
@@ -79,7 +81,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/generated/resources src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java
+          git add src/generated/resources src/main/resources src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java
           git commit -m "Migrate generated conditions to NeoForge namespace"
           git push origin HEAD:1.21.1-neoforge
 
