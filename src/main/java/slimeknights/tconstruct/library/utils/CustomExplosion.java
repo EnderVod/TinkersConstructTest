@@ -9,7 +9,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.enchantment.ProtectionEnchantment;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
@@ -190,7 +189,7 @@ public class CustomExplosion extends Explosion {
           if (knockback != 0) {
             double adjustedStrength = strength * knockback;
             if (entity instanceof LivingEntity living) {
-              adjustedStrength = ProtectionEnchantment.getExplosionKnockbackAfterDampener(living, adjustedStrength);
+              adjustedStrength *= 1.0D - living.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.EXPLOSION_KNOCKBACK_RESISTANCE);
             }
             Vec3 velocity = dir.scale(adjustedStrength / length);
             entity.setDeltaMovement(entity.getDeltaMovement().add(velocity));
