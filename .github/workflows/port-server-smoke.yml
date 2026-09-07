@@ -1,5 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
+# Smoke source: acebd24e (vanilla-package shim removed)
 on:
   push:
     branches:
