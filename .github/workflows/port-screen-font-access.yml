@@ -1,0 +1,81 @@
+name: Tinkers Screen Font Access Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-screen-font-access.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Replace external Screen font field reads
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          files = {
+              'src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiFuelModule.java': ('screen.font', 'Minecraft.getInstance().font'),
+              'src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiSmelteryTank.java': ('parent.font', 'Minecraft.getInstance().font'),
+              'src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiTankModule.java': ('screen.font', 'Minecraft.getInstance().font'),
+              'src/main/java/slimeknights/tconstruct/smeltery/client/screen/module/GuiMeltingModule.java': ('screen.font', 'Minecraft.getInstance().font'),
+          }
+          for filename, (old, new) in files.items():
+              path = Path(filename)
+              text = path.read_text(encoding='utf-8')
+              if old in text:
+                  text = text.replace(old, new)
+              elif new not in text:
+                  raise SystemExit(f'Expected font access missing from {filename}')
+              if 'import net.minecraft.client.Minecraft;' not in text:
+                  marker = 'package ' + text.split('package ', 1)[1].split(';', 1)[0] + ';\n\n'
+                  text = text.replace(marker, marker + 'import net.minecraft.client.Minecraft;\n', 1)
+              path.write_text(text, encoding='utf-8')
+
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          text = at.read_text(encoding='utf-8')
+          lines = text.splitlines()
+          lines = [line for line in lines if 'net.minecraft.client.gui.screens.Screen f_96547_' not in line]
+          # Remove the now-orphaned comment if present.
+          cleaned = []
+          for i, line in enumerate(lines):
+              if line.strip() == '# Font renderer':
+                  continue
+              cleaned.append(line)
+          at.write_text('\n'.join(cleaned) + '\n', encoding='utf-8')
+
+          # Guard known external reads.
+          bad = []
+          for filename in files:
+              text = Path(filename).read_text(encoding='utf-8')
+              if 'screen.font' in text or 'parent.font' in text:
+                  bad.append(filename)
+          if bad:
+              raise SystemExit('External Screen.font reads remain:\n' + '\n'.join(bad))
+          PY
+
+      - name: Commit font access migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No font-access changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/smeltery/client/screen/module \
+                  src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Use public Minecraft font in Smeltery modules'
+          git push origin HEAD:1.21.1-neoforge
