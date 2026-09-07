@@ -1,4 +1,4 @@
-name: Tinkers one-shot tool table screen 1.21 batch
+name: Tinkers one-shot block interactions 1.21 batch
 
 on:
   push:
@@ -21,46 +21,76 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified ToolTableScreen 1.21 migration
+      - name: Apply verified block interaction migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          at = Path("src/main/resources/META-INF/port-accesstransformer.cfg")
-          text = at.read_text(encoding="utf-8")
-          anchor = "public net.minecraft.client.gui.screens.Screen font\n"
-          if text.count(anchor) != 1:
-              raise RuntimeError("Expected Screen font AT anchor exactly once")
-          additions = (
-              "# Tinkers uses vanilla's smithing armor-stand transform for its tool-table preview.\n"
-              "public net.minecraft.client.gui.screens.inventory.SmithingScreen ARMOR_STAND_ANGLE\n"
-              "public net.minecraft.client.gui.screens.inventory.SmithingScreen ARMOR_STAND_TRANSLATION\n"
-          )
-          if "SmithingScreen ARMOR_STAND_ANGLE" not in text:
-              text = text.replace(anchor, anchor + additions, 1)
-          if "SmithingScreen ARMOR_STAND_TRANSLATION" not in text:
-              raise RuntimeError("Smithing translation AT missing after migration")
-          at.write_text(text, encoding="utf-8")
-
-          path = Path("src/main/java/slimeknights/tconstruct/tables/client/inventory/ToolTableScreen.java")
-          text = path.read_text(encoding="utf-8")
-
-          def replace_once(old, new, label):
-              global text
+          def replace_once(text, old, new, label):
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{label}: expected one match, found {count}: {old[:180]!r}")
-              text = text.replace(old, new, 1)
+                  raise RuntimeError(f"{label}: expected one match, found {count}: {old[:220]!r}")
+              return text.replace(old, new, 1)
 
-          replace_once(
-              "InventoryScreen.renderEntityInInventory(graphics, this.armorStandX, this.armorStandY, this.armorStandScale, pose, null, this.armorStandPreview);",
-              "InventoryScreen.renderEntityInInventory(graphics, this.armorStandX, this.armorStandY, this.armorStandScale, SmithingScreen.ARMOR_STAND_TRANSLATION, pose, null, this.armorStandPreview);",
-              "1.21 entity preview signature")
-          replace_once(
-              "result.getItem().appendHoverText(result, Minecraft.getInstance().level, list, Default.NORMAL);",
-              "result.getItem().appendHoverText(result, Item.TooltipContext.of(Minecraft.getInstance().level.registryAccess()), list, Default.NORMAL);",
-              "1.21 tooltip context")
+          # ChestBlock: item custom data + 1.21 block interaction pipeline.
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/ChestBlock.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(text, "import net.minecraft.core.BlockPos;", "import net.minecraft.core.BlockPos;\nimport net.minecraft.core.component.DataComponents;", "chest data components import")
+          text = replace_once(text, "import net.minecraft.nbt.Tag;", "import net.minecraft.nbt.Tag;\nimport net.minecraft.world.ItemInteractionResult;", "chest item interaction import")
+          text = replace_once(text, "import net.minecraft.world.item.ItemStack;", "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.component.CustomData;", "chest CustomData import")
+          text = replace_once(
+              text,
+              """    CompoundTag tag = stack.getTag();\n    if (tag != null && tag.contains(\"TinkerData\", Tag.TAG_COMPOUND)) {\n      CompoundTag tinkerData = tag.getCompound(\"TinkerData\");\n      BlockEntity te = worldIn.getBlockEntity(pos);\n      if (te instanceof AbstractChestBlockEntity chest) {\n        chest.readInventory(tinkerData);\n      }\n    }""",
+              """    CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();\n    if (tag.contains(\"TinkerData\", Tag.TAG_COMPOUND)) {\n      CompoundTag tinkerData = tag.getCompound(\"TinkerData\");\n      BlockEntity te = worldIn.getBlockEntity(pos);\n      if (te instanceof AbstractChestBlockEntity chest) {\n        chest.readInventory(tinkerData, worldIn.registryAccess());\n      }\n    }""",
+              "chest placed inventory data")
+          text = replace_once(
+              text,
+              """  @SuppressWarnings(\"deprecation\")\n  @Override\n  @Deprecated\n  public InteractionResult use(BlockState state, Level worldIn, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {\n    BlockEntity te = worldIn.getBlockEntity(pos);\n    Inventory playerInventory = player.getInventory();\n    ItemStack heldItem = playerInventory.getSelected();\n\n    if (!heldItem.isEmpty() && te instanceof AbstractChestBlockEntity chest && chest.canInsert(player, heldItem)) {\n      IItemHandlerModifiable itemHandler = chest.getItemHandler();\n      ItemStack rest = ItemHandlerHelper.insertItem(itemHandler, heldItem, false);\n      if (rest.isEmpty() || rest.getCount() < heldItem.getCount()) {\n        playerInventory.items.set(playerInventory.selected, rest);\n        return InteractionResult.SUCCESS;\n      }\n    }\n\n    return super.use(state, worldIn, pos, player, handIn, hit);\n  }""",
+              """  @Override\n  protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level worldIn, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {\n    BlockEntity te = worldIn.getBlockEntity(pos);\n    if (!heldItem.isEmpty() && te instanceof AbstractChestBlockEntity chest && chest.canInsert(player, heldItem)) {\n      IItemHandlerModifiable itemHandler = chest.getItemHandler();\n      ItemStack rest = ItemHandlerHelper.insertItem(itemHandler, heldItem, false);\n      if (rest.isEmpty() || rest.getCount() < heldItem.getCount()) {\n        player.setItemInHand(handIn, rest);\n        return ItemInteractionResult.SUCCESS;\n      }\n    }\n    return super.useItemOn(heldItem, state, worldIn, pos, player, handIn, hit);\n  }""",
+              "chest useItemOn migration")
+          text = text.replace("import net.minecraft.world.InteractionResult;\n", "")
+          text = text.replace("import net.minecraft.world.entity.player.Inventory;\n", "")
+          path.write_text(text, encoding="utf-8")
+
+          # TinkerStationBlock: custom-data presence is no longer needed; pick-block uses vanilla 1.21 signature.
+          path = Path("src/main/java/slimeknights/tconstruct/tables/block/TinkerStationBlock.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(text, "import net.minecraft.world.entity.player.Player;\n", "", "remove pick player import")
+          text = replace_once(text, "import net.minecraft.world.level.BlockGetter;", "import net.minecraft.world.level.LevelReader;", "LevelReader pick import")
+          text = replace_once(text, "import net.minecraft.world.phys.HitResult;\n", "", "remove HitResult import")
+          text = replace_once(text, "if (stack.hasTag() && level.getBlockEntity(pos) instanceof TinkerStationBlockEntity be) {", "if (level.getBlockEntity(pos) instanceof TinkerStationBlockEntity be) {", "remove legacy hasTag gate")
+          text = replace_once(
+              text,
+              "public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter level, BlockPos pos, Player player) {",
+              "public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {",
+              "vanilla 1.21 clone stack signature")
+          path.write_text(text, encoding="utf-8")
+
+          # ArmorSlot: enchantments are holder-backed dynamic registry entries in 1.21.
+          path = Path("src/main/java/slimeknights/tconstruct/tables/menu/slot/ArmorSlot.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(text, "import net.minecraft.resources.ResourceLocation;", "import net.minecraft.core.registries.Registries;\nimport net.minecraft.resources.ResourceLocation;", "enchantment registry import")
+          text = replace_once(text, "import net.minecraft.world.item.enchantment.EnchantmentHelper;", "import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;", "binding curse key import")
+          text = replace_once(
+              text,
+              "return stack.isEmpty() || player.isCreative() || !EnchantmentHelper.hasBindingCurse(stack);",
+              "return stack.isEmpty() || player.isCreative() || EnchantmentHelper.getItemEnchantmentLevel(player.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.BINDING_CURSE), stack) <= 0;",
+              "binding curse holder lookup")
+          path.write_text(text, encoding="utf-8")
+
+          # FluidCannonBlock: legacy Block#use moved to item interaction in 1.21.
+          path = Path("src/main/java/slimeknights/tconstruct/smeltery/block/FluidCannonBlock.java")
+          text = path.read_text(encoding="utf-8")
+          text = replace_once(text, "import net.minecraft.world.InteractionHand;", "import net.minecraft.world.InteractionHand;\nimport net.minecraft.world.ItemInteractionResult;", "cannon interaction result import")
+          text = replace_once(text, "import net.minecraft.world.item.Equipable;", "import net.minecraft.world.item.Equipable;\nimport net.minecraft.world.item.ItemStack;", "cannon stack import")
+          text = replace_once(
+              text,
+              """  @Deprecated\n  @Override\n  public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {""",
+              """  @Override\n  protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {""",
+              "fluid cannon useItemOn signature")
+          text = replace_once(text, "    return InteractionResult.SUCCESS;\n  }", "    return ItemInteractionResult.SUCCESS;\n  }", "fluid cannon result")
+          text = text.replace("import net.minecraft.world.InteractionResult;\n", "")
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -73,9 +103,11 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/resources/META-INF/port-accesstransformer.cfg \
-                  src/main/java/slimeknights/tconstruct/tables/client/inventory/ToolTableScreen.java
-          git commit -m "Port tool table preview and tooltip APIs to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/block/ChestBlock.java \
+                  src/main/java/slimeknights/tconstruct/tables/block/TinkerStationBlock.java \
+                  src/main/java/slimeknights/tconstruct/tables/menu/slot/ArmorSlot.java \
+                  src/main/java/slimeknights/tconstruct/smeltery/block/FluidCannonBlock.java
+          git commit -m "Port table and cannon interactions to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
