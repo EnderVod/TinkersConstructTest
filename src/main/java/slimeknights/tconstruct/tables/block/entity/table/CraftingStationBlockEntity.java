@@ -161,7 +161,7 @@ public class CraftingStationBlockEntity extends RetexturedTableBlockEntity imple
    * Removes the result from this inventory, updating inputs and triggering recipe hooks
    * @param player  Player taking result
    * @param result  Result removed
-   * @param amount  Number of times crafted
+   * @param amount  Number of result items crafted
    */
   public void takeResult(Player player, ItemStack result, int amount) {
     CraftingRecipe recipe = this.lastRecipe; // local variable just to prevent race conditions if the field changes, though that is unlikely
@@ -179,31 +179,50 @@ public class CraftingStationBlockEntity extends RetexturedTableBlockEntity imple
     result.onCraftedBy(this.level, player, amount);
     EventHooks.firePlayerCraftingEvent(player, result, this.craftingInventory);
 
-    // update all slots in the inventory
-    // remove remaining items
+    // CraftingInput.of() trims empty outer rows/columns in 1.21. Keep the positioned form so the
+    // recipe's remainder indexes can be mapped back onto the actual 3x3 table slots.
     CommonHooks.setCraftingPlayer(player);
-    CraftingInput input = craftingInventory.asInput();
+    CraftingInput.Positioned positioned = craftingInventory.asPositionedInput();
+    CraftingInput input = positioned.input();
     NonNullList<ItemStack> remaining = recipe.getRemainingItems(input);
     CommonHooks.setCraftingPlayer(null);
-    for (int i = 0; i < remaining.size(); ++i) {
-      ItemStack original = this.getItem(i);
-      ItemStack newStack = remaining.get(i);
 
-      // if empty or size 1, set directly (decreases by 1)
-      if (original.isEmpty() || original.getCount() == 1) {
-        this.setItem(i, newStack);
-      }
-      else if (ItemStack.isSameItemSameComponents(original, newStack)) {
-        // if matching, merge (decreasing by 1
-        newStack.grow(original.getCount() - 1);
-        this.setItem(i, newStack);
-      }
-      else {
-        // directly update the slot
-        this.setItem(i, original.copyWithCount(original.getCount() - 1));
-        // otherwise, drop the item as the player
-        if (!newStack.isEmpty() && !player.getInventory().add(newStack)) {
-          player.drop(newStack, false);
+    int gridWidth = craftingInventory.getWidth();
+    int gridHeight = craftingInventory.getHeight();
+    for (int y = 0; y < gridHeight; y++) {
+      for (int x = 0; x < gridWidth; x++) {
+        int slot = y * gridWidth + x;
+
+        // Vanilla ResultSlot semantics: consume one input from every occupied real grid slot first.
+        ItemStack original = this.getItem(slot);
+        if (!original.isEmpty()) {
+          this.removeItem(slot, 1);
+        }
+
+        // The remainder list is indexed in the trimmed CraftingInput, not the full table grid.
+        int remainderX = x - positioned.left();
+        int remainderY = y - positioned.top();
+        if (remainderX < 0 || remainderY < 0 || remainderX >= input.width() || remainderY >= input.height()) {
+          continue;
+        }
+        int remainderIndex = remainderY * input.width() + remainderX;
+        if (remainderIndex < 0 || remainderIndex >= remaining.size()) {
+          continue;
+        }
+
+        ItemStack newStack = remaining.get(remainderIndex);
+        if (!newStack.isEmpty()) {
+          ItemStack current = this.getItem(slot);
+          if (current.isEmpty()) {
+            this.setItem(slot, newStack);
+          }
+          else if (ItemStack.isSameItemSameComponents(current, newStack)) {
+            newStack.grow(current.getCount());
+            this.setItem(slot, newStack);
+          }
+          else if (!player.getInventory().add(newStack)) {
+            player.drop(newStack, false);
+          }
         }
       }
     }
@@ -238,7 +257,6 @@ public class CraftingStationBlockEntity extends RetexturedTableBlockEntity imple
 
   /**
    * Sends the current recipe to the given player
-   * @param player  Player to send an update to
    */
   public void syncRecipe(Player player) {
     // must have a last recipe and a server world
