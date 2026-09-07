@@ -21,9 +21,9 @@ import slimeknights.tconstruct.tables.client.inventory.TinkerStationScreen;
 public class UpdateTinkerStationRecipePacket implements IThreadsafePacket {
   private final BlockPos pos;
   private final ResourceLocation recipe;
-  public UpdateTinkerStationRecipePacket(BlockPos pos, ITinkerStationRecipe recipe) {
+  public UpdateTinkerStationRecipePacket(BlockPos pos, ResourceLocation recipe) {
     this.pos = pos;
-    this.recipe = recipe.getId();
+    this.recipe = recipe;
   }
 
   public UpdateTinkerStationRecipePacket(FriendlyByteBuf buffer) {
@@ -58,14 +58,14 @@ public class UpdateTinkerStationRecipePacket implements IThreadsafePacket {
         if (mc.screen instanceof TinkerStationScreen stationScreen) {
           TinkerStationBlockEntity te = stationScreen.getTileEntity();
           if (te != null && te.getBlockPos().equals(packet.pos)) {
-            te.updateRecipe(recipe);
+            te.updateRecipe(recipe, packet.recipe);
             stationScreen.updateDisplay();
             return;
           }
         }
         // if the wrong screen is open or no screen, use the tile directly
         if (BlockEntityPacket.getBlockEntity(world, packet.pos, packet) instanceof TinkerStationBlockEntity be) {
-          be.updateRecipe(recipe);
+          be.updateRecipe(recipe, packet.recipe);
         } else {
           TConstruct.LOG.error("Failed to update Tinker Station Recipe at {} to {}: unable to find Tinker Station", packet.pos, packet.recipe);
         }

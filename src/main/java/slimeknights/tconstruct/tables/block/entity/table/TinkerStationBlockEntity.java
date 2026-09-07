@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
@@ -55,6 +56,9 @@ public class TinkerStationBlockEntity extends RetexturedTableBlockEntity impleme
   /** Last crafted crafting recipe */
   @Nullable @Getter
   private ITinkerStationRecipe lastRecipe;
+  /** 1.21 stores recipe identity on RecipeHolder rather than Recipe. */
+  @Nullable
+  private ResourceLocation lastRecipeId;
   /** Result inventory, lazy loads results */
   @Getter
   private final LazyResultContainer craftingResult;
@@ -153,19 +157,28 @@ public class TinkerStationBlockEntity extends RetexturedTableBlockEntity impleme
     if (!this.level.isClientSide && this.level.getServer() != null) {
       RecipeManager manager = this.level.getServer().getRecipeManager();
 
-      // first, try the cached recipe
+      // first, try the cached recipe and its holder-owned ID
       ITinkerStationRecipe recipe = lastRecipe;
-      // if it does not match, find a new recipe
+      ResourceLocation recipeId = lastRecipeId;
+      // if it does not match, find a new holder so we retain both recipe value and its 1.21 ID
       if (recipe == null || !recipe.matches(this.inventoryWrapper, this.level)) {
-        recipe = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).map(holder -> holder.value()).orElse(null);
+        var holder = manager.getRecipeFor(TinkerRecipeTypes.TINKER_STATION.get(), this.inventoryWrapper, this.level).orElse(null);
+        if (holder != null) {
+          recipe = holder.value();
+          recipeId = holder.id();
+        } else {
+          recipe = null;
+          recipeId = null;
+        }
       }
 
       // if we have a recipe, fetch its result
       boolean needsSync = true;
       if (recipe != null) {
-        // sync if the recipe is different
-        if (lastRecipe != recipe) {
+        // sync if either the recipe object or holder identity changed
+        if (lastRecipe != recipe || !Objects.equals(lastRecipeId, recipeId)) {
           this.lastRecipe = recipe;
+          this.lastRecipeId = recipeId;
           this.syncToRelevantPlayers(this::syncRecipe);
           needsSync = false;
         }
@@ -290,8 +303,8 @@ public class TinkerStationBlockEntity extends RetexturedTableBlockEntity impleme
    */
   public void syncRecipe(Player player) {
     // must have a last recipe and a server level
-    if (this.lastRecipe != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer server) {
-      TinkerNetwork.getInstance().sendTo(new UpdateTinkerStationRecipePacket(this.worldPosition, this.lastRecipe), server);
+    if (this.lastRecipe != null && this.lastRecipeId != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer server) {
+      TinkerNetwork.getInstance().sendTo(new UpdateTinkerStationRecipePacket(this.worldPosition, this.lastRecipeId), server);
     }
   }
 
@@ -299,9 +312,15 @@ public class TinkerStationBlockEntity extends RetexturedTableBlockEntity impleme
    * Updates the recipe from the server
    * @param recipe  New recipe
    */
-  public void updateRecipe(ITinkerStationRecipe recipe) {
+  public void updateRecipe(ITinkerStationRecipe recipe, @Nullable ResourceLocation recipeId) {
     this.lastRecipe = recipe;
+    this.lastRecipeId = recipeId;
     this.craftingResult.clearContent();
+  }
+
+  /** Compatibility overload for callers that do not own a RecipeHolder ID. */
+  public void updateRecipe(ITinkerStationRecipe recipe) {
+    updateRecipe(recipe, null);
   }
 
 
