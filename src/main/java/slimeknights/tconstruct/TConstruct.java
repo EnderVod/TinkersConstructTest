@@ -15,6 +15,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import slimeknights.mantle.block.entity.InventoryBlockEntity;
 import slimeknights.tconstruct.common.TinkerModule;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.common.config.Config;
@@ -114,6 +115,11 @@ public class TConstruct {
 
   /** Registers native NeoForge capabilities for Tinkers blocks, block entities, and item stacks. */
   static void registerCapabilities(final RegisterCapabilitiesEvent event) {
+    InventoryBlockEntity.registerItemHandler(event, TinkerTables.craftingStationTile.get());
+    InventoryBlockEntity.registerItemHandler(event, TinkerTables.tinkerStationTile.get());
+    InventoryBlockEntity.registerItemHandler(event, TinkerTables.partBuilderTile.get());
+    InventoryBlockEntity.registerItemHandler(event, TinkerTables.modifierWorktableTile.get());
+
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.tank.get(), (tank, side) -> tank.getTank());
     event.registerBlockEntity(Capabilities.FluidHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getTank());
     event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, TinkerSmeltery.melter.get(), (melter, side) -> melter.getItemHandler());
