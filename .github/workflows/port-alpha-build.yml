@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source includes acebd24e vanilla-namespace fix; this workflow validates the assembled JAR.
+# Runtime source includes 1926644 namespace + NeoForge event-bus fixes; validate the assembled JAR.
 on:
   push:
     branches:
