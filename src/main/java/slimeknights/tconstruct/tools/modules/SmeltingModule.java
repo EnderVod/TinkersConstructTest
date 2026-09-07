@@ -22,6 +22,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
@@ -76,7 +77,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
   /** NBT key to store the cooking time */
   private static final String TAG_TIME = "tic_remaining_time";
   /** Cache of last recipe found */
-  private static AbstractCookingRecipe lastRecipe = null;
+  private static RecipeHolder<? extends AbstractCookingRecipe> lastRecipe = null;
   /** Cooking time for when a slot has no available recipe */
   private static final int NO_RECIPE = -1;
   private static final List<ModuleHook<?>> DEFAULT_HOOKS = HookProvider.<SmeltingModule>defaultHooks(ModifierHooks.MELEE_HIT, ModifierHooks.MONSTER_MELEE_HIT, ModifierHooks.LAUNCHER_HIT, ModifierHooks.BLOCK_HARVEST, ModifierHooks.PROJECTILE_LAUNCH, ModifierHooks.ON_ATTACKED, ModifierHooks.PLANT_HARVEST, ModifierHooks.SHEAR_ENTITY, ModifierHooks.SLING_LAUNCH);
@@ -121,15 +122,15 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
 
   /** Finds the recipe for the given stack */
   @Nullable
-  private static AbstractCookingRecipe findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {
+  private static RecipeHolder<? extends AbstractCookingRecipe> findRecipe(RecipeType<? extends AbstractCookingRecipe> recipeType, ItemStack stack, Level level, ModifierId modifier) {
     SingleRecipeInput input = new SingleRecipeInput(stack);
     try {
       // first, try the cached recipe
-      if (lastRecipe != null && lastRecipe.matches(input, level)) {
+      if (lastRecipe != null && lastRecipe.value().matches(input, level)) {
         return lastRecipe;
       }
       // if that failed, do a recipe lookup
-      AbstractCookingRecipe recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);
+      RecipeHolder<? extends AbstractCookingRecipe> recipe = level.getRecipeManager().getRecipeFor(recipeType, input, level).orElse(null);
       if (recipe != null) {
         lastRecipe = recipe;
       }
@@ -161,6 +162,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
       float cookingPower = amount * multiplier;
       for (int i = 0; i < list.size(); i++) {
         // lazily load a few pieces of data
+        RecipeHolder<? extends AbstractCookingRecipe> recipeHolder = null;
         AbstractCookingRecipe recipe = null;
         ItemStack stack = null;
 
@@ -169,9 +171,10 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
         // 0 means no recipe, time for a lookup
         if (time == 0) {
           time = NO_RECIPE;
-          stack = ItemStack.of(entry);
-          recipe = findRecipe(recipeType, stack, level, modifier.getId());
-          if (recipe != null) {
+          stack = ItemStack.parseOptional(level.registryAccess(), entry);
+          recipeHolder = findRecipe(recipeType, stack, level, modifier.getId());
+          if (recipeHolder != null) {
+            recipe = recipeHolder.value();
             time = recipe.getCookingTime();
           }
           entry.putInt(TAG_TIME, time);
@@ -198,9 +201,10 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
 
             // use the recipe we fetched earlier if present
             if (recipe == null) {
-              stack = ItemStack.of(entry);
+              stack = ItemStack.parseOptional(level.registryAccess(), entry);
               if (!stack.isEmpty()) {
-                recipe = findRecipe(recipeType, stack, level, modifier.getId());
+                recipeHolder = findRecipe(recipeType, stack, level, modifier.getId());
+                recipe = recipeHolder == null ? null : recipeHolder.value();
               }
             }
             // if we have a recipe, time to cook
@@ -216,7 +220,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
                     maxStackSize = Math.min(result.getMaxStackSize(), output.getSlotLimit(tool, modifier, slot));
                   }
                   // if not enough space for the combo or its type is wrong, just mark as almost finished and give up
-                  if (result.getCount() + currentResult.getCount() > maxStackSize || !currentResult.isEmpty() && !ItemStack.isSameItemSameTags(currentResult, result)) {
+                  if (result.getCount() + currentResult.getCount() > maxStackSize || !currentResult.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, result)) {
                     entry.putInt(TAG_TIME, 1);
                     continue;
                   }
@@ -259,7 +263,7 @@ public record SmeltingModule(RecipeType<? extends AbstractCookingRecipe> recipeT
                   }
                 }
               } catch (Exception e) {
-                TConstruct.LOG.error("Error getting result of recipe {} on modifier {}, this usually indicates a broken recipe", recipe.getId(), modifier, e);
+                TConstruct.LOG.error("Error getting result of recipe {} on modifier {}, this usually indicates a broken recipe", recipeHolder != null ? recipeHolder.id() : recipe, modifier, e);
               }
             } else {
               // lost the recipe? stop trying to smelt it
