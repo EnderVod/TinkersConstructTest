@@ -1,4 +1,4 @@
-name: Tinkers one-shot block interactions 1.21 batch
+name: Tinkers one-shot copper can components 1.21 batch
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified block interaction migrations
+      - name: Apply verified Copper Can component migration
         shell: bash
         run: |
           python - <<'PY'
@@ -33,64 +33,81 @@ jobs:
                   raise RuntimeError(f"{label}: expected one match, found {count}: {old[:220]!r}")
               return text.replace(old, new, 1)
 
-          # ChestBlock: item custom data + 1.21 block interaction pipeline.
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/ChestBlock.java")
+          path = Path("src/main/java/slimeknights/tconstruct/smeltery/item/CopperCanItem.java")
           text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.core.BlockPos;", "import net.minecraft.core.BlockPos;\nimport net.minecraft.core.component.DataComponents;", "chest data components import")
-          text = replace_once(text, "import net.minecraft.nbt.Tag;", "import net.minecraft.nbt.Tag;\nimport net.minecraft.world.ItemInteractionResult;", "chest item interaction import")
-          text = replace_once(text, "import net.minecraft.world.item.ItemStack;", "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.component.CustomData;", "chest CustomData import")
           text = replace_once(
               text,
-              """    CompoundTag tag = stack.getTag();\n    if (tag != null && tag.contains(\"TinkerData\", Tag.TAG_COMPOUND)) {\n      CompoundTag tinkerData = tag.getCompound(\"TinkerData\");\n      BlockEntity te = worldIn.getBlockEntity(pos);\n      if (te instanceof AbstractChestBlockEntity chest) {\n        chest.readInventory(tinkerData);\n      }\n    }""",
-              """    CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();\n    if (tag.contains(\"TinkerData\", Tag.TAG_COMPOUND)) {\n      CompoundTag tinkerData = tag.getCompound(\"TinkerData\");\n      BlockEntity te = worldIn.getBlockEntity(pos);\n      if (te instanceof AbstractChestBlockEntity chest) {\n        chest.readInventory(tinkerData, worldIn.registryAccess());\n      }\n    }""",
-              "chest placed inventory data")
+              "import net.minecraft.core.registries.BuiltInRegistries;",
+              "import net.minecraft.core.component.DataComponentPatch;\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.core.registries.BuiltInRegistries;",
+              "component imports")
+          text = replace_once(text, "import net.minecraft.nbt.CompoundTag;", "import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.NbtOps;", "NbtOps import")
           text = replace_once(
               text,
-              """  @SuppressWarnings(\"deprecation\")\n  @Override\n  @Deprecated\n  public InteractionResult use(BlockState state, Level worldIn, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {\n    BlockEntity te = worldIn.getBlockEntity(pos);\n    Inventory playerInventory = player.getInventory();\n    ItemStack heldItem = playerInventory.getSelected();\n\n    if (!heldItem.isEmpty() && te instanceof AbstractChestBlockEntity chest && chest.canInsert(player, heldItem)) {\n      IItemHandlerModifiable itemHandler = chest.getItemHandler();\n      ItemStack rest = ItemHandlerHelper.insertItem(itemHandler, heldItem, false);\n      if (rest.isEmpty() || rest.getCount() < heldItem.getCount()) {\n        playerInventory.items.set(playerInventory.selected, rest);\n        return InteractionResult.SUCCESS;\n      }\n    }\n\n    return super.use(state, worldIn, pos, player, handIn, hit);\n  }""",
-              """  @Override\n  protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level worldIn, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {\n    BlockEntity te = worldIn.getBlockEntity(pos);\n    if (!heldItem.isEmpty() && te instanceof AbstractChestBlockEntity chest && chest.canInsert(player, heldItem)) {\n      IItemHandlerModifiable itemHandler = chest.getItemHandler();\n      ItemStack rest = ItemHandlerHelper.insertItem(itemHandler, heldItem, false);\n      if (rest.isEmpty() || rest.getCount() < heldItem.getCount()) {\n        player.setItemInHand(handIn, rest);\n        return ItemInteractionResult.SUCCESS;\n      }\n    }\n    return super.useItemOn(heldItem, state, worldIn, pos, player, handIn, hit);\n  }""",
-              "chest useItemOn migration")
-          text = text.replace("import net.minecraft.world.InteractionResult;\n", "")
-          text = text.replace("import net.minecraft.world.entity.player.Inventory;\n", "")
+              "import net.minecraft.world.item.TooltipFlag;\nimport net.minecraft.world.level.Level;",
+              "import net.minecraft.world.item.TooltipFlag;\nimport net.minecraft.world.item.component.CustomData;",
+              "tooltip/custom data imports")
+          text = replace_once(text, "import slimeknights.mantle.data.loadable.Loadables;", "import slimeknights.mantle.data.loadable.Loadables;\nimport slimeknights.tconstruct.TConstruct;", "logger import")
+
+          text = replace_once(
+              text,
+              """  @Override\n  public void appendHoverText(ItemStack stack, @Nullable Level worldIn, List<Component> tooltip, TooltipFlag flag) {\n    Fluid fluid = getFluid(stack);\n    if (fluid != Fluids.EMPTY) {\n      CompoundTag fluidTag = getFluidTag(stack);\n      MutableComponent text;\n      if (fluidTag != null) {\n        FluidStack displayFluid = new FluidStack(fluid, FluidValues.INGOT, fluidTag);\n        text = displayFluid.getDisplayName().plainCopy();\n      } else {\n        text = Component.translatable(fluid.getFluidType().getDescriptionId());\n      }\n      tooltip.add(Component.translatable(this.getDescriptionId() + \".contents\", text).withStyle(ChatFormatting.GRAY));\n      if (flag.isAdvanced()) {\n        tooltip.add(Component.translatable(TankItem.FLUID_ID, Loadables.FLUID.getKey(fluid)).withStyle(ChatFormatting.DARK_GRAY));\n      }\n    } else {\n      tooltip.add(Component.translatable(this.getDescriptionId() + \".tooltip\").withStyle(ChatFormatting.GRAY));\n    }\n  }""",
+              """  @Override\n  public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {\n    Fluid fluid = getFluid(stack);\n    if (fluid != Fluids.EMPTY) {\n      MutableComponent text = makeFluidStack(stack, fluid, FluidValues.INGOT).getHoverName().plainCopy();\n      tooltip.add(Component.translatable(this.getDescriptionId() + \".contents\", text).withStyle(ChatFormatting.GRAY));\n      if (flag.isAdvanced()) {\n        tooltip.add(Component.translatable(TankItem.FLUID_ID, Loadables.FLUID.getKey(fluid)).withStyle(ChatFormatting.DARK_GRAY));\n      }\n    } else {\n      tooltip.add(Component.translatable(this.getDescriptionId() + \".tooltip\").withStyle(ChatFormatting.GRAY));\n    }\n  }""",
+              "1.21 tooltip signature")
+
+          text = replace_once(
+              text,
+              """  /** Removes the fluid from the given stack */\n  public static void removeFluid(ItemStack stack) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null) {\n      nbt.remove(TAG_FLUID);\n      nbt.remove(TAG_FLUID_TAG);\n      if (nbt.isEmpty()) {\n        stack.setTag(null);\n      }\n    }\n  }\n\n  /** Sets the fluid on the given stack whether or not its valiid */\n  private static void setFluidInternal(ItemStack stack, ResourceLocation fluid, @Nullable CompoundTag fluidTag) {\n    CompoundTag nbt = stack.getOrCreateTag();\n    nbt.putString(TAG_FLUID, fluid.toString());\n    if (fluidTag != null) {\n      nbt.put(TAG_FLUID_TAG, fluidTag.copy());\n    } else {\n      nbt.remove(TAG_FLUID_TAG);\n    }\n  }\n\n\n  /** Sets the fluid on the given stack */\n  @SuppressWarnings(\"deprecation\")\n  public static ItemStack setFluid(ItemStack stack, ResourceLocation fluid, @Nullable CompoundTag fluidTag) {\n    // if empty, try to remove the NBT, helps with recipes\n    if (fluid.equals(BuiltInRegistries.FLUID.getDefaultKey())) {\n      removeFluid(stack);\n    } else {\n      setFluidInternal(stack, fluid, fluidTag);\n    }\n    return stack;\n  }\n  /** Sets the fluid on the given stack */\n  @SuppressWarnings(\"deprecation\")\n  public static ItemStack setFluid(ItemStack stack, Fluid fluid, @Nullable CompoundTag fluidTag) {\n    // if empty, try to remove the NBT, helps with recipes\n    if (fluid == Fluids.EMPTY) {\n      removeFluid(stack);\n    } else {\n      setFluidInternal(stack, BuiltInRegistries.FLUID.getKey(fluid), fluidTag);\n    }\n    return stack;\n  }\n\n  /** Sets the fluid on the given stack */\n  public static ItemStack setFluid(ItemStack stack, FluidStack fluid) {\n    return setFluid(stack, fluid.getFluid(), fluid.getTag());\n  }""",
+              """  /** Removes the fluid from the given stack while preserving unrelated custom data. */\n  public static void removeFluid(ItemStack stack) {\n    CompoundTag nbt = getCustomData(stack);\n    nbt.remove(TAG_FLUID);\n    nbt.remove(TAG_FLUID_TAG);\n    if (nbt.isEmpty()) {\n      stack.remove(DataComponents.CUSTOM_DATA);\n    } else {\n      stack.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));\n    }\n  }\n\n  /** Writes the fluid ID and its serialized 1.21 component patch into the can's custom data. */\n  private static void setFluidInternal(ItemStack stack, ResourceLocation fluid, @Nullable Tag encodedComponents) {\n    CompoundTag nbt = getCustomData(stack);\n    nbt.putString(TAG_FLUID, fluid.toString());\n    if (encodedComponents != null) {\n      nbt.put(TAG_FLUID_TAG, encodedComponents.copy());\n    } else {\n      nbt.remove(TAG_FLUID_TAG);\n    }\n    stack.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));\n  }\n\n  /** Compatibility overload for old callers that supplied arbitrary FluidStack NBT. */\n  @SuppressWarnings(\"deprecation\")\n  public static ItemStack setFluid(ItemStack stack, ResourceLocation fluid, @Nullable CompoundTag fluidTag) {\n    if (fluid.equals(BuiltInRegistries.FLUID.getDefaultKey())) {\n      removeFluid(stack);\n      return stack;\n    }\n    Tag encoded = null;\n    if (fluidTag != null && !fluidTag.isEmpty()) {\n      DataComponentPatch legacy = DataComponentPatch.builder().set(DataComponents.CUSTOM_DATA, CustomData.of(fluidTag.copy())).build();\n      encoded = serializeFluidComponents(legacy);\n      if (encoded == null) {\n        return stack;\n      }\n    }\n    setFluidInternal(stack, fluid, encoded);\n    return stack;\n  }\n\n  /** Compatibility overload for old callers that supplied arbitrary FluidStack NBT. */\n  @SuppressWarnings(\"deprecation\")\n  public static ItemStack setFluid(ItemStack stack, Fluid fluid, @Nullable CompoundTag fluidTag) {\n    if (fluid == Fluids.EMPTY) {\n      removeFluid(stack);\n      return stack;\n    }\n    return setFluid(stack, BuiltInRegistries.FLUID.getKey(fluid), fluidTag);\n  }\n\n  /** Sets the fluid on the given stack, preserving all 1.21 fluid data components. */\n  public static ItemStack setFluid(ItemStack stack, FluidStack fluid) {\n    if (fluid.isEmpty()) {\n      removeFluid(stack);\n      return stack;\n    }\n    Tag encoded = fluid.isComponentsPatchEmpty() ? null : serializeFluidComponents(fluid.getComponentsPatch());\n    if (!fluid.isComponentsPatchEmpty() && encoded == null) {\n      return stack;\n    }\n    setFluidInternal(stack, BuiltInRegistries.FLUID.getKey(fluid.getFluid()), encoded);\n    return stack;\n  }""",
+              "item custom data/component storage")
+
+          text = replace_once(
+              text,
+              """  public static Fluid getFluid(ItemStack stack) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null && nbt.contains(TAG_FLUID, Tag.TAG_STRING)) {""",
+              """  public static Fluid getFluid(ItemStack stack) {\n    CompoundTag nbt = getCustomData(stack);\n    if (nbt.contains(TAG_FLUID, Tag.TAG_STRING)) {""",
+              "fluid ID custom-data read")
+
+          text = replace_once(
+              text,
+              """  /** Gets the fluid NBT from the given stack */\n  @Nullable\n  public static CompoundTag getFluidTag(ItemStack stack) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null && nbt.contains(TAG_FLUID_TAG, Tag.TAG_COMPOUND)) {\n      return nbt.getCompound(TAG_FLUID_TAG);\n    }\n    return null;\n  }""",
+              """  /** Gets a mutable copy of this item's custom-data component. */\n  private static CompoundTag getCustomData(ItemStack stack) {\n    return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();\n  }\n\n  /** Reads the stored 1.21 fluid component patch. Legacy fluid NBT becomes CUSTOM_DATA. */\n  static DataComponentPatch getFluidComponents(ItemStack stack) {\n    CompoundTag nbt = getCustomData(stack);\n    if (!nbt.contains(TAG_FLUID_TAG)) {\n      return DataComponentPatch.EMPTY;\n    }\n    Tag encoded = nbt.get(TAG_FLUID_TAG);\n    if (encoded == null) {\n      return DataComponentPatch.EMPTY;\n    }\n    var parsed = DataComponentPatch.CODEC.parse(NbtOps.INSTANCE, encoded);\n    var result = parsed.result();\n    if (result.isPresent()) {\n      return result.get();\n    }\n    if (encoded instanceof CompoundTag legacy && !legacy.isEmpty()) {\n      return DataComponentPatch.builder().set(DataComponents.CUSTOM_DATA, CustomData.of(legacy.copy())).build();\n    }\n    parsed.error().ifPresent(error -> TConstruct.LOG.warn(\"Unable to decode Copper Can fluid components: {}\", error.message()));\n    return DataComponentPatch.EMPTY;\n  }\n\n  /** Serializes a fluid component patch into the can's persistent custom data. */\n  @Nullable\n  private static Tag serializeFluidComponents(DataComponentPatch components) {\n    return DataComponentPatch.CODEC.encodeStart(NbtOps.INSTANCE, components)\n      .resultOrPartial(error -> TConstruct.LOG.warn(\"Unable to encode Copper Can fluid components: {}\", error))\n      .orElse(null);\n  }\n\n  /** Reconstructs a component-aware fluid stack from this Copper Can. */\n  static FluidStack makeFluidStack(ItemStack stack, Fluid fluid, int amount) {\n    FluidStack result = new FluidStack(fluid, amount);\n    result.applyComponents(getFluidComponents(stack));\n    return result;\n  }""",
+              "fluid component helpers")
+
+          text = replace_once(
+              text,
+              """  public static String getSubtype(ItemStack stack) {\n    CompoundTag nbt = stack.getTag();\n    if (nbt != null) {\n      return nbt.getString(TAG_FLUID);\n    }\n    return \"\";\n  }""",
+              """  public static String getSubtype(ItemStack stack) {\n    return getCustomData(stack).getString(TAG_FLUID);\n  }""",
+              "subtype custom-data read")
+
+          for legacy in ("stack.getTag()", "stack.setTag(", "stack.getOrCreateTag()", "fluid.getTag()", "new FluidStack(fluid, FluidValues.INGOT,", "getFluidTag(stack)"):
+              if legacy in text:
+                  raise RuntimeError(f"Legacy CopperCanItem API remains: {legacy}")
           path.write_text(text, encoding="utf-8")
 
-          # TinkerStationBlock: custom-data presence is no longer needed; pick-block uses vanilla 1.21 signature.
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/TinkerStationBlock.java")
+          path = Path("src/main/java/slimeknights/tconstruct/smeltery/item/CopperCanFluidHandler.java")
           text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.world.entity.player.Player;\n", "", "remove pick player import")
-          text = replace_once(text, "import net.minecraft.world.level.BlockGetter;", "import net.minecraft.world.level.LevelReader;", "LevelReader pick import")
-          text = replace_once(text, "import net.minecraft.world.phys.HitResult;\n", "", "remove HitResult import")
-          text = replace_once(text, "if (stack.hasTag() && level.getBlockEntity(pos) instanceof TinkerStationBlockEntity be) {", "if (level.getBlockEntity(pos) instanceof TinkerStationBlockEntity be) {", "remove legacy hasTag gate")
+          text = replace_once(text, "import net.minecraft.nbt.CompoundTag;\n", "", "remove CompoundTag import")
+          text = replace_once(text, "import javax.annotation.Nullable;\n", "", "remove Nullable import")
           text = replace_once(
               text,
-              "public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter level, BlockPos pos, Player player) {",
-              "public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {",
-              "vanilla 1.21 clone stack signature")
-          path.write_text(text, encoding="utf-8")
-
-          # ArmorSlot: enchantments are holder-backed dynamic registry entries in 1.21.
-          path = Path("src/main/java/slimeknights/tconstruct/tables/menu/slot/ArmorSlot.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.resources.ResourceLocation;", "import net.minecraft.core.registries.Registries;\nimport net.minecraft.resources.ResourceLocation;", "enchantment registry import")
-          text = replace_once(text, "import net.minecraft.world.item.enchantment.EnchantmentHelper;", "import net.minecraft.world.item.enchantment.EnchantmentHelper;\nimport net.minecraft.world.item.enchantment.Enchantments;", "binding curse key import")
+              """  /** Gets the contained fluid */\n  @Nullable\n  private CompoundTag getFluidTag() {\n    return CopperCanItem.getFluidTag(container);\n  }\n\n""",
+              "",
+              "remove legacy fluid tag helper")
+          old = "new FluidStack(getFluid(), getCapacity(), getFluidTag())"
+          if text.count(old) != 1:
+              raise RuntimeError(f"Expected one tank FluidStack constructor, found {text.count(old)}")
+          text = text.replace(old, "CopperCanItem.makeFluidStack(container, getFluid(), getCapacity())", 1)
+          old = "new FluidStack(fluid, capacity, getFluidTag())"
+          if text.count(old) != 2:
+              raise RuntimeError(f"Expected two drain FluidStack constructors, found {text.count(old)}")
+          text = text.replace(old, "CopperCanItem.makeFluidStack(container, fluid, capacity)", 2)
           text = replace_once(
               text,
-              "return stack.isEmpty() || player.isCreative() || !EnchantmentHelper.hasBindingCurse(stack);",
-              "return stack.isEmpty() || player.isCreative() || EnchantmentHelper.getItemEnchantmentLevel(player.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.BINDING_CURSE), stack) <= 0;",
-              "binding curse holder lookup")
-          path.write_text(text, encoding="utf-8")
-
-          # FluidCannonBlock: legacy Block#use moved to item interaction in 1.21.
-          path = Path("src/main/java/slimeknights/tconstruct/smeltery/block/FluidCannonBlock.java")
-          text = path.read_text(encoding="utf-8")
-          text = replace_once(text, "import net.minecraft.world.InteractionHand;", "import net.minecraft.world.InteractionHand;\nimport net.minecraft.world.ItemInteractionResult;", "cannon interaction result import")
-          text = replace_once(text, "import net.minecraft.world.item.Equipable;", "import net.minecraft.world.item.Equipable;\nimport net.minecraft.world.item.ItemStack;", "cannon stack import")
-          text = replace_once(
-              text,
-              """  @Deprecated\n  @Override\n  public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {""",
-              """  @Override\n  protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {""",
-              "fluid cannon useItemOn signature")
-          text = replace_once(text, "    return InteractionResult.SUCCESS;\n  }", "    return ItemInteractionResult.SUCCESS;\n  }", "fluid cannon result")
-          text = text.replace("import net.minecraft.world.InteractionResult;\n", "")
+              "FluidStack.areFluidStackTagsEqual(resource, output)",
+              "FluidStack.isSameFluidSameComponents(resource, output)",
+              "component-aware fluid equality")
+          for legacy in ("getFluidTag()", "areFluidStackTagsEqual", "new FluidStack(fluid, capacity,"):
+              if legacy in text:
+                  raise RuntimeError(f"Legacy CopperCanFluidHandler API remains: {legacy}")
           path.write_text(text, encoding="utf-8")
           PY
 
@@ -103,11 +120,9 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tables/block/ChestBlock.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/TinkerStationBlock.java \
-                  src/main/java/slimeknights/tconstruct/tables/menu/slot/ArmorSlot.java \
-                  src/main/java/slimeknights/tconstruct/smeltery/block/FluidCannonBlock.java
-          git commit -m "Port table and cannon interactions to 1.21"
+          git add src/main/java/slimeknights/tconstruct/smeltery/item/CopperCanItem.java \
+                  src/main/java/slimeknights/tconstruct/smeltery/item/CopperCanFluidHandler.java
+          git commit -m "Port Copper Can fluid components to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
