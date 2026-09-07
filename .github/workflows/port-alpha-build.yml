@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source includes a89a630 humanoid-armor + NeoForge runtime fixes; validate the assembled JAR.
+# Runtime source validated through d5af006: compile green + dedicated server ready; assemble the current test JAR.
 on:
   push:
     branches:
