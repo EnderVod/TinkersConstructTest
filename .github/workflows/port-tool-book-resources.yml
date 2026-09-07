@@ -42,20 +42,32 @@ jobs:
                   return [migrate_common_tags(item) for item in value]
               return value
 
-          # Tool building recipes are still under the pre-1.21 plural directory.
-          # Mantle's 1.21 codec bridge also needs the recipe ID embedded in loadable recipes.
+          # Tool-building resources are still under the pre-1.21 plural directory.
+          # Custom TConstruct recipes need mantle_id for the codec bridge; vanilla recipes
+          # instead need the 1.21 ItemStack result field name `id` rather than `item`.
           old_building = root / 'recipes/tools/building'
           new_building = root / 'recipe/tools/building'
           if not old_building.exists():
               raise SystemExit(f'Missing tool-building recipe source: {old_building}')
 
           tool_count = 0
+          custom_tool_count = 0
+          vanilla_tool_count = 0
           for src in sorted(old_building.rglob('*.json')):
               dst = new_building / src.relative_to(old_building)
               dst.parent.mkdir(parents=True, exist_ok=True)
               data = migrate_common_tags(json.loads(src.read_text(encoding='utf-8')))
               recipe_path = dst.relative_to(root / 'recipe').with_suffix('').as_posix()
-              data['mantle_id'] = f'tconstruct:{recipe_path}'
+              recipe_type = data.get('type', '')
+              result = data.get('result')
+              if isinstance(recipe_type, str) and recipe_type.startswith('tconstruct:'):
+                  data['mantle_id'] = f'tconstruct:{recipe_path}'
+                  custom_tool_count += 1
+              else:
+                  data.pop('mantle_id', None)
+                  if isinstance(result, dict) and 'item' in result and 'id' not in result:
+                      result['id'] = result.pop('item')
+                  vanilla_tool_count += 1
               dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
               tool_count += 1
 
@@ -111,7 +123,7 @@ jobs:
           new_loot.parent.mkdir(parents=True, exist_ok=True)
           new_loot.write_text(old_loot.read_text(encoding='utf-8'), encoding='utf-8')
 
-          print(f'Migrated {tool_count} tool-building recipes')
+          print(f'Migrated {tool_count} tool-building resources ({custom_tool_count} custom, {vanilla_tool_count} vanilla)')
           print(f'Migrated {len(book_names)} book crafting recipes')
           print('Migrated starting-book advancement and loot table')
 
@@ -127,13 +139,43 @@ jobs:
             echo "Tool-building migration count mismatch: old=$old_count new=$new_count"
             exit 1
           fi
-          mantle_count=$(grep -R -l '"mantle_id"' "$root/recipe/tools/building" | wc -l)
-          if [ "$mantle_count" -ne "$new_count" ]; then
-            echo "Expected mantle_id in all $new_count tool-building recipes, found $mantle_count"
-            exit 1
-          fi
+
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          tool_root = Path('src/generated/resources/data/tconstruct/recipe/tools/building')
+          custom = 0
+          vanilla = 0
+          for path in tool_root.rglob('*.json'):
+              data = json.loads(path.read_text(encoding='utf-8'))
+              recipe_type = data.get('type', '')
+              recipe_id = 'tconstruct:' + path.relative_to(Path('src/generated/resources/data/tconstruct/recipe')).with_suffix('').as_posix()
+              if isinstance(recipe_type, str) and recipe_type.startswith('tconstruct:'):
+                  custom += 1
+                  if data.get('mantle_id') != recipe_id:
+                      raise SystemExit(f'{path}: expected mantle_id {recipe_id}, got {data.get("mantle_id")!r}')
+              else:
+                  vanilla += 1
+                  if 'mantle_id' in data:
+                      raise SystemExit(f'{path}: vanilla recipe should not carry mantle_id')
+                  result = data.get('result')
+                  if isinstance(result, dict) and ('item' in result or 'id' not in result):
+                      raise SystemExit(f'{path}: bad 1.21 vanilla result {result!r}')
+              if '"tag": "forge:' in json.dumps(data):
+                  raise SystemExit(f'{path}: stale Forge tag remains')
+          if custom == 0 or vanilla == 0:
+              raise SystemExit(f'Expected both custom and vanilla tool-building resources, got custom={custom}, vanilla={vanilla}')
+          print(f'Validated tool-building resources: custom={custom}, vanilla={vanilla}')
+          PY
+
           grep -q '"type": "tconstruct:tool_building"' "$root/recipe/tools/building/pickaxe.json"
           grep -q '"mantle_id": "tconstruct:tools/building/pickaxe"' "$root/recipe/tools/building/pickaxe.json"
+          grep -q '"id": "tconstruct:earth_staff"' "$root/recipe/tools/building/earth_staff.json"
+          if grep -q '"item": "tconstruct:earth_staff"' "$root/recipe/tools/building/earth_staff.json"; then
+            echo 'earth_staff still uses stale result.item'
+            exit 1
+          fi
 
           python - <<'PY'
           from pathlib import Path
@@ -164,8 +206,7 @@ jobs:
                   raise SystemExit(f'{path}: missing/incorrect mantle_id')
           for path in root.glob('*.json'):
               data = json.loads(path.read_text(encoding='utf-8'))
-              text = json.dumps(data)
-              if '"tag": "forge:' in text:
+              if '"tag": "forge:' in json.dumps(data):
                   raise SystemExit(f'{path}: stale Forge tag remains')
           PY
 
@@ -200,5 +241,5 @@ jobs:
             echo 'No migration changes to commit.'
             exit 0
           fi
-          git commit -m 'Migrate tool building and book resources to 1.21'
+          git commit -m 'Fix vanilla tool-building recipes for 1.21'
           git push
