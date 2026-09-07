@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 1118999b: station tab font access and Minecraft 1.21 pattern recipe migration compile green.
+# Runtime source validated through 405f8825: station tabs, Pattern recipe, model namespace, and GUI font access compile green.
 on:
   push:
     branches:
