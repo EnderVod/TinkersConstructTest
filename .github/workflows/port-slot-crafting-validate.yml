@@ -1,0 +1,72 @@
+name: Tinkers Slot and Crafting Station Validation
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-slot-crafting-validate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Verify Slot x/y runtime AT
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg').read_text(encoding='utf-8')
+          required = (
+              'public-f net.minecraft.world.inventory.Slot x',
+              'public-f net.minecraft.world.inventory.Slot y',
+          )
+          for line in required:
+              if line not in at:
+                  raise SystemExit('Missing runtime Slot AT: ' + line)
+          for stale in ('Slot f_40220_', 'Slot f_40221_'):
+              if stale in at:
+                  raise SystemExit('Stale Slot AT remains: ' + stale)
+
+          screen = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java').read_text(encoding='utf-8')
+          if 'slot.x =' not in screen or 'slot.y =' not in screen:
+              raise SystemExit('Tinker Station no longer contains expected dynamic slot positioning; reevaluate AT need')
+          print('Named 1.21 Slot x/y AT is present for Tinker Station dynamic layout.')
+          PY
+
+      - name: Verify Crafting Station 1.21 recipes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('src/generated/resources/data/tconstruct/recipe/tables')
+          names = ('crafting_station', 'crafting_station_from_logs', 'crafting_station_from_tables')
+          for name in names:
+              path = root / f'{name}.json'
+              data = json.loads(path.read_text(encoding='utf-8'))
+              result = data.get('result', {})
+              if result.get('id') != 'tconstruct:crafting_station' or 'item' in result:
+                  raise SystemExit(f'{path}: invalid 1.21 result object {result!r}')
+          normal = json.loads((root / 'crafting_station.json').read_text(encoding='utf-8'))
+          ingredient = normal.get('key', {}).get('w', {})
+          if ingredient.get('type') != 'neoforge:difference':
+              raise SystemExit('crafting_station.json is not using neoforge:difference')
+          if ingredient.get('base', {}).get('tag') != 'c:workbenches':
+              raise SystemExit('crafting_station.json is not using c:workbenches')
+          tables = Path('src/generated/resources/data/tconstruct/tags/item/tables.json')
+          values = set(json.loads(tables.read_text(encoding='utf-8')).get('values', []))
+          required = {'tconstruct:crafting_station', 'tconstruct:part_builder', 'tconstruct:tinker_station'}
+          if not required.issubset(values):
+              raise SystemExit('Singular tables item tag is missing core table blocks')
+          print('All Crafting Station recipe variants and tables tag are in 1.21 resource paths.')
+          PY
