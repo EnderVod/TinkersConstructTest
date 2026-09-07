@@ -1,0 +1,163 @@
+name: Port Tool Building and Book Resources
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-tool-book-resources.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Migrate tool building and book resources to 1.21
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+
+          root = Path('src/generated/resources/data/tconstruct')
+
+          # Tool building recipes are still under the pre-1.21 plural directory.
+          # Mantle's 1.21 codec bridge also needs the recipe ID embedded in loadable recipes.
+          old_building = root / 'recipes/tools/building'
+          new_building = root / 'recipe/tools/building'
+          if not old_building.exists():
+              raise SystemExit(f'Missing tool-building recipe source: {old_building}')
+
+          tool_count = 0
+          for src in sorted(old_building.rglob('*.json')):
+              dst = new_building / src.relative_to(old_building)
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              data = json.loads(src.read_text(encoding='utf-8'))
+              recipe_path = dst.relative_to(root / 'recipe').with_suffix('').as_posix()
+              data['mantle_id'] = f'tconstruct:{recipe_path}'
+              dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+              tool_count += 1
+
+          # These six guide-book recipes are referenced directly by Mantle book pages.
+          # In 1.21 they need the singular recipe directory and vanilla result.id.
+          book_names = [
+              'materials_and_you',
+              'puny_smelting',
+              'mighty_smelting',
+              'fantastic_foundry',
+              'tinkers_gadgetry',
+              'encyclopedia',
+          ]
+          old_common = root / 'recipes/common'
+          new_common = root / 'recipe/common'
+          new_common.mkdir(parents=True, exist_ok=True)
+          for name in book_names:
+              src = old_common / f'{name}.json'
+              if not src.exists():
+                  raise SystemExit(f'Missing book recipe source: {src}')
+              data = json.loads(src.read_text(encoding='utf-8'))
+              result = data.get('result')
+              if isinstance(result, dict) and 'item' in result and 'id' not in result:
+                  result['id'] = result.pop('item')
+              (new_common / f'{name}.json').write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+
+          # The automatic first Materials and You book is a conditional tick advancement
+          # whose reward is a loot table. Both resource directories became singular in 1.21,
+          # and NeoForge conditions now live directly on the advancement root.
+          old_adv = root / 'advancements/internal/starting_book.json'
+          if not old_adv.exists():
+              raise SystemExit(f'Missing starting-book advancement source: {old_adv}')
+          wrapper = json.loads(old_adv.read_text(encoding='utf-8'))
+          entries = wrapper.get('advancements')
+          if not isinstance(entries, list) or len(entries) != 1:
+              raise SystemExit('Unexpected legacy starting_book advancement wrapper')
+          entry = entries[0]
+          advancement = dict(entry['advancement'])
+          conditions = entry.get('conditions', [])
+          if conditions:
+              advancement['neoforge:conditions'] = conditions
+          new_adv = root / 'advancement/internal/starting_book.json'
+          new_adv.parent.mkdir(parents=True, exist_ok=True)
+          new_adv.write_text(json.dumps(advancement, indent=2) + '\n', encoding='utf-8')
+
+          old_loot = root / 'loot_tables/gameplay/starting_book.json'
+          if not old_loot.exists():
+              raise SystemExit(f'Missing starting-book loot table source: {old_loot}')
+          new_loot = root / 'loot_table/gameplay/starting_book.json'
+          new_loot.parent.mkdir(parents=True, exist_ok=True)
+          new_loot.write_text(old_loot.read_text(encoding='utf-8'), encoding='utf-8')
+
+          print(f'Migrated {tool_count} tool-building recipes')
+          print(f'Migrated {len(book_names)} book crafting recipes')
+          print('Migrated starting-book advancement and loot table')
+
+      - name: Validate migrated resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=src/generated/resources/data/tconstruct
+
+          old_count=$(find "$root/recipes/tools/building" -type f -name '*.json' | wc -l)
+          new_count=$(find "$root/recipe/tools/building" -type f -name '*.json' | wc -l)
+          if [ "$old_count" -eq 0 ] || [ "$old_count" -ne "$new_count" ]; then
+            echo "Tool-building migration count mismatch: old=$old_count new=$new_count"
+            exit 1
+          fi
+          mantle_count=$(grep -R -l '"mantle_id"' "$root/recipe/tools/building" | wc -l)
+          if [ "$mantle_count" -ne "$new_count" ]; then
+            echo "Expected mantle_id in all $new_count tool-building recipes, found $mantle_count"
+            exit 1
+          fi
+          grep -q '"type": "tconstruct:tool_building"' "$root/recipe/tools/building/pickaxe.json"
+          grep -q '"mantle_id": "tconstruct:tools/building/pickaxe"' "$root/recipe/tools/building/pickaxe.json"
+
+          for name in materials_and_you puny_smelting mighty_smelting fantastic_foundry tinkers_gadgetry encyclopedia; do
+            file="$root/recipe/common/$name.json"
+            test -f "$file"
+            grep -q '"id": "tconstruct:' "$file"
+            if grep -q '"item": "tconstruct:' "$file"; then
+              echo "Found stale vanilla recipe result.item in $file"
+              exit 1
+            fi
+          done
+
+          adv="$root/advancement/internal/starting_book.json"
+          loot="$root/loot_table/gameplay/starting_book.json"
+          test -f "$adv"
+          test -f "$loot"
+          grep -q '"trigger": "minecraft:tick"' "$adv"
+          grep -q '"neoforge:conditions"' "$adv"
+          grep -q '"type": "tconstruct:config"' "$adv"
+          grep -q '"prop": "spawn_with_book"' "$adv"
+          grep -q '"tconstruct:gameplay/starting_book"' "$adv"
+          grep -q '"name": "tconstruct:materials_and_you"' "$loot"
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/generated/resources/data/tconstruct/recipe/tools/building \
+            src/generated/resources/data/tconstruct/recipe/common/materials_and_you.json \
+            src/generated/resources/data/tconstruct/recipe/common/puny_smelting.json \
+            src/generated/resources/data/tconstruct/recipe/common/mighty_smelting.json \
+            src/generated/resources/data/tconstruct/recipe/common/fantastic_foundry.json \
+            src/generated/resources/data/tconstruct/recipe/common/tinkers_gadgetry.json \
+            src/generated/resources/data/tconstruct/recipe/common/encyclopedia.json \
+            src/generated/resources/data/tconstruct/advancement/internal/starting_book.json \
+            src/generated/resources/data/tconstruct/loot_table/gameplay/starting_book.json
+          if git diff --cached --quiet; then
+            echo 'No migration changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Migrate tool building and book resources to 1.21'
+          git push
