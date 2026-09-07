@@ -1,0 +1,98 @@
+name: Tinkers Model Namespace Sweep
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-model-namespace-sweep.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Replace stale Forge model references
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              '"forge:item/default"': '"neoforge:item/default"',
+              '"forge:item/default-tool"': '"neoforge:item/default-tool"',
+              '"forge:item/bucket_drip"': '"neoforge:item/bucket_drip"',
+              '"forge:composite"': '"neoforge:composite"',
+          }
+
+          changed = []
+          root = Path('src/generated/resources/assets/tconstruct/models')
+          counts = {old: 0 for old in replacements}
+          for path in root.rglob('*.json'):
+              text = path.read_text(encoding='utf-8')
+              new = text
+              for old, repl in replacements.items():
+                  n = new.count(old)
+                  if n:
+                      counts[old] += n
+                      new = new.replace(old, repl)
+              if new != text:
+                  path.write_text(new, encoding='utf-8')
+                  changed.append(path)
+
+          providers = {
+              Path('src/main/java/slimeknights/tconstruct/common/data/model/TinkerItemModelProvider.java'):
+                  [('"forge:item/default"', '"neoforge:item/default"')],
+              Path('src/main/java/slimeknights/tconstruct/fluids/data/FluidBucketModelProvider.java'):
+                  [('"forge:item/bucket_drip"', '"neoforge:item/bucket_drip"')],
+          }
+          for path, pairs in providers.items():
+              text = path.read_text(encoding='utf-8')
+              new = text
+              for old, repl in pairs:
+                  if old not in new:
+                      raise SystemExit(f'Expected provider reference {old} missing from {path}')
+                  new = new.replace(old, repl)
+              if new != text:
+                  path.write_text(new, encoding='utf-8')
+                  changed.append(path)
+
+          for old, count in counts.items():
+              print(f'{old}: {count} replacements')
+          print(f'Changed {len(set(changed))} files')
+
+          # Fail if any of the exact legacy model references remain in generated Tinkers models.
+          leftovers = []
+          for path in root.rglob('*.json'):
+              text = path.read_text(encoding='utf-8')
+              for old in replacements:
+                  if old in text:
+                      leftovers.append((path, old))
+          if leftovers:
+              for path, old in leftovers[:50]:
+                  print(f'LEFTOVER {old}: {path}')
+              raise SystemExit('Legacy Forge model references remain')
+          PY
+
+      - name: Commit model namespace migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No model namespace changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/assets/tconstruct/models \
+                  src/main/java/slimeknights/tconstruct/common/data/model/TinkerItemModelProvider.java \
+                  src/main/java/slimeknights/tconstruct/fluids/data/FluidBucketModelProvider.java
+          git commit -m 'Use NeoForge model resource namespace'
+          git push origin HEAD:1.21.1-neoforge
