@@ -1,5 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
+# Touch this workflow after migration sweeps when a clean verification run is needed.
 on:
   push:
     branches:
