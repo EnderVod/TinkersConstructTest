@@ -339,14 +339,15 @@ public class ToolEvents {
     if (!(event.getEntity() instanceof LivingEntity living)) {
       return;
     }
-    // this event runs before vanilla updates prevBlockPos
+    // this event runs before vanilla updates the entity's old position fields for the current tick
     BlockPos pos = living.blockPosition();
-    if (!living.isSpectator() && !living.level().isClientSide() && living.isAlive() && !Objects.equals(living.lastPos, pos)) {
+    BlockPos previousPos = BlockPos.containing(living.xOld, living.yOld, living.zOld);
+    if (!living.isSpectator() && !living.level().isClientSide() && living.isAlive() && !Objects.equals(previousPos, pos)) {
       ItemStack boots = living.getItemBySlot(EquipmentSlot.FEET);
       if (!boots.isEmpty() && boots.is(TinkerTags.Items.BOOTS)) {
         ToolStack tool = ToolStack.from(boots);
         for (ModifierEntry entry : tool.getModifierList()) {
-          entry.getHook(ModifierHooks.BOOT_WALK).onWalk(tool, entry, living, living.lastPos, pos);
+          entry.getHook(ModifierHooks.BOOT_WALK).onWalk(tool, entry, living, previousPos, pos);
         }
       }
     }
