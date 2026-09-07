@@ -88,6 +88,7 @@ public abstract class LayoutIcon {
      * data in the generic NBT field. Mantle decodes that field into CUSTOM_DATA, while normal
      * 1.21 Tinkers tools read their serialized state from ToolDataComponents.TOOL_DATA.
      * Promote legacy preview NBT on demand so the custom tool model can see its materials.
+     * This is paired with Mantle's 1.21 SNBT string parser fix.
      */
     private void migrateLegacyToolData() {
       if (ToolDataComponents.getTag(stack) != null) {
