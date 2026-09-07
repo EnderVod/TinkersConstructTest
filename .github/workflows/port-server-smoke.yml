@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source: acebd24e (vanilla-package shim removed)
+# Smoke source includes the 1.21 runtime and humanoid-armor fixes.
 on:
   push:
     branches:
@@ -89,7 +89,10 @@ jobs:
           server_pid=$!
           ready=0
 
-          for _ in $(seq 1 180); do
+          # A cold runner may spend several minutes preparing NeoForm and vanilla assets before
+          # Minecraft itself starts. Keep the process under the job timeout, but do not confuse
+          # that one-time Gradle setup with a Tinkers startup failure.
+          for _ in $(seq 1 600); do
             if grep -Eq 'Done \([0-9.]+s\)!|Done \(' run/server/logs/latest.log server-console.log 2>/dev/null; then
               ready=1
               break
