@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 94e6d499: ResourceLocation menu-crash migration + compatibility shim compile green.
+# Runtime source validated through c98467c5: full ResourceLocation sweep compile green.
 on:
   push:
     branches:
