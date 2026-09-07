@@ -1,0 +1,75 @@
+name: Tinkers Smithing Screen Access Migration
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-smithing-screen-at.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Add Minecraft 1.21 SmithingScreen preview access
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          at_path = Path('src/main/resources/META-INF/accesstransformer.cfg')
+          at = at_path.read_text(encoding='utf-8')
+          required = [
+              'public net.minecraft.client.gui.screens.inventory.SmithingScreen ARMOR_STAND_ANGLE',
+              'public net.minecraft.client.gui.screens.inventory.SmithingScreen ARMOR_STAND_TRANSLATION',
+          ]
+
+          missing = [line for line in required if line not in at]
+          if missing:
+              marker = '# Part builder screen\n'
+              block = (
+                  '# Tinker Station armor stand preview - Minecraft 1.21 keeps the SmithingScreen transforms private\n'
+                  + '\n'.join(required)
+                  + '\n\n'
+              )
+              if marker in at:
+                  at = at.replace(marker, block + marker, 1)
+              else:
+                  at = at.rstrip() + '\n\n' + block
+              at_path.write_text(at, encoding='utf-8')
+
+          # Verify the exact runtime accesses reported by the client crash are covered.
+          at = at_path.read_text(encoding='utf-8')
+          for line in required:
+              if line not in at:
+                  raise SystemExit('Missing SmithingScreen access transformer: ' + line)
+
+          screen = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/ToolTableScreen.java').read_text(encoding='utf-8')
+          for field in ('SmithingScreen.ARMOR_STAND_ANGLE', 'SmithingScreen.ARMOR_STAND_TRANSLATION'):
+              if field not in screen:
+                  raise SystemExit('Expected Tinker Station smithing preview access changed; reevaluate patch: ' + field)
+
+          print('Both SmithingScreen preview fields are explicitly opened for the Tinker Station renderer.')
+          PY
+
+      - name: Commit SmithingScreen access fix
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo 'No SmithingScreen access changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/resources/META-INF/accesstransformer.cfg
+          git commit -m 'Open 1.21 SmithingScreen preview transforms'
+          git push origin HEAD:1.21.1-neoforge
