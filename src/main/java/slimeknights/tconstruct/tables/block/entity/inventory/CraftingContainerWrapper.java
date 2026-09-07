@@ -88,6 +88,14 @@ public class CraftingContainerWrapper implements CraftingContainer {
     return CraftingInput.of(width, height, getItems());
   }
 
+  /**
+   * Creates the 1.21 positioned crafting input, retaining the trimmed input's offset inside the real grid.
+   * This is required when mapping recipe remainder slots back onto the backing crafting inventory.
+   */
+  public CraftingInput.Positioned asPositionedInput() {
+    return CraftingInput.ofPositioned(width, height, getItems());
+  }
+
   @Override
   public List<ItemStack> getItems() {
     // TODO: would rather use the internal list for the container, should make a custom item handler perhaps?
