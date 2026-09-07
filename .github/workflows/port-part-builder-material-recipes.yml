@@ -1,0 +1,96 @@
+name: Port Part Builder and Material Recipes
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-part-builder-material-recipes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Migrate 1.20 recipe directories to 1.21
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          import shutil
+
+          root = Path('src/generated/resources/data/tconstruct')
+          sources = [
+              root / 'recipes/tools/parts/builder',
+              root / 'recipes/tools/materials',
+          ]
+
+          copied = 0
+          changed_tags = 0
+
+          def migrate_tags(value):
+              global changed_tags
+              if isinstance(value, dict):
+                  out = {}
+                  for key, item in value.items():
+                      if key == 'tag' and isinstance(item, str) and item.startswith('forge:'):
+                          item = 'c:' + item[len('forge:'):]
+                          changed_tags += 1
+                      else:
+                          item = migrate_tags(item)
+                      out[key] = item
+                  return out
+              if isinstance(value, list):
+                  return [migrate_tags(item) for item in value]
+              return value
+
+          for source in sources:
+              if not source.exists():
+                  raise SystemExit(f'Missing source directory: {source}')
+              relative = source.relative_to(root / 'recipes')
+              target = root / 'recipe' / relative
+              for src in sorted(source.rglob('*.json')):
+                  dst = target / src.relative_to(source)
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  data = json.loads(src.read_text(encoding='utf-8'))
+                  data = migrate_tags(data)
+                  dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+                  copied += 1
+
+          print(f'Copied {copied} recipe JSON files into the singular 1.21 recipe tree')
+          print(f'Migrated {changed_tags} Forge tag references to the common c namespace')
+
+      - name: Validate migrated recipe families
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f src/generated/resources/data/tconstruct/recipe/tools/parts/builder/pick_head.json
+          test -f src/generated/resources/data/tconstruct/recipe/tools/materials/bone.json
+          grep -q '"type": "tconstruct:part_builder"' src/generated/resources/data/tconstruct/recipe/tools/parts/builder/pick_head.json
+          grep -q '"type": "tconstruct:material"' src/generated/resources/data/tconstruct/recipe/tools/materials/bone.json
+          if grep -R '"tag"[[:space:]]*:[[:space:]]*"forge:' src/generated/resources/data/tconstruct/recipe/tools/parts/builder src/generated/resources/data/tconstruct/recipe/tools/materials; then
+            echo 'Found stale Forge tag references in migrated Part Builder/material recipes'
+            exit 1
+          fi
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/data/tconstruct/recipe/tools/parts/builder src/generated/resources/data/tconstruct/recipe/tools/materials
+          if git diff --cached --quiet; then
+            echo 'No migration changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Migrate Part Builder and material recipes to 1.21'
+          git push
