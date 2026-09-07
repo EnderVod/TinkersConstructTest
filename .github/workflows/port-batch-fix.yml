@@ -1,4 +1,4 @@
-name: Tinkers JEI crafting extension adapter
+name: Remove vanilla-package explosion shim
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   cleanup:
@@ -21,118 +20,40 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Adapt per-recipe crafting extensions to JEI 19.42 singletons
+      - name: Remove split-package compatibility shim
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          ROOT = Path('src/main/java')
-          def p(rel): return ROOT / rel
-
-          def replace_once(path, old, new, label):
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'{path}: {label}: expected one match, found {count}')
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          def add_import(path, anchor, imp, label):
-              text = path.read_text(encoding='utf-8')
-              if imp in text:
-                  return
-              count = text.count(anchor)
-              if count != 1:
-                  raise RuntimeError(f'{path}: {label}: expected one anchor, found {count}')
-              path.write_text(text.replace(anchor, anchor + '\n' + imp, 1), encoding='utf-8')
-
-          # JEI 19.42 registers one extension object per recipe class and passes RecipeHolder to each method.
-          # Tinkers' existing extension classes cache recipe-specific output lists, so preserve them behind a
-          # tiny adapter instead of duplicating their rendering logic.
-          adapter = p('slimeknights/tconstruct/plugin/jei/util/LegacyCraftingExtension.java')
-          if adapter.exists():
-              raise RuntimeError('LegacyCraftingExtension already exists unexpectedly')
-          adapter.write_text('''package slimeknights.tconstruct.plugin.jei.util;\n\nimport mezz.jei.api.gui.builder.IRecipeLayoutBuilder;\nimport mezz.jei.api.gui.ingredient.ICraftingGridHelper;\nimport mezz.jei.api.recipe.IFocusGroup;\nimport mezz.jei.api.recipe.category.extensions.vanilla.crafting.ICraftingCategoryExtension;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\n\nimport javax.annotation.Nullable;\nimport java.util.function.Function;\n\n/**\n * Adapts Tinkers' legacy per-recipe crafting extensions to JEI 19.42's singleton extension API.\n * The factory may return null to let JEI fall back when a recipe cannot be displayed safely.\n */\n@SuppressWarnings({\"removal\", \"deprecation\"})\npublic record LegacyCraftingExtension<R extends CraftingRecipe>(Function<R, ? extends ICraftingCategoryExtension<R>> factory)\n  implements ICraftingCategoryExtension<R> {\n\n  @Nullable\n  private ICraftingCategoryExtension<R> extension(RecipeHolder<R> holder) {\n    return factory.apply(holder.value());\n  }\n\n  @Override\n  public boolean isHandled(RecipeHolder<R> holder) {\n    return extension(holder) != null;\n  }\n\n  @Override\n  public int getWidth(RecipeHolder<R> holder) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    return extension == null ? 0 : extension.getWidth();\n  }\n\n  @Override\n  public int getHeight(RecipeHolder<R> holder) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    return extension == null ? 0 : extension.getHeight();\n  }\n\n  @Override\n  public void setRecipe(RecipeHolder<R> holder, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, IFocusGroup focuses) {\n    ICraftingCategoryExtension<R> extension = extension(holder);\n    if (extension != null) {\n      extension.setRecipe(builder, craftingGridHelper, focuses);\n    }\n  }\n}\n''', encoding='utf-8')
-
-          # Give the old per-recipe extensions proper generic types so the adapter remains type-safe.
-          path = p('slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
-          replace_once(path,
-                       'public class ShapedMaterialExtension implements ICraftingCategoryExtension {',
-                       'public class ShapedMaterialExtension implements ICraftingCategoryExtension<ShapedMaterialRecipe> {',
-                       'typed legacy shaped extension')
-
-          path = p('slimeknights/tconstruct/plugin/jei/material/MaterialsCraftingExtension.java')
-          replace_once(path,
-                       'public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension {',
-                       'public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension<T> {',
-                       'typed materials extension')
-
-          # The shared helper also serves deprecated ShapedMaterialRecipe, which does not implement
-          # MaterialsCraftingTableRecipe. Pass the already-known recipe ID explicitly instead of over-constraining R.
-          replace_once(path,
-                       'public static <R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, R recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {',
-                       'public static void setRecipe(ICraftingCategoryExtension<?> self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, CraftingRecipe recipe, ResourceLocation recipeId, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {',
-                       'shared material helper signature')
+          path = Path('src/main/java/slimeknights/tconstruct/library/utils/CustomExplosion.java')
           text = path.read_text(encoding='utf-8')
-          count = text.count('recipe.getId()')
-          if count != 2:
-              raise RuntimeError(f'MaterialsCraftingExtension expected two helper recipe.getId() uses, found {count}')
-          # First use is instance getRegistryName and must stay; second is the helper error log.
-          marker = 'Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipe.getId(), builder.getClass().getName());'
-          if text.count(marker) != 1:
-              raise RuntimeError('Materials helper error log mismatch')
-          text = text.replace(marker, 'Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipeId, builder.getClass().getName());', 1)
-          old = 'setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);'
-          if text.count(old) != 1:
-              raise RuntimeError('Materials instance helper call mismatch')
-          text = text.replace(old, 'setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);', 1)
+          old_import = 'import net.minecraft.world.item.enchantment.ProtectionEnchantment;\n'
+          if text.count(old_import) != 1:
+              raise RuntimeError(f'Expected ProtectionEnchantment import once, found {text.count(old_import)}')
+          text = text.replace(old_import, '', 1)
+          old_call = 'adjustedStrength = ProtectionEnchantment.getExplosionKnockbackAfterDampener(living, adjustedStrength);'
+          new_call = 'adjustedStrength *= 1.0D - living.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.EXPLOSION_KNOCKBACK_RESISTANCE);'
+          if text.count(old_call) != 1:
+              raise RuntimeError(f'Expected explosion shim call once, found {text.count(old_call)}')
+          text = text.replace(old_call, new_call, 1)
           path.write_text(text, encoding='utf-8')
 
-          path = p('slimeknights/tconstruct/plugin/jei/ShapedMaterialExtension.java')
-          replace_once(path,
-                       'MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);',
-                       'MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);',
-                       'legacy shaped helper call')
+          shim = Path('src/main/java/net/minecraft/world/item/enchantment/ProtectionEnchantment.java')
+          if not shim.exists():
+              raise RuntimeError('ProtectionEnchantment shim is already missing')
+          shim.unlink()
 
-          # Register adapters instead of passing factories where JEI 19.42 expects extension instances.
-          path = p('slimeknights/tconstruct/plugin/jei/JEIPlugin.java')
-          add_import(path,
-                     'import slimeknights.tconstruct.plugin.jei.util.GuiContainerTankHandler;',
-                     'import slimeknights.tconstruct.plugin.jei.util.LegacyCraftingExtension;',
-                     'legacy extension adapter import')
-          text = path.read_text(encoding='utf-8')
-          old = '''    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new);\n    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create);\n    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless);'''
-          new = '''    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, new LegacyCraftingExtension<ShapedMaterialRecipe>(ShapedMaterialExtension::new));\n    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, new LegacyCraftingExtension<ShapedMaterialsRecipe>(ShapedMaterialsExtension::create));\n    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, new LegacyCraftingExtension<ShapelessMaterialsRecipe>(MaterialsCraftingExtension::shapeless));'''
-          if text.count(old) != 1:
-              raise RuntimeError('JEI crafting extension registration block mismatch')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          # Assertions for the exact issues seen in compile #412.
-          plugin = path.read_text(encoding='utf-8')
-          for bad in ('addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new)',
-                      'addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create)',
-                      'addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless)'):
-              if bad in plugin:
-                  raise RuntimeError(f'Unadapted JEI 19.42 factory registration remains: {bad}')
-          materials = p('slimeknights/tconstruct/plugin/jei/material/MaterialsCraftingExtension.java').read_text(encoding='utf-8')
-          if '<R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe' in materials:
-              raise RuntimeError('Over-constrained material helper generic remains')
-          print('JEI crafting extension adapter batch validated')
+          # No Tinkers-owned sources may live in the vanilla namespace; that creates a Java module split-package.
+          vanilla_sources = list(Path('src/main/java/net/minecraft').rglob('*.java'))
+          if vanilla_sources:
+              raise RuntimeError(f'Vanilla namespace sources remain: {vanilla_sources}')
           PY
 
-      - name: Commit verified crafting extension adapter
+      - name: Commit runtime namespace fix
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo "No crafting extension adapter changes were needed."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/plugin/jei
-          git commit -m "Adapt Tinkers crafting extensions to JEI 19.42"
+          git add -A src/main/java/slimeknights/tconstruct/library/utils/CustomExplosion.java src/main/java/net/minecraft
+          git commit -m "Remove vanilla-package explosion compatibility shim"
           git push origin HEAD:1.21.1-neoforge
-
-      - name: Dispatch full port compile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run port-compile.yml --ref 1.21.1-neoforge
