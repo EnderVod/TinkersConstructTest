@@ -11,13 +11,18 @@ import com.google.gson.JsonSerializer;
 import com.google.gson.JsonSyntaxException;
 import io.netty.handler.codec.DecoderException;
 import lombok.RequiredArgsConstructor;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import slimeknights.mantle.data.loadable.common.ItemStackLoadable;
 import slimeknights.mantle.util.JsonHelper;
 import slimeknights.mantle.util.typed.TypedMap;
 import slimeknights.tconstruct.library.recipe.partbuilder.Pattern;
+import slimeknights.tconstruct.library.tools.nbt.ToolDataComponents;
+import slimeknights.tconstruct.library.tools.nbt.ToolStack;
 
 import javax.annotation.Nullable;
 
@@ -78,10 +83,30 @@ public abstract class LayoutIcon {
   protected static class ItemStackIcon extends LayoutIcon {
     private final ItemStack stack;
 
+    /**
+     * Station layout JSON predates Minecraft's data component system and stores Tinkers preview
+     * data in the generic NBT field. Mantle decodes that field into CUSTOM_DATA, while normal
+     * 1.21 Tinkers tools read their serialized state from ToolDataComponents.TOOL_DATA.
+     * Promote legacy preview NBT on demand so the custom tool model can see its materials.
+     */
+    private void migrateLegacyToolData() {
+      if (ToolDataComponents.getTag(stack) != null) {
+        return;
+      }
+      CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+      if (customData != null) {
+        CompoundTag tag = customData.copyTag();
+        if (tag.contains(ToolStack.TAG_MATERIALS)) {
+          ToolDataComponents.setTag(stack, tag);
+        }
+      }
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T> T getValue(Class<T> clazz) {
       if (clazz == ItemStack.class) {
+        migrateLegacyToolData();
         return (T) stack;
       }
       return null;
