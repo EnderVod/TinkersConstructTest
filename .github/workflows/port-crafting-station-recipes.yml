@@ -30,85 +30,73 @@ jobs:
           old_root = Path('src/generated/resources/data/tconstruct/recipes/tables')
           new_root = Path('src/generated/resources/data/tconstruct/recipe/tables')
           new_root.mkdir(parents=True, exist_ok=True)
+          names = ('crafting_station', 'crafting_station_from_logs', 'crafting_station_from_tables')
+          workstation_tag = 'c:player_workstations/crafting_tables'
 
-          names = (
-              'crafting_station',
-              'crafting_station_from_logs',
-              'crafting_station_from_tables',
-          )
-
-          def migrate(value):
-              if isinstance(value, dict):
-                  out = {}
-                  for key, child in value.items():
-                      if key == 'item' and value is not None:
-                          # Only recipe result stacks changed item -> id in 1.21; ingredient item remains valid.
-                          out[key] = migrate(child)
+          def rewrite(node):
+              if isinstance(node, dict):
+                  for key, value in list(node.items()):
+                      if key == 'type' and value == 'forge:difference':
+                          node[key] = 'neoforge:difference'
+                      elif key == 'tag' and value == 'forge:workbenches':
+                          node[key] = workstation_tag
                       else:
-                          out[key] = migrate(child)
-                  return out
-              if isinstance(value, list):
-                  return [migrate(v) for v in value]
-              return value
+                          rewrite(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      rewrite(value)
 
           for name in names:
               old = old_root / f'{name}.json'
               data = json.loads(old.read_text(encoding='utf-8'))
-
               result = data.get('result')
-              if not isinstance(result, dict) or 'item' not in result:
-                  raise SystemExit(f'{old}: expected legacy result.item')
-              result['id'] = result.pop('item')
+              if not isinstance(result, dict):
+                  raise SystemExit(f'{old}: missing result object')
+              if 'item' in result:
+                  result['id'] = result.pop('item')
               if result.get('id') != 'tconstruct:crafting_station':
                   raise SystemExit(f'{old}: unexpected result {result!r}')
-
-              def rewrite(node):
-                  if isinstance(node, dict):
-                      for key, value in list(node.items()):
-                          if key == 'type' and value == 'forge:difference':
-                              node[key] = 'neoforge:difference'
-                          elif key == 'tag' and value == 'forge:workbenches':
-                              node[key] = 'c:workbenches'
-                          else:
-                              rewrite(value)
-                  elif isinstance(node, list):
-                      for value in node:
-                          rewrite(value)
-
               rewrite(data)
               new = new_root / f'{name}.json'
               new.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
               print(f'Migrated {old} -> {new}')
 
-          # The from_tables recipe depends on this local item tag, which also moved to singular tags/item in 1.21.
           old_tag = Path('src/generated/resources/data/tconstruct/tags/items/tables.json')
           new_tag = Path('src/generated/resources/data/tconstruct/tags/item/tables.json')
           new_tag.parent.mkdir(parents=True, exist_ok=True)
           tag_data = json.loads(old_tag.read_text(encoding='utf-8'))
-          expected_tables = {
-              'tconstruct:crafting_station',
-              'tconstruct:part_builder',
-              'tconstruct:tinker_station',
-          }
-          if not expected_tables.issubset(set(tag_data.get('values', []))):
+          required_tables = {'tconstruct:crafting_station', 'tconstruct:part_builder', 'tconstruct:tinker_station'}
+          if not required_tables.issubset(set(tag_data.get('values', []))):
               raise SystemExit('tables item tag is missing core table entries')
           new_tag.write_text(json.dumps(tag_data, indent=2) + '\n', encoding='utf-8')
 
-          # Exact validations for the user-visible missing recipe.
+          # Contribute the Tinkers Crafting Station to NeoForge/Fabric's standard common crafting-table tag.
+          for registry in ('item', 'block'):
+              path = Path(f'src/generated/resources/data/c/tags/{registry}/player_workstations/crafting_tables.json')
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(json.dumps({'replace': False, 'values': ['tconstruct:crafting_station']}, indent=2) + '\n', encoding='utf-8')
+
+          # Keep Tinkers' runtime tag constants aligned with NeoForge 1.21 common tags.
+          tags_path = Path('src/main/java/slimeknights/tconstruct/common/TinkerTags.java')
+          tags = tags_path.read_text(encoding='utf-8')
+          old = 'WORKBENCHES = common("workbenches");'
+          if tags.count(old) not in (0, 2):
+              raise SystemExit(f'Unexpected WORKBENCHES constant count: {tags.count(old)}')
+          tags = tags.replace(old, 'WORKBENCHES = common("player_workstations/crafting_tables");')
+          if tags.count('WORKBENCHES = common("player_workstations/crafting_tables");') != 2:
+              raise SystemExit('Failed to migrate both block and item WORKBENCHES constants')
+          tags_path.write_text(tags, encoding='utf-8')
+
           normal = json.loads((new_root / 'crafting_station.json').read_text(encoding='utf-8'))
           ingredient = normal['key']['w']
           if ingredient.get('type') != 'neoforge:difference':
               raise SystemExit('Crafting Station recipe does not use neoforge:difference')
-          if ingredient.get('base', {}).get('tag') != 'c:workbenches':
-              raise SystemExit('Crafting Station recipe does not use c:workbenches')
+          if ingredient.get('base', {}).get('tag') != workstation_tag:
+              raise SystemExit('Crafting Station recipe does not use the 1.21 common crafting workstation tag')
           for name in names:
-              data = json.loads((new_root / f'{name}.json').read_text(encoding='utf-8'))
-              if data.get('result', {}).get('id') != 'tconstruct:crafting_station':
-                  raise SystemExit(f'{name}: missing 1.21 result.id')
-              if 'item' in data.get('result', {}):
-                  raise SystemExit(f'{name}: legacy result.item remains')
-          if not new_tag.is_file():
-              raise SystemExit('Singular tags/item/tables.json was not created')
+              result = json.loads((new_root / f'{name}.json').read_text(encoding='utf-8')).get('result', {})
+              if result.get('id') != 'tconstruct:crafting_station' or 'item' in result:
+                  raise SystemExit(f'{name}: invalid 1.21 result {result!r}')
           PY
 
       - name: Commit Crafting Station migration
@@ -123,6 +111,9 @@ jobs:
           git add src/generated/resources/data/tconstruct/recipe/tables/crafting_station.json \
                   src/generated/resources/data/tconstruct/recipe/tables/crafting_station_from_logs.json \
                   src/generated/resources/data/tconstruct/recipe/tables/crafting_station_from_tables.json \
-                  src/generated/resources/data/tconstruct/tags/item/tables.json
-          git commit -m 'Migrate Crafting Station recipes to 1.21'
+                  src/generated/resources/data/tconstruct/tags/item/tables.json \
+                  src/generated/resources/data/c/tags/item/player_workstations/crafting_tables.json \
+                  src/generated/resources/data/c/tags/block/player_workstations/crafting_tables.json \
+                  src/main/java/slimeknights/tconstruct/common/TinkerTags.java
+          git commit -m 'Use 1.21 common Crafting Station tags'
           git push origin HEAD:1.21.1-neoforge
