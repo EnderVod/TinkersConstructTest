@@ -65,11 +65,8 @@ jobs:
               """  public UpdateTinkerStationRecipePacket(BlockPos pos, ITinkerStationRecipe recipe) {\n    this.pos = pos;\n    this.recipe = recipe.getId();\n  }""",
               """  public UpdateTinkerStationRecipePacket(BlockPos pos, ResourceLocation recipe) {\n    this.pos = pos;\n    this.recipe = recipe;\n  }""",
               "packet takes holder ID")
-          old = "te.updateRecipe(recipe);"
-          count = text.count(old)
-          if count != 2:
-              raise RuntimeError(f"Expected two client recipe updates, found {count}")
-          text = text.replace(old, "te.updateRecipe(recipe, packet.recipe);", 2)
+          text = replace_once(text, "te.updateRecipe(recipe);", "te.updateRecipe(recipe, packet.recipe);", "screen tile recipe update")
+          text = replace_once(text, "be.updateRecipe(recipe);", "be.updateRecipe(recipe, packet.recipe);", "direct block entity recipe update")
           if "recipe.getId()" in text:
               raise RuntimeError("Obsolete recipe.getId() remains in station sync packet")
           path.write_text(text, encoding="utf-8")
