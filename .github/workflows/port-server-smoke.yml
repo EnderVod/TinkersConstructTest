@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source includes the 1.21 runtime and humanoid-armor fixes.
+# Smoke source includes migrated 1.21 Part Builder and material recipe families through b64cad67.
 on:
   push:
     branches:
