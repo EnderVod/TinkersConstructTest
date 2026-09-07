@@ -158,7 +158,7 @@ public class ModifiableArrow extends AbstractArrow implements ToolProjectile, Pr
   }
 
   @Override
-  protected void doKnockback(LivingEntity target, DamageSource source) {
+  public void doKnockback(LivingEntity target, DamageSource source) {
     super.doKnockback(target, source);
     if (knockback > 0) {
       double resistance = Math.max(0.0, 1.0 - target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));
