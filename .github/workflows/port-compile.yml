@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Verify Minecraft 1.21 equipment-slot cache migration through 8c0908b0.
+# Verify station tabs, 1.21 pattern recipe, and NeoForge model namespace through 6ae60756.
 on:
   push:
     branches:
@@ -69,7 +69,6 @@ jobs:
           cp "$mantle_jar" libs/
           echo "Using Mantle dependency: $(basename "$mantle_jar")"
 
-      # Keep compiler output as artifacts so each porting pass can target the exact remaining failures.
       - name: Compile Tinkers core
         run: |
           set -o pipefail
@@ -88,6 +87,38 @@ jobs:
           if bad:
               raise SystemExit('Hard-coded six-slot EquipmentSlot caches remain:\n' + '\n'.join(bad))
           print('No hard-coded six-slot caches remain in getFilterFlag()-indexed classes.')
+          PY
+
+      - name: Verify NeoForge model resource namespace
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          legacy = ('"forge:item/default"', '"forge:item/default-tool"', '"forge:item/bucket_drip"', '"forge:composite"')
+          bad = []
+          for root in (Path('src/generated/resources/assets/tconstruct/models'), Path('src/main/resources/assets/tconstruct/models')):
+              if not root.exists():
+                  continue
+              for path in root.rglob('*.json'):
+                  text = path.read_text(encoding='utf-8')
+                  if any(token in text for token in legacy):
+                      bad.append(str(path))
+          if bad:
+              raise SystemExit('Legacy Forge model resource references remain:\n' + '\n'.join(bad[:100]))
+          print('No legacy Forge model resource references remain in Tinkers models.')
+          PY
+
+      - name: Verify Minecraft 1.21 pattern recipe
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('src/generated/resources/data/tconstruct/recipe/tables/pattern.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          if data.get('result', {}).get('id') != 'tconstruct:pattern':
+              raise SystemExit('Pattern recipe does not use Minecraft 1.21 result.id format')
+          if data.get('key', {}).get('s', {}).get('tag') != 'c:rods/wooden':
+              raise SystemExit('Pattern recipe does not use the NeoForge c: wooden rod tag')
+          print('Pattern recipe is present in singular recipe/ path with 1.21 fields and c: tag.')
           PY
 
       - name: Build compact compiler summary
