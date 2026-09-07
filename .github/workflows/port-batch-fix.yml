@@ -1,4 +1,4 @@
-name: Port standard armor types to 1.21
+name: Port data condition namespaces to NeoForge 1.21
 
 on:
   push:
@@ -21,74 +21,66 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Restrict Tinkers armor systems to player armor types
+      - name: Migrate generated condition codec IDs
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          root = Path('src/main/java/slimeknights/tconstruct')
-          material = root / 'library/tools/definition/ModifiableArmorMaterial.java'
-          text = material.read_text(encoding='utf-8')
+          root = Path('src/generated/resources')
+          replacements = {
+              '"type": "forge:mod_loaded"': '"type": "neoforge:mod_loaded"',
+              '"type": "forge:item_exists"': '"type": "neoforge:item_exists"',
+              '"type": "forge:not"': '"type": "neoforge:not"',
+              '"type": "forge:and"': '"type": "neoforge:and"',
+              '"type": "forge:or"': '"type": "neoforge:or"',
+              '"type": "forge:true"': '"type": "neoforge:true"',
+              '"type": "forge:false"': '"type": "neoforge:false"',
+              '"type": "forge:tag_empty"': '"type": "neoforge:tag_empty"',
+          }
 
-          old_slots = '  public static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};'
-          new_slots = old_slots + '\n  /** The four humanoid armor item types. Minecraft 1.21 also has BODY for animal armor, which Tinkers does not model. */\n  public static final ArmorItem.Type[] ARMOR_TYPES = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};'
-          if text.count(old_slots) != 1:
-              raise RuntimeError('ARMOR_SLOTS anchor mismatch')
-          text = text.replace(old_slots, new_slots, 1)
+          total = 0
+          files = 0
+          for path in root.rglob('*.json'):
+              text = path.read_text(encoding='utf-8')
+              original = text
+              for old, new in replacements.items():
+                  hits = text.count(old)
+                  if hits:
+                      total += hits
+                      text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  files += 1
 
-          old_array = 'ToolDefinition[] definitions = new ToolDefinition[4];'
-          if text.count(old_array) != 1:
-              raise RuntimeError('armor definition array anchor mismatch')
-          text = text.replace(old_array, 'ToolDefinition[] definitions = new ToolDefinition[ARMOR_TYPES.length];', 1)
-
-          old_loop = '    for (ArmorItem.Type slot : slots) {\n      definitions[slot.ordinal()] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));\n    }'
-          new_loop = '    for (ArmorItem.Type slot : slots) {\n      int index = slot.ordinal();\n      if (index >= definitions.length) {\n        throw new IllegalArgumentException("Unsupported non-humanoid armor type " + slot);\n      }\n      definitions[index] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));\n    }'
-          if text.count(old_loop) != 1:
-              raise RuntimeError('armor create loop mismatch')
-          text = text.replace(old_loop, new_loop, 1)
-
-          old_default = 'return create(id, equipSound, ArmorItem.Type.values());'
-          if text.count(old_default) != 1:
-              raise RuntimeError('default armor type list mismatch')
-          text = text.replace(old_default, 'return create(id, equipSound, ARMOR_TYPES);', 1)
-
-          old_lookup = '    return armorDefinitions[slotType.ordinal()];'
-          new_lookup = '    int index = slotType.ordinal();\n    return index < armorDefinitions.length ? armorDefinitions[index] : null;'
-          if text.count(old_lookup) != 1:
-              raise RuntimeError('armor definition lookup mismatch')
-          text = text.replace(old_lookup, new_lookup, 1)
-          material.write_text(text, encoding='utf-8')
-
-          replacement = 'slimeknights.tconstruct.library.tools.definition.ModifiableArmorMaterial.ARMOR_TYPES'
-          changed = []
-          count = 0
-          for path in root.rglob('*.java'):
-              if path == material:
-                  continue
-              source = path.read_text(encoding='utf-8')
-              hits = source.count('ArmorItem.Type.values()')
-              if hits:
-                  count += hits
-                  path.write_text(source.replace('ArmorItem.Type.values()', replacement), encoding='utf-8')
-                  changed.append((str(path), hits))
-
-          if count != 22:
-              raise RuntimeError(f'Expected 22 remaining ArmorItem.Type.values() uses, found {count}: {changed}')
-
-          leftovers = [str(path) for path in root.rglob('*.java') if 'ArmorItem.Type.values()' in path.read_text(encoding='utf-8')]
+          leftovers = []
+          for path in root.rglob('*.json'):
+              text = path.read_text(encoding='utf-8')
+              for old in replacements:
+                  if old in text:
+                      leftovers.append((str(path), old))
           if leftovers:
-              raise RuntimeError(f'Legacy ArmorItem.Type.values() remains: {leftovers}')
-          print(f'Patched {count + 1} armor type call sites across Tinkers')
+              raise RuntimeError(f'Legacy Forge condition IDs remain: {leftovers[:20]}')
+          if total < 500:
+              raise RuntimeError(f'Expected a broad stale-condition migration, only replaced {total} values')
+          print(f'Migrated {total} condition codec IDs across {files} generated JSON files')
+
+          worldgen = Path('src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java')
+          source = worldgen.read_text(encoding='utf-8')
+          old = '.addGrass(Blocks.GRASS, 7)'
+          new = '.addGrass(Blocks.SHORT_GRASS, 7)'
+          if source.count(old) != 1:
+              raise RuntimeError(f'Expected one old clay-island grass reference, found {source.count(old)}')
+          worldgen.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
 
-      - name: Commit armor type migration
+      - name: Commit data migration
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct
-          git commit -m "Restrict Tinkers armor systems to humanoid armor types"
+          git add src/generated/resources src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java
+          git commit -m "Migrate generated conditions to NeoForge namespace"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch compile and server smoke
