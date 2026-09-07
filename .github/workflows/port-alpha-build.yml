@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through c98467c5: full ResourceLocation sweep compile green.
+# Runtime source validated through c360e733: NeoForge sprite source registration compile green.
 on:
   push:
     branches:
