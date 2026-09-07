@@ -1,4 +1,5 @@
 {
+  "replace": false,
   "values": [
     "#tconstruct:molten_iron"
   ]
