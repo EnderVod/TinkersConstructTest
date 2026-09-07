@@ -1,4 +1,4 @@
-name: Tinkers JEI 19.42 compatibility batch
+name: Tinkers JEI RecipeHolder runtime batch
 
 on:
   push:
@@ -21,18 +21,16 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Backport JEI category APIs to 19.42
+      - name: Apply RecipeHolder and runtime JEI migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           ROOT=Path('src/main/java')
-
           def p(rel): return ROOT/rel
 
           def replace_once(path, old, new, label):
-              text=path.read_text(encoding='utf-8')
-              c=text.count(old)
+              text=path.read_text(encoding='utf-8'); c=text.count(old)
               if c!=1: raise RuntimeError(f'{path}: {label} expected 1 found {c}')
               path.write_text(text.replace(old,new,1),encoding='utf-8')
 
@@ -43,119 +41,89 @@ jobs:
               if c!=1: raise RuntimeError(f'{path}: {label} anchor {c}')
               path.write_text(text.replace(anchor,anchor+'\n'+imp,1),encoding='utf-8')
 
-          # Restore JEI 19.42 tooltip widget removed by upstream Tinkers' 19.51 migration.
-          helper=p('slimeknights/tconstruct/plugin/jei/util/RecipeTooltipWidget.java')
-          if helper.exists(): raise RuntimeError('RecipeTooltipWidget unexpectedly exists')
-          helper.write_text('''package slimeknights.tconstruct.plugin.jei.util;\n\nimport mezz.jei.api.gui.builder.ITooltipBuilder;\nimport mezz.jei.api.gui.drawable.IDrawable;\nimport mezz.jei.api.gui.widgets.IRecipeWidget;\nimport net.minecraft.client.gui.GuiGraphics;\nimport net.minecraft.client.gui.navigation.ScreenPosition;\nimport net.minecraft.network.chat.Component;\n\nimport javax.annotation.Nullable;\nimport java.util.List;\n\n/** Adds a tooltip to a rectangular area of a recipe, optionally drawing content in the same location. */\npublic class RecipeTooltipWidget implements IRecipeWidget {\n  @Nullable\n  private final IDrawable drawable;\n  private final ScreenPosition position;\n  private final int width;\n  private final int height;\n  private final List<Component> tooltip;\n\n  public RecipeTooltipWidget(IDrawable drawable, int x, int y, Component tooltip) {\n    this(drawable, x, y, List.of(tooltip));\n  }\n\n  public RecipeTooltipWidget(IDrawable drawable, int x, int y, List<Component> tooltip) {\n    this(drawable, x, y, drawable.getWidth(), drawable.getHeight(), tooltip);\n  }\n\n  public RecipeTooltipWidget(int x, int y, int width, int height, Component tooltip) {\n    this(null, x, y, width, height, List.of(tooltip));\n  }\n\n  private RecipeTooltipWidget(@Nullable IDrawable drawable, int x, int y, int width, int height, List<Component> tooltip) {\n    this.drawable = drawable;\n    this.position = new ScreenPosition(x, y);\n    this.width = width;\n    this.height = height;\n    this.tooltip = List.copyOf(tooltip);\n  }\n\n  @Override\n  public ScreenPosition getPosition() {\n    return position;\n  }\n\n  @Override\n  public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {\n    if (drawable != null) {\n      drawable.draw(graphics);\n    }\n  }\n\n  @Override\n  public void getTooltip(ITooltipBuilder builder, double mouseX, double mouseY) {\n    if (mouseX >= 0 && mouseY >= 0 && mouseX < width && mouseY < height) {\n      builder.addAll(tooltip);\n    }\n  }\n}\n''',encoding='utf-8')
-
-          # Simple widget API backports.
-          for rel, old, new in [
-          ('slimeknights/tconstruct/plugin/jei/entity/SeveringCategory.java','builder.addRecipeArrowWidget().setPosition(42, 10);','builder.addRecipeArrow().setPosition(42, 10);'),
-          ('slimeknights/tconstruct/plugin/jei/entity/EntityMeltingRecipeCategory.java','builder.addDrawableWidget(arrow).setPosition(71, 21);','builder.addDrawable(arrow).setPosition(71, 21);'),
-          ('slimeknights/tconstruct/plugin/jei/AlloyRecipeCategory.java','builder.addDrawableWidget(arrow).setPosition(90, 21);','builder.addDrawable(arrow).setPosition(90, 21);'),
-          ('slimeknights/tconstruct/plugin/jei/partbuilder/PartBuilderCategory.java','builder.addRecipeArrowWidget().setPosition(66, 15);','builder.addRecipeArrow().setPosition(66, 15);'),
-          ]: replace_once(p(rel),old,new,'JEI 19.42 widget backport')
-
-          # Tool building tooltip drawable.
-          path=p('slimeknights/tconstruct/plugin/jei/ToolBuildingCategory.java')
-          add_import(path,'import slimeknights.tconstruct.library.tools.layout.LayoutSlot;','import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;','tool tooltip import')
-          replace_once(path,'builder.addRecipeArrowWidget().setPosition(74, 22);','builder.addRecipeArrow().setPosition(74, 22);','tool arrow')
-          replace_once(path,'builder.addDrawableWidget(anvil).setPosition(76, 44).setTooltip(ANVIL);','builder.addWidget(new RecipeTooltipWidget(anvil, 76, 44, ANVIL));','anvil tooltip')
-
-          # Molding simple drawables.
-          path=p('slimeknights/tconstruct/plugin/jei/MoldingRecipeCategory.java')
-          for old,new,label in [
-          ('builder.addRecipeArrowWidget().setPosition(24, 23);','builder.addRecipeArrow().setPosition(24, 23);','molding arrow'),
-          ('builder.addDrawableWidget(recipe.getPattern().isEmpty() ? upArrow : downArrow).setPosition(8, 17);','builder.addDrawable(recipe.getPattern().isEmpty() ? upArrow : downArrow).setPosition(8, 17);','molding direction'),
-          ('builder.addDrawableWidget(block).setPosition(3, 40);','builder.addDrawable(block).setPosition(3, 40);','molding input block'),
-          ('builder.addDrawableWidget(block).setPosition(51, 40);','builder.addDrawable(block).setPosition(51, 40);','molding output block'),
-          ]: replace_once(path,old,new,label)
-
-          # Melting used a custom animated drawable with tooltip before JEI 19.51.
-          path=p('slimeknights/tconstruct/plugin/jei/melting/AbstractMeltingCategory.java')
-          add_import(path,'import mezz.jei.api.gui.drawable.IDrawable;','import mezz.jei.api.gui.drawable.IDrawableAnimated.StartDirection;','animated direction import')
-          add_import(path,'import slimeknights.tconstruct.plugin.jei.util.FluidTooltipCallback;','import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;','melting tooltip import')
-          replace_once(path,'  protected final IDrawableStatic plus;','  protected final IDrawableStatic plus;\n  private final IGuiHelper guiHelper;','melting gui helper field')
-          replace_once(path,'    this.background = helper.createDrawable(BACKGROUND_LOC, 0, 0, 132, 40);','    this.guiHelper = helper;\n    this.background = helper.createDrawable(BACKGROUND_LOC, 0, 0, 132, 40);','melting gui helper init')
-          old='''    // includes both the static arrow background and animated foreground\n    builder.addAnimatedRecipeArrowWidget(recipe.getTime() * 5)\n      .setPosition(56, 18)\n      .setTooltip(Component.translatable(KEY_COOLING_TIME, recipe.getTime() / 4));\n    if (recipe.getOreType() != null) {\n      builder.addDrawableWidget(plus).setPosition(83, 26).setTooltip(TOOLTIP_ORE);\n    }'''
-          new='''    IDrawable arrow = guiHelper.drawableBuilder(BACKGROUND_LOC, 150, 41, 24, 17)\n                                 .buildAnimated(recipe.getTime() * 5, StartDirection.LEFT, false);\n    builder.addWidget(new RecipeTooltipWidget(\n      arrow, 56, 18, Component.translatable(KEY_COOLING_TIME, recipe.getTime() / 4)));\n    if (recipe.getOreType() != null) {\n      builder.addWidget(new RecipeTooltipWidget(plus, 83, 26, TOOLTIP_ORE));\n    }'''
-          replace_once(path,old,new,'melting widgets')
-
-          # Worktable title hover area.
-          path=p('slimeknights/tconstruct/plugin/jei/modifiers/ModifierWorktableCategory.java')
-          add_import(path,'import slimeknights.tconstruct.plugin.jei.TConstructJEIConstants;','import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;','worktable tooltip import')
-          replace_once(path,'builder.addTooltipArea(0, 2, 121, 11).setTooltip(recipe.getDescription(null));','builder.addWidget(new RecipeTooltipWidget(0, 2, 121, 11, recipe.getDescription(null)));','worktable tooltip')
-
-          # Modifier tooltip drawables.
-          path=p('slimeknights/tconstruct/plugin/jei/modifiers/ModifierRecipeCategory.java')
-          add_import(path,'import slimeknights.tconstruct.plugin.jei.TConstructJEIConstants;','import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;','modifier tooltip import')
-          replace_once(path,'builder.addRecipeArrowWidget().setPosition(71, 33);','builder.addRecipeArrow().setPosition(71, 33);','modifier arrow')
-          replace_once(path,'builder.addDrawableWidget(requirements).setPosition(66, 58).setTooltip(requirementsError);','builder.addWidget(new RecipeTooltipWidget(requirements, 66, 58, requirementsError));','requirements tooltip')
-          replace_once(path,'builder.addDrawableWidget(incremental).setPosition(83, 59).setTooltip(TEXT_INCREMENTAL);','builder.addWidget(new RecipeTooltipWidget(incremental, 83, 59, TEXT_INCREMENTAL));','incremental tooltip')
-          replace_once(path,'''builder.addDrawableWidget(SLOTLESS)\n        .setPosition(102, 58)\n        .setTooltip(SlotIngredientRenderer.TEXT_FREE);''','''builder.addWidget(new RecipeTooltipWidget(SLOTLESS, 102, 58, SlotIngredientRenderer.TEXT_FREE));''','slotless tooltip')
-
-          # Casting drawables and cast tooltip.
-          path=p('slimeknights/tconstruct/plugin/jei/casting/AbstractCastingCategory.java')
-          add_import(path,'import slimeknights.tconstruct.plugin.jei.util.FluidTooltipCallback;','import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;','casting tooltip import')
-          replace_once(path,'builder.addDrawableWidget(block).setPosition(38, 35);','builder.addDrawable(block).setPosition(38, 35);','casting block')
-          replace_once(path,'builder.addDrawableWidget(arrow).setPosition(58, 18);','builder.addDrawable(arrow).setPosition(58, 18);','casting arrow')
-          replace_once(path,'builder.addDrawableWidget(drawable).setPosition(63, 39).setTooltip(tooltip);','builder.addWidget(new RecipeTooltipWidget(drawable, 63, 39, tooltip));','casting tooltip')
-
-          # JEI 19.42 ITypedIngredient predates normalize().
-          path=p('slimeknights/tconstruct/plugin/jei/util/ClickableIngredient.java')
+          # Crafting recipes are holder-owned in 1.21, matching JEI 19.42 RecipeTypes.CRAFTING.
+          path=p('slimeknights/tconstruct/plugin/jei/transfer/ToolInventoryTransferInfo.java')
+          add_import(path,'import net.minecraft.world.item.crafting.CraftingRecipe;','import net.minecraft.world.item.crafting.RecipeHolder;','tool transfer holder import')
           text=path.read_text(encoding='utf-8')
-          text=text.replace('import mezz.jei.api.ingredients.IIngredientHelper;\n','')
-          old='''  @Override\n  public ClickableIngredient<T> normalize(IIngredientHelper<T> ingredientHelper) {\n    T normalized = ingredientHelper.normalizeIngredient(getIngredient);\n    return normalized == getIngredient ? this : new ClickableIngredient<>(getType, normalized, getArea);\n  }\n\n'''
-          if text.count(old)!=1: raise RuntimeError('Clickable normalize mismatch')
-          path.write_text(text.replace(old,'',1),encoding='utf-8')
+          text=text.replace('IRecipeTransferHandler<ToolContainerMenu, CraftingRecipe>, IRecipeTransferInfo<ToolContainerMenu, CraftingRecipe>', 'IRecipeTransferHandler<ToolContainerMenu, RecipeHolder<CraftingRecipe>>, IRecipeTransferInfo<ToolContainerMenu, RecipeHolder<CraftingRecipe>>')
+          text=text.replace('IRecipeTransferHandler<ToolContainerMenu, CraftingRecipe> handler;', 'IRecipeTransferHandler<ToolContainerMenu, RecipeHolder<CraftingRecipe>> handler;')
+          text=text.replace('RecipeType<CraftingRecipe> getRecipeType()', 'RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType()')
+          count=text.count('CraftingRecipe recipe')
+          if count!=4: raise RuntimeError(f'Tool transfer expected 4 CraftingRecipe recipe params, got {count}')
+          text=text.replace('CraftingRecipe recipe','RecipeHolder<CraftingRecipe> recipe')
+          path.write_text(text,encoding='utf-8')
 
-          # Tinkers-owned display interfaces retain recipe IDs after vanilla Recipe moved identity to RecipeHolder.
-          for rel, anchor in [
-          ('slimeknights/tconstruct/library/recipe/worktable/IModifierWorktableRecipe.java','import net.minecraft.network.chat.Component;'),
-          ('slimeknights/tconstruct/library/recipe/partbuilder/IDisplayPartBuilderRecipe.java','import net.minecraft.core.registries.BuiltInRegistries;'),
-          ('slimeknights/tconstruct/library/recipe/material/MaterialsCraftingTableRecipe.java','import net.minecraft.world.item.ItemStack;'),
-          ]: add_import(p(rel),anchor,'import net.minecraft.resources.ResourceLocation;','recipe id import')
-          path=p('slimeknights/tconstruct/library/recipe/worktable/IModifierWorktableRecipe.java')
-          replace_once(path,'public interface IModifierWorktableRecipe extends ICommonRecipe<ITinkerableContainer> {','public interface IModifierWorktableRecipe extends ICommonRecipe<ITinkerableContainer> {\n  /** Stable ID used for JEI display/bookmark identity. */\n  ResourceLocation getId();','worktable id contract')
-          path=p('slimeknights/tconstruct/library/recipe/partbuilder/IDisplayPartBuilderRecipe.java')
-          replace_once(path,'public interface IDisplayPartBuilderRecipe extends IPartBuilderRecipe {','public interface IDisplayPartBuilderRecipe extends IPartBuilderRecipe {\n  /** Stable ID used for JEI display/bookmark identity. */\n  ResourceLocation getId();','part builder id contract')
-          path=p('slimeknights/tconstruct/library/recipe/material/MaterialsCraftingTableRecipe.java')
-          replace_once(path,'public interface MaterialsCraftingTableRecipe {','public interface MaterialsCraftingTableRecipe {\n  /** Stable ID used by crafting-category extensions. */\n  ResourceLocation getId();','materials id contract')
+          path=p('slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java')
+          add_import(path,'import net.minecraft.world.item.crafting.CraftingRecipe;','import net.minecraft.world.item.crafting.RecipeHolder;','station transfer holder import')
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('IRecipeTransferInfo<CraftingStationContainerMenu, CraftingRecipe>', 'IRecipeTransferInfo<CraftingStationContainerMenu, RecipeHolder<CraftingRecipe>>')
+          text=text.replace('RecipeType<CraftingRecipe> getRecipeType()', 'RecipeType<RecipeHolder<CraftingRecipe>> getRecipeType()')
+          count=text.count('CraftingRecipe recipe')
+          if count!=3: raise RuntimeError(f'Station transfer expected 3 CraftingRecipe recipe params, got {count}')
+          text=text.replace('CraftingRecipe recipe','RecipeHolder<CraftingRecipe> recipe')
+          old='''  public boolean canHandle(CraftingStationContainerMenu container, RecipeHolder<CraftingRecipe> recipe) {\n    if (recipe instanceof ShapedRecipe shaped) {\n      return shaped.getWidth() <= 3 && shaped.getHeight() <= 3;\n    }\n    return recipe.getIngredients().size() <= 9;\n  }'''
+          new='''  public boolean canHandle(CraftingStationContainerMenu container, RecipeHolder<CraftingRecipe> recipe) {\n    CraftingRecipe value = recipe.value();\n    if (value instanceof ShapedRecipe shaped) {\n      return shaped.getWidth() <= 3 && shaped.getHeight() <= 3;\n    }\n    return value.getIngredients().size() <= 9;\n  }'''
+          if text.count(old)!=1: raise RuntimeError('Station canHandle holder unwrap mismatch')
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
 
-          # Static extension helper must preserve the materials recipe intersection type.
-          path=p('slimeknights/tconstruct/plugin/jei/material/MaterialsCraftingExtension.java')
-          replace_once(path,'public static void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, CraftingRecipe recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {','public static <R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, R recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {','materials helper generic')
+          # Potion subtype identity moved from raw NBT tags to the POTION_CONTENTS data component.
+          path=p('slimeknights/tconstruct/plugin/jei/util/PotionSubtypeInterpreter.java')
+          path.write_text('''package slimeknights.tconstruct.plugin.jei.util;\n\nimport mezz.jei.api.ingredients.subtypes.IIngredientSubtypeInterpreter;\nimport mezz.jei.api.ingredients.subtypes.UidContext;\nimport net.minecraft.world.effect.MobEffectInstance;\nimport net.minecraft.world.item.alchemy.PotionContents;\n\n/** Common subtype logic for the fluid and item forms of potion fluid. */\npublic interface PotionSubtypeInterpreter<T> extends IIngredientSubtypeInterpreter<T> {\n  PotionContents getPotion(T ingredient);\n\n  @Override\n  default String apply(T ingredient, UidContext context) {\n    PotionContents contents = getPotion(ingredient);\n    if (contents.equals(PotionContents.EMPTY)) {\n      return IIngredientSubtypeInterpreter.NONE;\n    }\n    String potionId = contents.potion()\n      .flatMap(holder -> holder.unwrapKey())\n      .map(key -> key.location().toString())\n      .orElse(\"\");\n    StringBuilder builder = new StringBuilder(potionId);\n    for (MobEffectInstance effect : contents.getAllEffects()) {\n      builder.append(';').append(effect);\n    }\n    return builder.toString();\n  }\n}\n''',encoding='utf-8')
 
-          # Exact JEI 19.42 crafting extension method name.
+          # Remaining JEIPlugin changes are 1.21 holder/data-component/runtime API migrations.
           path=p('slimeknights/tconstruct/plugin/jei/JEIPlugin.java')
           text=path.read_text(encoding='utf-8')
-          count=text.count('.addCategoryExtension(')
-          if count!=3: raise RuntimeError(f'Expected 3 addCategoryExtension calls, got {count}')
-          path.write_text(text.replace('.addCategoryExtension(','.addExtension('),encoding='utf-8')
+          text=text.replace('import mezz.jei.api.runtime.IIngredientVisibility;\n','')
+          text=text.replace('import net.minecraft.core.Holder;\n','import net.minecraft.core.Holder;\nimport net.minecraft.core.component.DataComponents;\n')
+          text=text.replace('import net.minecraft.world.item.alchemy.Potion;\n','')
+          text=text.replace('import net.minecraft.world.item.alchemy.Potions;\n','import net.minecraft.world.item.alchemy.PotionContents;\nimport net.minecraft.world.item.alchemy.Potions;\n')
+          text=text.replace('import net.minecraft.world.item.crafting.CraftingRecipe;\n','import net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;\n')
+          text=text.replace('import java.util.Set;\n','')
+          if text.count('.byType(type)')!=1: raise RuntimeError('Expected one private byType call')
+          text=text.replace('.byType(type)', '.getAllRecipesFor(type)',1)
+          if text.count('item.get()')!=3: raise RuntimeError(f'Expected 3 Holder<Item>.get calls, got {text.count("item.get()")}')
+          text=text.replace('item.get()','item.value()')
+          if text.count('item.containsTag(TinkerTags.Items.MELEE)')!=1: raise RuntimeError('Expected melee containsTag')
+          text=text.replace('item.containsTag(TinkerTags.Items.MELEE)','item.is(TinkerTags.Items.MELEE)',1)
+          old='''    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)ItemStack::getTag);\n    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)FluidStack::getTag);'''
+          new='''    registry.registerSubtypeInterpreter(TinkerFluids.potion.asItem(), (PotionSubtypeInterpreter<ItemStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));\n    registry.registerSubtypeInterpreter(NeoForgeTypes.FLUID_STACK, TinkerFluids.potion.get(), (PotionSubtypeInterpreter<FluidStack>)stack -> stack.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY));'''
+          if text.count(old)!=1: raise RuntimeError('Potion subtype registration mismatch')
+          text=text.replace(old,new,1)
+          old='''    IIngredientVisibility visibility = jeiRuntime.getJeiHelpers().getIngredientVisibility();\n    if (!hideItems.isEmpty()) {\n      visibility.hideIngredients(VanillaTypes.ITEM_STACK, hideItems, Set.of(UidContext.Ingredient));\n    }\n    if (!showItems.isEmpty()) {\n      visibility.unhideIngredients(VanillaTypes.ITEM_STACK, showItems, Set.of(UidContext.Ingredient));\n    }'''
+          new='''    if (!hideItems.isEmpty()) {\n      manager.removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hideItems);\n    }\n    if (!showItems.isEmpty()) {\n      manager.addIngredientsAtRuntime(VanillaTypes.ITEM_STACK, showItems);\n    }'''
+          if text.count(old)!=1: raise RuntimeError('Runtime visibility block mismatch')
+          text=text.replace(old,new,1)
+          old='''                                      BuiltInRegistries.POTION.holders().filter(holder -> {\n                                        Potion potion = holder.get();\n                                        return potion != Potions.EMPTY && potion != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID);\n                                      }).map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());'''
+          new='''                                      BuiltInRegistries.POTION.holders()\n                                        .filter(holder -> holder != Potions.WATER && !holder.is(TinkerTags.Potions.HIDDEN_FLUID))\n                                        .map(holder -> PotionFluidType.potionFluid(holder, FluidType.BUCKET_VOLUME)).toList());'''
+          if text.count(old)!=1: raise RuntimeError('Potion fluid registry filter mismatch')
+          text=text.replace(old,new,1)
+          old='''      List<CraftingRecipe> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)\n        .flatMap(id -> recipes.byKey(id).stream())\n        .filter(recipe -> recipe instanceof CraftingRecipe)\n        .map(recipe -> (CraftingRecipe) recipe)\n        .toList();'''
+          new='''      List<RecipeHolder<CraftingRecipe>> easterEggs = Arrays.stream(EASTER_EGG_RECIPES)\n        .flatMap(id -> recipes.byKey(id).stream())\n        .filter(holder -> holder.value() instanceof CraftingRecipe)\n        .map(holder -> new RecipeHolder<>(holder.id(), (CraftingRecipe) holder.value()))\n        .toList();'''
+          if text.count(old)!=1: raise RuntimeError('Easter egg RecipeHolder migration mismatch')
+          text=text.replace(old,new,1)
+          path.write_text(text,encoding='utf-8')
 
-          # Assert no 19.51-only category widget APIs remain in the files handled here.
-          for rel in [
-          'slimeknights/tconstruct/plugin/jei/entity/SeveringCategory.java','slimeknights/tconstruct/plugin/jei/entity/EntityMeltingRecipeCategory.java','slimeknights/tconstruct/plugin/jei/ToolBuildingCategory.java','slimeknights/tconstruct/plugin/jei/AlloyRecipeCategory.java','slimeknights/tconstruct/plugin/jei/MoldingRecipeCategory.java','slimeknights/tconstruct/plugin/jei/melting/AbstractMeltingCategory.java','slimeknights/tconstruct/plugin/jei/modifiers/ModifierWorktableCategory.java','slimeknights/tconstruct/plugin/jei/modifiers/ModifierRecipeCategory.java','slimeknights/tconstruct/plugin/jei/casting/AbstractCastingCategory.java','slimeknights/tconstruct/plugin/jei/partbuilder/PartBuilderCategory.java']:
-              text=p(rel).read_text(encoding='utf-8')
-              for bad in ('addDrawableWidget(', 'addRecipeArrowWidget(', 'addAnimatedRecipeArrowWidget(', 'addTooltipArea('):
-                  if bad in text: raise RuntimeError(f'{rel}: {bad} remains')
-          print('JEI 19.42 compatibility batch validated')
+          plugin=path.read_text(encoding='utf-8')
+          for bad in ('item.get()', 'containsTag(TinkerTags.Items.MELEE)', 'ItemStack::getTag', 'FluidStack::getTag', 'hideIngredients(', 'unhideIngredients(', 'Potions.EMPTY', '.byType(type)'):
+              if bad in plugin: raise RuntimeError(f'Obsolete JEI/1.21 API remains: {bad}')
+          for rel in ['slimeknights/tconstruct/plugin/jei/transfer/ToolInventoryTransferInfo.java','slimeknights/tconstruct/plugin/jei/transfer/CraftingStationTransferInfo.java']:
+              t=p(rel).read_text(encoding='utf-8')
+              if 'RecipeType<CraftingRecipe>' in t or ('IRecipeTransferInfo<' in t and ', CraftingRecipe>' in t):
+                  raise RuntimeError(f'{rel}: raw CraftingRecipe transfer generic remains')
+          print('JEI RecipeHolder/runtime batch validated')
           PY
 
-      - name: Commit verified JEI compatibility batch
+      - name: Commit verified RecipeHolder/runtime batch
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "No JEI compatibility changes were needed."
+            echo "No JEI RecipeHolder/runtime changes were needed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/plugin/jei \
-                  src/main/java/slimeknights/tconstruct/library/recipe/worktable/IModifierWorktableRecipe.java \
-                  src/main/java/slimeknights/tconstruct/library/recipe/partbuilder/IDisplayPartBuilderRecipe.java \
-                  src/main/java/slimeknights/tconstruct/library/recipe/material/MaterialsCraftingTableRecipe.java
-          git commit -m "Backport Tinkers JEI integration to JEI 19.42"
+          git add src/main/java/slimeknights/tconstruct/plugin/jei
+          git commit -m "Port JEI RecipeHolder and runtime APIs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
