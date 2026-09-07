@@ -69,7 +69,7 @@ public class TinkerTags {
 
   public static class Blocks {
     private static void init() {}
-    public static final TagKey<Block> WORKBENCHES = common("workbenches");
+    public static final TagKey<Block> WORKBENCHES = common("player_workstations/crafting_tables");
     public static final TagKey<Block> TABLES = local("tables");
     public static final TagKey<Block> GLASS_PANES_SILICA = common("glass_panes/silica");
 
@@ -231,7 +231,7 @@ public class TinkerTags {
 
   public static class Items {
     private static void init() {}
-    public static final TagKey<Item> WORKBENCHES = common("workbenches");
+    public static final TagKey<Item> WORKBENCHES = common("player_workstations/crafting_tables");
     public static final TagKey<Item> TABLES = local("tables");
     public static final TagKey<Item> GLASS_PANES_SILICA = common("glass_panes/silica");
 
