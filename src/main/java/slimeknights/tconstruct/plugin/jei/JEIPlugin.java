@@ -105,6 +105,7 @@ import slimeknights.tconstruct.plugin.jei.transfer.CraftingStationTransferInfo;
 import slimeknights.tconstruct.plugin.jei.transfer.TinkerStationTransferInfo;
 import slimeknights.tconstruct.plugin.jei.transfer.ToolInventoryTransferInfo;
 import slimeknights.tconstruct.plugin.jei.util.GuiContainerTankHandler;
+import slimeknights.tconstruct.plugin.jei.util.LegacyCraftingExtension;
 import slimeknights.tconstruct.plugin.jei.util.PotionSubtypeInterpreter;
 import slimeknights.tconstruct.plugin.jei.util.ToolPartSubtypeInterpreter;
 import slimeknights.tconstruct.plugin.jei.util.ToolSubtypeInterpreter;
@@ -187,9 +188,9 @@ public class JEIPlugin implements IModPlugin {
   @SuppressWarnings("deprecation")
   @Override
   public void registerVanillaCategoryExtensions(IVanillaCategoryExtensionRegistration registry) {
-    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new);
-    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create);
-    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless);
+    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, new LegacyCraftingExtension<ShapedMaterialRecipe>(ShapedMaterialExtension::new));
+    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, new LegacyCraftingExtension<ShapedMaterialsRecipe>(ShapedMaterialsExtension::create));
+    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, new LegacyCraftingExtension<ShapelessMaterialsRecipe>(MaterialsCraftingExtension::shapeless));
   }
 
   @Override

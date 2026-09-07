@@ -28,7 +28,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 /** Common logic for {@link ShapedMaterialsExtension} and {@link ShapelessMaterialsExtension} */
-public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension {
+public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraftingTableRecipe> implements ICraftingCategoryExtension<T> {
   protected final T recipe;
   private final ItemStack plainResult;
   private final List<ItemStack> result;
@@ -86,7 +86,7 @@ public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraf
   }
 
   /** Sets the recipe in the builder */
-  public static <R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, R recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {
+  public static void setRecipe(ICraftingCategoryExtension<?> self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, CraftingRecipe recipe, ResourceLocation recipeId, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {
     builder.addInvisibleIngredients(RecipeIngredientRole.OUTPUT).addItemStack(plainResult);
 
     // apply ingredient stacks
@@ -101,7 +101,7 @@ public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraf
     List<IRecipeSlotBuilder> inputs = craftingGridHelper.createAndSetInputs(builder, inputStacks, width, height);
     IRecipeSlotBuilder output = craftingGridHelper.createAndSetOutputs(builder, result);
     if (inputs.size() != 9) {
-      Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipe.getId(), builder.getClass().getName());
+      Mantle.logger.error("Failed to create focus link for {} as the layout {} is not 3x3", recipeId, builder.getClass().getName());
     } else if (materialSlots != null) {
       // apply focus links
       int finalWidth = width;
@@ -115,7 +115,7 @@ public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraf
 
   @Override
   public void setRecipe(IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, IFocusGroup focuses) {
-    setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);
+    setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);
   }
 
   /** Gets the width and height of the grid for a shapeless recipe. */

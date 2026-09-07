@@ -23,7 +23,7 @@ import java.util.stream.IntStream;
  * @deprecated use {@link ShapedMaterialsExtension}
  */
 @Deprecated
-public class ShapedMaterialExtension implements ICraftingCategoryExtension {
+public class ShapedMaterialExtension implements ICraftingCategoryExtension<ShapedMaterialRecipe> {
   private final ShapedMaterialRecipe recipe;
   private final ItemStack plainResult;
   private final List<ItemStack> result;
@@ -63,6 +63,6 @@ public class ShapedMaterialExtension implements ICraftingCategoryExtension {
 
   @Override
   public void setRecipe(IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, IFocusGroup focusGroup) {
-    MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, result, plainResult, materialSlots);
+    MaterialsCraftingExtension.setRecipe(this, builder, craftingGridHelper, recipe, recipe.getId(), result, plainResult, materialSlots);
   }
 }
