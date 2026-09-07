@@ -122,7 +122,7 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     super(container, playerInventory, title);
 
     this.tinkerInfo.yOffset = 5;
-    this.modifierInfo.yOffset = this.tinkerInfo.imageHeight + 9;
+    this.modifierInfo.yOffset = this.tinkerInfo.getArea().getHeight() + 9;
 
     this.imageHeight = 184;
 
@@ -162,10 +162,10 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     this.tinkerInfo.xOffset = 2;
     this.tinkerInfo.yOffset = this.centerBeam.h + this.panelDecorationL.h;
     this.modifierInfo.xOffset = this.tinkerInfo.xOffset;
-    this.modifierInfo.yOffset = this.tinkerInfo.yOffset + this.tinkerInfo.imageHeight + 4;
+    this.modifierInfo.yOffset = this.tinkerInfo.yOffset + this.tinkerInfo.getArea().getHeight() + 4;
 
     for (ModuleScreen<?,?> module : this.modules) {
-      module.topPos += 4;
+      module.adjustBounds(0, 4, 0, 0);
     }
 
     int x = (this.width - this.imageWidth) / 2;
