@@ -1,4 +1,4 @@
-name: Tinkers one-shot crafting input 1.21 batch
+name: Tinkers one-shot smashing components 1.21 batch
 
 on:
   push:
@@ -21,82 +21,57 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified crafting input migrations
+      - name: Apply verified Smashing fluid component migration
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path, old, new):
-              text = path.read_text(encoding="utf-8")
+          path = Path("src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/SmashingModule.java")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_once(old, new):
+              global text
               count = text.count(old)
               if count != 1:
-                  raise RuntimeError(f"{path}: expected exactly one match, found {count}: {old[:180]!r}")
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise RuntimeError(f"Expected exactly one match, found {count}: {old[:180]!r}")
+              text = text.replace(old, new, 1)
 
-          wrapper = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/CraftingContainerWrapper.java")
-          replace_once(wrapper,
-              "import net.minecraft.world.item.ItemStack;",
-              "import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.crafting.CraftingInput;")
-          replace_once(wrapper,
-              """  @Override\n  public List<ItemStack> getItems() {""",
-              """  /** Creates the immutable 1.21 recipe input snapshot for the current grid. */\n  public CraftingInput asInput() {\n    return CraftingInput.of(width, height, getItems());\n  }\n\n  @Override\n  public List<ItemStack> getItems() {""")
+          replace_once(
+              "import net.minecraft.core.RegistryAccess;",
+              "import net.minecraft.core.RegistryAccess;\nimport net.minecraft.core.component.DataComponentPatch;\nimport net.minecraft.core.component.DataComponents;")
+          replace_once(
+              "import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.Tag;",
+              "import net.minecraft.nbt.CompoundTag;\nimport net.minecraft.nbt.NbtOps;\nimport net.minecraft.nbt.Tag;")
+          replace_once(
+              "import net.minecraft.world.item.TooltipFlag;",
+              "import net.minecraft.world.item.TooltipFlag;\nimport net.minecraft.world.item.component.CustomData;")
+          replace_once("import java.util.Objects;\n", "")
 
-          station = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/CraftingStationBlockEntity.java")
-          replace_once(station,
-              "import net.minecraft.core.NonNullList;",
-              "import net.minecraft.core.NonNullList;\nimport net.minecraft.resources.ResourceLocation;")
-          replace_once(station,
-              "import net.minecraft.world.item.crafting.CraftingRecipe;",
-              "import net.minecraft.world.item.crafting.CraftingInput;\nimport net.minecraft.world.item.crafting.CraftingRecipe;\nimport net.minecraft.world.item.crafting.RecipeHolder;")
-          replace_once(station, "import net.minecraftforge.common.util.LazyOptional;\n", "")
-          replace_once(station, "import net.neoforged.neoforge.items.ItemHandlerHelper;\n", "")
-          replace_once(station,
-              """  @Nullable\n  private CraftingRecipe lastRecipe;""",
-              """  @Nullable\n  private CraftingRecipe lastRecipe;\n  /** Recipe ID is stored separately in 1.21 as IDs belong to RecipeHolder. */\n  @Nullable\n  private ResourceLocation lastRecipeId;""")
-          replace_once(station, "    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "")
-          replace_once(station,
-              """  @Override\n  public AABB getRenderBoundingBox() {\n    return new AABB(worldPosition, worldPosition.offset(1, 2, 1));\n  }""",
-              """  @Override\n  public AABB getRenderBoundingBox() {\n    return new AABB(\n      worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(),\n      worldPosition.getX() + 1, worldPosition.getY() + 2, worldPosition.getZ() + 1);\n  }""")
-          replace_once(station,
-              """      // first, try the cached recipe\n      CommonHooks.setCraftingPlayer(player);\n      CraftingRecipe recipe = lastRecipe;\n      // if it does not match, find a new recipe\n      // note we intentionally have no player access during matches, that could lead to an unstable recipe\n      if (recipe == null || !recipe.matches(this.craftingInventory, this.level)) {\n        recipe = manager.getRecipeFor(RecipeType.CRAFTING, this.craftingInventory, this.level).orElse(null);\n      }\n\n      // if we have a recipe, fetch its result\n      if (recipe != null) {\n        result = recipe.assemble(this.craftingInventory, level.registryAccess());\n\n        // sync if the recipe is different\n        if (recipe != lastRecipe) {\n          this.lastRecipe = recipe;\n          this.syncToRelevantPlayers(this::syncRecipe);\n        }\n      }""",
-              """      // first, try the cached recipe against a 1.21 CraftingInput snapshot\n      CommonHooks.setCraftingPlayer(player);\n      CraftingInput input = craftingInventory.asInput();\n      CraftingRecipe recipe = lastRecipe;\n      ResourceLocation recipeId = lastRecipeId;\n      // if it does not match, find a new recipe\n      // note we intentionally have no player access during matches, that could lead to an unstable recipe\n      if (recipe == null || !recipe.matches(input, this.level)) {\n        RecipeHolder<CraftingRecipe> holder = manager.getRecipeFor(RecipeType.CRAFTING, input, this.level).orElse(null);\n        recipe = holder == null ? null : holder.value();\n        recipeId = holder == null ? null : holder.id();\n      }\n\n      // if we have a recipe, fetch its result\n      if (recipe != null) {\n        result = recipe.assemble(input, level.registryAccess());\n\n        // sync if the recipe is different\n        if (recipe != lastRecipe || !java.util.Objects.equals(recipeId, lastRecipeId)) {\n          this.lastRecipe = recipe;\n          this.lastRecipeId = recipeId;\n          this.syncToRelevantPlayers(this::syncRecipe);\n        }\n      }""")
-          replace_once(station,
-              """    else if (this.lastRecipe != null && this.lastRecipe.matches(this.craftingInventory, this.level)) {\n      CommonHooks.setCraftingPlayer(player);\n      result = this.lastRecipe.assemble(this.craftingInventory, level.registryAccess());\n      CommonHooks.setCraftingPlayer(null);\n    }""",
-              """    else if (this.lastRecipe != null) {\n      CommonHooks.setCraftingPlayer(player);\n      CraftingInput input = craftingInventory.asInput();\n      if (this.lastRecipe.matches(input, this.level)) {\n        result = this.lastRecipe.assemble(input, level.registryAccess());\n      }\n      CommonHooks.setCraftingPlayer(null);\n    }""")
-          replace_once(station,
-              """    // try matches again now that we have player access\n    if (recipe == null || this.level == null || !recipe.matches(craftingInventory, level)) {""",
-              """    // try matches again now that we have player access\n    CraftingInput input = craftingInventory.asInput();\n    if (recipe == null || this.level == null || !recipe.matches(input, level)) {""")
-          replace_once(station,
-              "ItemStack result = recipe.assemble(craftingInventory, level.registryAccess());",
-              "ItemStack result = recipe.assemble(input, level.registryAccess());")
-          replace_once(station,
-              "player.awardRecipes(Collections.singleton(recipe));",
-              """if (lastRecipeId != null) {\n        player.awardRecipesByKey(Collections.singletonList(lastRecipeId));\n      }""")
-          replace_once(station,
-              "ForgeEventFactory.firePlayerCraftingEvent(player, result, this.craftingInventory);",
-              "EventHooks.firePlayerCraftingEvent(player, result, this.craftingInventory);")
-          replace_once(station,
-              "NonNullList<ItemStack> remaining = recipe.getRemainingItems(craftingInventory);",
-              "CraftingInput input = craftingInventory.asInput();\n    NonNullList<ItemStack> remaining = recipe.getRemainingItems(input);")
-          replace_once(station,
-              "ItemStack.isSameItemSameTags(original, newStack)",
-              "ItemStack.isSameItemSameComponents(original, newStack)")
-          replace_once(station,
-              "ItemHandlerHelper.copyStackWithSize(original, original.getCount() - 1)",
-              "original.copyWithCount(original.getCount() - 1)")
-          replace_once(station,
-              """    if (this.lastRecipe != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer) {\n      TinkerNetwork.getInstance().sendTo(new UpdateCraftingRecipePacket(this.worldPosition, this.lastRecipe), (ServerPlayer) player);\n    }""",
-              """    if (this.lastRecipe != null && this.lastRecipeId != null && this.level != null && !this.level.isClientSide && player instanceof ServerPlayer) {\n      TinkerNetwork.getInstance().sendTo(new UpdateCraftingRecipePacket(this.worldPosition, this.lastRecipeId), (ServerPlayer) player);\n    }""")
-          replace_once(station,
-              """  public void updateRecipe(CraftingRecipe recipe) {\n    this.lastRecipe = recipe;\n    this.craftingResult.clearContent();\n  }""",
-              """  public void updateRecipe(CraftingRecipe recipe, ResourceLocation recipeId) {\n    this.lastRecipe = recipe;\n    this.lastRecipeId = recipeId;\n    this.craftingResult.clearContent();\n  }""")
+          replace_once(
+              """  /** Gets the current fluid NBT */\n  @Nullable\n  private static CompoundTag getFluidTag(IModDataView data) {\n    if (data.contains(KEY_FLUID_TAG, Tag.TAG_COMPOUND)) {\n      return data.getCompound(KEY_FLUID_TAG);\n    }\n    return null;\n  }""",
+              """  /** Reads the stored 1.21 fluid component patch. Legacy 1.20 fluid NBT becomes custom data. */\n  private static DataComponentPatch getFluidComponents(IModDataView data) {\n    if (!data.contains(KEY_FLUID_TAG)) {\n      return DataComponentPatch.EMPTY;\n    }\n    Tag encoded = data.get(KEY_FLUID_TAG);\n    if (encoded == null) {\n      return DataComponentPatch.EMPTY;\n    }\n    var parsed = DataComponentPatch.CODEC.parse(NbtOps.INSTANCE, encoded);\n    var result = parsed.result();\n    if (result.isPresent()) {\n      return result.get();\n    }\n    // Before 1.21 this key stored FluidStack's arbitrary tag directly. Preserve it as CUSTOM_DATA.\n    if (encoded instanceof CompoundTag legacy && !legacy.isEmpty()) {\n      return DataComponentPatch.builder().set(DataComponents.CUSTOM_DATA, CustomData.of(legacy.copy())).build();\n    }\n    parsed.error().ifPresent(error -> TConstruct.LOG.warn("Unable to decode Smashing fluid components: {}", error.message()));\n    return DataComponentPatch.EMPTY;\n  }\n\n  /** Serializes a fluid's component patch for persistent modifier/projectile storage. */\n  @Nullable\n  private static Tag serializeFluidComponents(FluidStack stack) {\n    return DataComponentPatch.CODEC.encodeStart(NbtOps.INSTANCE, stack.getComponentsPatch())\n      .resultOrPartial(error -> TConstruct.LOG.warn("Unable to encode Smashing fluid components: {}", error))\n      .orElse(null);\n  }\n\n  /** Reconstructs a component-aware fluid stack from modifier data. */\n  private static FluidStack makeFluidStack(IModDataView data, Fluid fluid, int amount) {\n    FluidStack stack = new FluidStack(fluid, amount);\n    stack.applyComponents(getFluidComponents(data));\n    return stack;\n  }""")
 
-          packet = Path("src/main/java/slimeknights/tconstruct/tables/network/UpdateCraftingRecipePacket.java")
-          replace_once(packet,
-              """  public UpdateCraftingRecipePacket(BlockPos pos, CraftingRecipe recipe) {\n    this.pos = pos;\n    this.recipe = recipe.getId();\n  }""",
-              """  public UpdateCraftingRecipePacket(BlockPos pos, ResourceLocation recipe) {\n    this.pos = pos;\n    this.recipe = recipe;\n  }""")
-          replace_once(packet, "be.updateRecipe(recipe);", "be.updateRecipe(recipe, this.recipe);")
+          replace_once(
+              """    // success! we can fill\n    if (action.execute()) {\n      // we don't actually store the amount, its up to the modifier to determine that\n      data.putString(KEY_FLUID, Loadables.FLUID.getString(resource.getFluid()));\n      // we want to store a fixed size, but its possible part swapping changes our capacity, so keep track of our capacity at the time of storing\n      data.putFloat(KEY_VALIDATE, getValidationAmount(tool, modifier));\n      CompoundTag tag = resource.getTag();\n      if (tag != null) {\n        data.put(KEY_FLUID_TAG, tag.copy());\n      }\n    }""",
+              """    // Ensure all fluid components are persistable before accepting the fill.\n    Tag components = serializeFluidComponents(resource);\n    if (components == null) {\n      return 0;\n    }\n    // success! we can fill\n    if (action.execute()) {\n      // we don't actually store the amount, its up to the modifier to determine that\n      data.putString(KEY_FLUID, Loadables.FLUID.getString(resource.getFluid()));\n      // we want to store a fixed size, but its possible part swapping changes our capacity, so keep track of our capacity at the time of storing\n      data.putFloat(KEY_VALIDATE, getValidationAmount(tool, modifier));\n      data.put(KEY_FLUID_TAG, components.copy());\n    }""")
+
+          text = text.replace("new FluidStack(fluid, amount, getFluidTag(data))", "makeFluidStack(data, fluid, amount)")
+          text = text.replace("new FluidStack(fluid, amount, getFluidTag(persistentData))", "makeFluidStack(persistentData, fluid, amount)")
+          text = text.replace("new FluidStack(fluid, FluidValues.BOTTLE, getFluidTag(data))", "makeFluidStack(data, fluid, FluidValues.BOTTLE)")
+
+          replace_once(
+              """          // ensure the tag matches\n          CompoundTag storedTag = getFluidTag(data);\n          if (Objects.equals(storedTag, resource.getTag())) {\n            FluidStack result = new FluidStack(fluid, amount, storedTag);\n            if (action.execute()) {\n              clearFluid(data);\n            }\n            return result;\n          }""",
+              """          // ensure both fluid identity and the 1.21 component patch match\n          FluidStack stored = makeFluidStack(data, fluid, amount);\n          if (FluidStack.isSameFluidSameComponents(stored, resource)) {\n            if (action.execute()) {\n              clearFluid(data);\n            }\n            return stored;\n          }""")
+
+          replace_once(
+              """          if (toolData.contains(KEY_FLUID_TAG, Tag.TAG_COMPOUND)) {\n            persistentData.put(KEY_FLUID_TAG, toolData.getCompound(KEY_FLUID_TAG));\n          }""",
+              """          if (toolData.contains(KEY_FLUID_TAG)) {\n            Tag components = toolData.get(KEY_FLUID_TAG);\n            if (components != null) {\n              persistentData.put(KEY_FLUID_TAG, components.copy());\n            }\n          }""")
+
+          if "getFluidTag(" in text or "getTag()" in text or "new FluidStack(fluid, amount," in text:
+              raise RuntimeError("Legacy FluidStack tag API remains after Smashing migration")
+
+          path.write_text(text, encoding="utf-8")
           PY
 
       - name: Commit verified batch
@@ -108,10 +83,8 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tables/block/entity/inventory/CraftingContainerWrapper.java \
-                  src/main/java/slimeknights/tconstruct/tables/block/entity/table/CraftingStationBlockEntity.java \
-                  src/main/java/slimeknights/tconstruct/tables/network/UpdateCraftingRecipePacket.java
-          git commit -m "Port crafting station inputs and recipe IDs to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tools/modules/ranged/ammo/SmashingModule.java
+          git commit -m "Port Smashing fluid data components to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
