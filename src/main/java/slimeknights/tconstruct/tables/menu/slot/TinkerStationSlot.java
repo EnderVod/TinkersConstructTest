@@ -6,7 +6,10 @@ import slimeknights.tconstruct.library.tools.layout.LayoutSlot;
 import slimeknights.tconstruct.tables.block.entity.inventory.LazyResultContainer;
 import slimeknights.tconstruct.tables.block.entity.table.TinkerStationBlockEntity;
 
-/** Class for common logic with tinker station input slots */
+/**
+ * Class for common logic with tinker station input slots.
+ * Slot coordinates are dynamically repositioned by TinkerStationScreen; Minecraft 1.21 requires the named x/y AT entries.
+ */
 public class TinkerStationSlot extends Slot {
   private final LazyResultContainer craftResult;
   private LayoutSlot layout = null;
