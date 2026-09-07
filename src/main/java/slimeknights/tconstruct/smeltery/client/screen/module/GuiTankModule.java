@@ -136,8 +136,8 @@ public class GuiTankModule implements IScreenWithFluidTank, ClickableTankModule 
    * @param mouseY    Global mouse Y position
    */
   public void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-    int checkX = mouseX - screen.leftPos;
-    int checkY = mouseY - screen.topPos;
+    int checkX = mouseX - screen.getGuiLeft();
+    int checkY = mouseY - screen.getGuiTop();
 
     if (isHovered(checkX, checkY)) {
       FluidStack fluid = tank.getFluidInTank(TANK_INDEX);

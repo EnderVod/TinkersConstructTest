@@ -122,7 +122,7 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     super(container, playerInventory, title);
 
     this.tinkerInfo.yOffset = 5;
-    this.modifierInfo.yOffset = this.tinkerInfo.getArea().getHeight() + 9;
+    this.modifierInfo.yOffset = this.tinkerInfo.getYSize() + 9;
 
     this.imageHeight = 184;
 
@@ -162,7 +162,7 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     this.tinkerInfo.xOffset = 2;
     this.tinkerInfo.yOffset = this.centerBeam.h + this.panelDecorationL.h;
     this.modifierInfo.xOffset = this.tinkerInfo.xOffset;
-    this.modifierInfo.yOffset = this.tinkerInfo.yOffset + this.tinkerInfo.getArea().getHeight() + 4;
+    this.modifierInfo.yOffset = this.tinkerInfo.yOffset + this.tinkerInfo.getYSize() + 4;
 
     for (ModuleScreen<?,?> module : this.modules) {
       module.adjustBounds(0, 4, 0, 0);
@@ -390,10 +390,10 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     x += this.centerBeam.drawScaledX(graphics, x, y, this.buttonsScreen.getImageWidth());
     this.rightBeam.draw(graphics, x, y);
 
-    x = tinkerInfo.leftPos - this.leftBeam.w;
+    x = tinkerInfo.getGuiLeft() - this.leftBeam.w;
     this.leftBeam.draw(graphics, x, y);
     x += this.leftBeam.w;
-    x += this.centerBeam.drawScaledX(graphics, x, y, this.tinkerInfo.imageWidth);
+    x += this.centerBeam.drawScaledX(graphics, x, y, this.tinkerInfo.getXSize());
     this.rightBeam.draw(graphics, x, y);
 
     // draw the decoration for the buttons
@@ -406,10 +406,10 @@ public class TinkerStationScreen extends ToolTableScreen<TinkerStationBlockEntit
     }
 
     // draw the decorations for the panels
-    this.panelDecorationL.draw(graphics, this.tinkerInfo.leftPos + 5, this.tinkerInfo.topPos - this.panelDecorationL.h);
-    this.panelDecorationR.draw(graphics, this.tinkerInfo.guiRight() - 5 - this.panelDecorationR.w, this.tinkerInfo.topPos - this.panelDecorationR.h);
-    this.panelDecorationL.draw(graphics, this.modifierInfo.leftPos + 5, this.modifierInfo.topPos - this.panelDecorationL.h);
-    this.panelDecorationR.draw(graphics, this.modifierInfo.guiRight() - 5 - this.panelDecorationR.w, this.modifierInfo.topPos - this.panelDecorationR.h);
+    this.panelDecorationL.draw(graphics, this.tinkerInfo.getGuiLeft() + 5, this.tinkerInfo.getGuiTop() - this.panelDecorationL.h);
+    this.panelDecorationR.draw(graphics, this.tinkerInfo.guiRight() - 5 - this.panelDecorationR.w, this.tinkerInfo.getGuiTop() - this.panelDecorationR.h);
+    this.panelDecorationL.draw(graphics, this.modifierInfo.getGuiLeft() + 5, this.modifierInfo.getGuiTop() - this.panelDecorationL.h);
+    this.panelDecorationR.draw(graphics, this.modifierInfo.guiRight() - 5 - this.panelDecorationR.w, this.modifierInfo.getGuiTop() - this.panelDecorationR.h);
 
     // render slot background icons
     for (int i = 0; i <= maxInputs; i++) {

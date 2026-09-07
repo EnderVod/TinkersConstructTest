@@ -80,8 +80,8 @@ public class GuiMeltingModule {
    * @param mouseY  Mouse Y position
    */
   public void drawHeatTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
-    int checkX = mouseX - screen.leftPos;
-    int checkY = mouseY - screen.topPos;
+    int checkX = mouseX - screen.getGuiLeft();
+    int checkY = mouseY - screen.getGuiTop();
     int temperature = this.temperature.getAsInt();
     AbstractContainerMenu menu = screen.getMenu();
     for (int i = 0; i < inventory.getSlots(); i++) {

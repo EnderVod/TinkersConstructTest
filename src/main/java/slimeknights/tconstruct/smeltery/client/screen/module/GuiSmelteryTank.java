@@ -127,8 +127,8 @@ public class GuiSmelteryTank implements IScreenWithFluidTank {
    * @param mouseY    Mouse Y
    */
   public void renderHighlight(GuiGraphics graphics, int mouseX, int mouseY) {
-    int checkX = mouseX - parent.leftPos;
-    int checkY = mouseY - parent.topPos;
+    int checkX = mouseX - parent.getGuiLeft();
+    int checkY = mouseY - parent.getGuiTop();
     if (withinTank(checkX, checkY)) {
       if (tank.getContained() == 0) {
         GuiUtil.renderHighlight(graphics, x, y, width, height);
@@ -155,8 +155,8 @@ public class GuiSmelteryTank implements IScreenWithFluidTank {
    */
   public void drawTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
     // Liquids
-    int checkX = mouseX - parent.leftPos;
-    int checkY = mouseY - parent.topPos;
+    int checkX = mouseX - parent.getGuiLeft();
+    int checkY = mouseY - parent.getGuiTop();
     if (withinTank(checkX, checkY)) {
       int hovered = tank.getContained() == 0 ? -1 : getFluidFromMouse(calcLiquidHeights(false), checkY);
       List<Component> tooltip;

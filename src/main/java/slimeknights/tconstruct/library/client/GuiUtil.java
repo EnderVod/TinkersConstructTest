@@ -30,7 +30,7 @@ public final class GuiUtil {
    * @param background  Background location
    */
   public static void drawBackground(GuiGraphics graphics, AbstractContainerScreen<?> screen, ResourceLocation background) {
-    graphics.blit(background, screen.leftPos, screen.topPos, 0, 0, screen.imageWidth, screen.imageHeight);
+    graphics.blit(background, screen.getGuiLeft(), screen.getGuiTop(), 0, 0, screen.getXSize(), screen.getYSize());
   }
 
   /**
@@ -146,8 +146,8 @@ public final class GuiUtil {
     float v1 = sprite.getV0();
     int spriteHeight = sprite.contents().height();
     int spriteWidth = sprite.contents().width();
-    int startX = x + screen.leftPos;
-    int startY = y + screen.topPos;
+    int startX = x + screen.getGuiLeft();
+    int startY = y + screen.getGuiTop();
     do {
       int renderHeight = Math.min(spriteHeight, height);
       height -= renderHeight;
