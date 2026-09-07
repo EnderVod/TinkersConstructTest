@@ -39,14 +39,13 @@ jobs:
           marker = "public net.minecraft.world.item.context.BlockPlaceContext replaceClicked\n"
           if text.count(marker) != 1:
               raise RuntimeError("Expected BlockPlaceContext AT anchor exactly once")
-          additions = """
-
-# HugeFungusFeature kept these generation helpers in 1.21.1 but made them private. Tinkers' slime
-# fungus only changes base validation/height selection, then deliberately delegates stem/hat placement
-# to vanilla so behavior stays identical to the active Minecraft implementation.
-public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeStem(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V
-public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeHat(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V
-"""
+          additions = (
+              "\n# HugeFungusFeature kept these generation helpers in 1.21.1 but made them private. Tinkers' slime\n"
+              "# fungus only changes base validation/height selection, then deliberately delegates stem/hat placement\n"
+              "# to vanilla so behavior stays identical to the active Minecraft implementation.\n"
+              "public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeStem(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V\n"
+              "public net.minecraft.world.level.levelgen.feature.HugeFungusFeature placeHat(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/level/levelgen/feature/HugeFungusConfiguration;Lnet/minecraft/core/BlockPos;IZ)V\n"
+          )
           if "HugeFungusFeature placeStem" in text or "HugeFungusFeature placeHat" in text:
               raise RuntimeError("Huge fungus AT entries already present unexpectedly")
           at.write_text(text.replace(marker, marker + additions, 1), encoding="utf-8")
