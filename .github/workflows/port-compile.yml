@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Port Compile
 
-# Verify station tabs, 1.21 pattern recipe, model namespace, and GUI font access through 68330c40.
+# Verify table screen protected-field cleanup and core 1.21 recipes through 73e5c302.
 on:
   push:
     branches:
@@ -143,6 +143,51 @@ jobs:
           if bad:
               raise SystemExit('External Screen.font access remains:\n' + '\n'.join(bad))
           print('External Screen.font reads and stale font AT are gone.')
+          PY
+
+      - name: Verify cross-screen protected bounds access is gone
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          field_re = re.compile(r'\b(?!this\b)([A-Za-z_$][\w$]*)\.(imageHeight|imageWidth|topPos|leftPos)\b')
+          bad = []
+          for path in Path('src/main/java').rglob('*.java'):
+              for lineno, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if field_re.search(line):
+                      bad.append(f'{path}:{lineno}: {line.strip()}')
+          at = Path('src/main/resources/META-INF/accesstransformer.cfg').read_text(encoding='utf-8')
+          for token in ('f_97726_ # xSize', 'f_97727_ # ySize', 'f_97736_ # guiTop', 'f_97735_ # guiLeft'):
+              if token in at:
+                  bad.append('stale AbstractContainerScreen field AT: ' + token)
+          if bad:
+              raise SystemExit('Cross-screen protected container access remains:\n' + '\n'.join(bad[:200]))
+          print('No direct cross-screen imageWidth/imageHeight/leftPos/topPos access or stale field AT remains.')
+          PY
+
+      - name: Verify Minecraft 1.21 core table recipes
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected = {
+              'part_builder': 'tconstruct:part_builder',
+              'tinker_station': 'tconstruct:tinker_station',
+          }
+          root = Path('src/generated/resources/data/tconstruct/recipe/tables')
+          for name, result_id in expected.items():
+              path = root / f'{name}.json'
+              data = json.loads(path.read_text(encoding='utf-8'))
+              result = data.get('result', {})
+              if result.get('id') != result_id or 'item' in result:
+                  raise SystemExit(f'{path}: expected 1.21 result.id {result_id}, got {result!r}')
+              if data.get('key', {}).get('w', {}).get('tag') != 'tconstruct:planklike':
+                  raise SystemExit(f'{path}: expected tconstruct:planklike tag')
+          tag = Path('src/generated/resources/data/tconstruct/tags/item/planklike.json')
+          values = json.loads(tag.read_text(encoding='utf-8')).get('values', [])
+          if '#minecraft:planks' not in values:
+              raise SystemExit('Singular tags/item/planklike.json is missing #minecraft:planks')
+          print('Part Builder, Tinker Station, and planklike tag are present in 1.21 singular resource paths.')
           PY
 
       - name: Build compact compiler summary
