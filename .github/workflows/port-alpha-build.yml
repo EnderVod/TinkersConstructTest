@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Source compile green at c48211d; this workflow validates the assembled runtime JAR.
+# Runtime source includes acebd24e vanilla-namespace fix; this workflow validates the assembled JAR.
 on:
   push:
     branches:
