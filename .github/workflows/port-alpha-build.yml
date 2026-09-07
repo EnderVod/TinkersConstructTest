@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through 577afb2c with 30 tool-building resources, six guide-book recipes, starting-book resources, 1.21 fluid tags, and latest green Mantle.
+# Runtime source validated through 4ca1082d with 1.21 durability gating, table loot, cobblestone material input, recipe unlock advancements, and latest green Mantle.
 on:
   push:
     branches:
