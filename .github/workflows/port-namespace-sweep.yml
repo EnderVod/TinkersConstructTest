@@ -62,6 +62,12 @@ jobs:
           changed = []
           root = Path('src/main/java')
           for path in root.rglob('*.java'):
+              relative = path.relative_to(root)
+              # Keep our deliberately retained Forge compatibility shims in the legacy namespace.
+              # They emulate removed Forge APIs for Tinkers and must not be rewritten to NeoForge.
+              if relative.parts[:2] == ('net', 'minecraftforge'):
+                  continue
+
               original = path.read_text(encoding='utf-8')
               text = original
 
