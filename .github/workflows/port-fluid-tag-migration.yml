@@ -1,0 +1,93 @@
+name: Tinkers 1.21 Fluid Tag Migration
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - '.github/workflows/port-fluid-tag-migration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-fluid-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout port branch
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Migrate 1.20 fluid tag layout to 1.21
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='src/generated/resources/data'
+
+          # Minecraft 1.21 uses the singular registry tag folder: tags/fluid.
+          # Preserve the old generated folders for now, but mirror every namespace
+          # into the path the 1.21 resource loader actually reads.
+          for old in "$root"/*/tags/fluids; do
+            [ -d "$old" ] || continue
+            new="${old%/fluids}/fluid"
+            mkdir -p "$new"
+            cp -a "$old"/. "$new"/
+          done
+
+          # NeoForge 1.21 common tags use the c namespace. Tinkers' generated
+          # 1.20 resources still contain the Forge common fluid tags, while the
+          # migrated recipes already reference c:molten_*.
+          if [ -d "$root/forge/tags/fluids" ]; then
+            mkdir -p "$root/c/tags/fluid"
+            cp -a "$root/forge/tags/fluids"/. "$root/c/tags/fluid"/
+          fi
+
+      - name: Validate molten fluid tags used by migrated recipes
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='src/generated/resources/data'
+
+          test -f "$root/tconstruct/tags/fluid/molten_iron.json"
+          grep -q 'tconstruct:molten_iron' "$root/tconstruct/tags/fluid/molten_iron.json"
+          test -f "$root/c/tags/fluid/molten_iron.json"
+          grep -q '#tconstruct:molten_iron' "$root/c/tags/fluid/molten_iron.json"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          root = Path('src/generated/resources/data')
+          refs = set()
+          for path in (root / 'tconstruct' / 'recipe').rglob('*.json'):
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except OSError:
+                  continue
+              refs.update(re.findall(r'c:(molten_[a-z0-9_./-]+)', text))
+
+          missing = []
+          for name in sorted(refs):
+              if not (root / 'c' / 'tags' / 'fluid' / f'{name}.json').is_file():
+                  missing.append(name)
+
+          print(f'Found {len(refs)} c:molten_* recipe references')
+          if missing:
+              raise SystemExit('Missing 1.21 common fluid tag files: ' + ', '.join(missing))
+          PY
+
+      - name: Commit migrated fluid tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo 'No migration changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/generated/resources/data/*/tags/fluid
+          git commit -m 'Migrate fluid tags to 1.21 layout'
+          git push
