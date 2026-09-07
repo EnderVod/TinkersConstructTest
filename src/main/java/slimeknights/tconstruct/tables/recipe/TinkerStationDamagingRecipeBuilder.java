@@ -32,6 +32,6 @@ public class TinkerStationDamagingRecipeBuilder extends AbstractRecipeBuilder<Ti
       throw new IllegalStateException("Empty ingredient not allowed");
     }
     ResourceLocation advancementId = buildOptionalAdvancement(id, "tinker_station");
-    consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));
+    consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationDamagingRecipe(id, ingredient, damageAmount), TinkerStationDamagingRecipe.LOADER, advancementId));
   }
 }

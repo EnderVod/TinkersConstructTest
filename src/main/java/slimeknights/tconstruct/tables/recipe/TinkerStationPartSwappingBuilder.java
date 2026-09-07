@@ -57,9 +57,9 @@ public class TinkerStationPartSwappingBuilder extends AbstractRecipeBuilder<Tink
   @Override
   public void save(Consumer<FinishedRecipe> consumer, ResourceLocation id) {
     if (fromTool) {
-      consumer.accept(new LoadableFinishedRecipe<>(new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));
+      consumer.accept(new LoadableFinishedRecipe<>(id, new ToolMaterialSwappingRecipe(id, tools, maxStackSize, extraRequirements), ToolMaterialSwappingRecipe.LOADER, null));
     } else {
-      consumer.accept(new LoadableFinishedRecipe<>(new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));
+      consumer.accept(new LoadableFinishedRecipe<>(id, new TinkerStationPartSwapping(id, tools, maxStackSize, extraRequirements), TinkerStationPartSwapping.LOADER, null));
     }
   }
 }
