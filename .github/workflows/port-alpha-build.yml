@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through c0b29ba9: 1.21 Slot x/y and SmithingScreen preview access compile green.
+# Runtime source validated through 92eb826d with Mantle c7c47df: 23 station layouts load and preview tool data is bridged to 1.21 components.
 on:
   push:
     branches:
