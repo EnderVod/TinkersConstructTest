@@ -34,21 +34,29 @@ jobs:
 
           copied = 0
           changed_tags = 0
+          changed_ingredients = 0
+          renamed_items = 0
 
-          def migrate_tags(value):
-              global changed_tags
+          def migrate_data(value):
+              global changed_tags, changed_ingredients, renamed_items
               if isinstance(value, dict):
                   out = {}
                   for key, item in value.items():
                       if key == 'tag' and isinstance(item, str) and item.startswith('forge:'):
                           item = 'c:' + item[len('forge:'):]
                           changed_tags += 1
+                      elif key == 'type' and item == 'forge:difference':
+                          item = 'neoforge:difference'
+                          changed_ingredients += 1
+                      elif key == 'item' and item == 'minecraft:scute':
+                          item = 'minecraft:turtle_scute'
+                          renamed_items += 1
                       else:
-                          item = migrate_tags(item)
+                          item = migrate_data(item)
                       out[key] = item
                   return out
               if isinstance(value, list):
-                  return [migrate_tags(item) for item in value]
+                  return [migrate_data(item) for item in value]
               return value
 
           for source in sources:
@@ -60,7 +68,7 @@ jobs:
                   dst = target / src.relative_to(source)
                   dst.parent.mkdir(parents=True, exist_ok=True)
                   data = json.loads(src.read_text(encoding='utf-8'))
-                  data = migrate_tags(data)
+                  data = migrate_data(data)
                   recipe_path = dst.relative_to(root / 'recipe').with_suffix('').as_posix()
                   data['mantle_id'] = f'tconstruct:{recipe_path}'
                   dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
@@ -68,25 +76,39 @@ jobs:
 
           print(f'Copied {copied} recipe JSON files into the singular 1.21 recipe tree')
           print(f'Migrated {changed_tags} Forge tag references to the common c namespace')
+          print(f'Migrated {changed_ingredients} forge:difference ingredients to neoforge:difference')
+          print(f'Renamed {renamed_items} minecraft:scute references to minecraft:turtle_scute')
           print(f'Embedded mantle_id in {copied} loadable recipes')
 
       - name: Validate migrated recipe families
         shell: bash
         run: |
           set -euo pipefail
-          test -f src/generated/resources/data/tconstruct/recipe/tools/parts/builder/pick_head.json
-          test -f src/generated/resources/data/tconstruct/recipe/tools/materials/bone.json
-          grep -q '"type": "tconstruct:part_builder"' src/generated/resources/data/tconstruct/recipe/tools/parts/builder/pick_head.json
-          grep -q '"type": "tconstruct:material"' src/generated/resources/data/tconstruct/recipe/tools/materials/bone.json
-          grep -q '"mantle_id": "tconstruct:tools/parts/builder/pick_head"' src/generated/resources/data/tconstruct/recipe/tools/parts/builder/pick_head.json
-          grep -q '"mantle_id": "tconstruct:tools/materials/bone"' src/generated/resources/data/tconstruct/recipe/tools/materials/bone.json
-          count=$(grep -R -l '"mantle_id"' src/generated/resources/data/tconstruct/recipe/tools/parts/builder src/generated/resources/data/tconstruct/recipe/tools/materials | wc -l)
+          root=src/generated/resources/data/tconstruct/recipe/tools
+          test -f "$root/parts/builder/pick_head.json"
+          test -f "$root/materials/bone.json"
+          grep -q '"type": "tconstruct:part_builder"' "$root/parts/builder/pick_head.json"
+          grep -q '"type": "tconstruct:material"' "$root/materials/bone.json"
+          grep -q '"mantle_id": "tconstruct:tools/parts/builder/pick_head"' "$root/parts/builder/pick_head.json"
+          grep -q '"mantle_id": "tconstruct:tools/materials/bone"' "$root/materials/bone.json"
+          grep -q '"type": "neoforge:difference"' "$root/materials/wood/logs/default.json"
+          grep -q '"type": "neoforge:difference"' "$root/materials/wood/planks/default.json"
+          grep -q '"item": "minecraft:turtle_scute"' "$root/materials/turtle_scute.json"
+          count=$(grep -R -l '"mantle_id"' "$root/parts/builder" "$root/materials" | wc -l)
           if [ "$count" -ne 360 ]; then
             echo "Expected 360 migrated loadable recipes with mantle_id, found $count"
             exit 1
           fi
-          if grep -R '"tag"[[:space:]]*:[[:space:]]*"forge:' src/generated/resources/data/tconstruct/recipe/tools/parts/builder src/generated/resources/data/tconstruct/recipe/tools/materials; then
+          if grep -R '"tag"[[:space:]]*:[[:space:]]*"forge:' "$root/parts/builder" "$root/materials"; then
             echo 'Found stale Forge tag references in migrated Part Builder/material recipes'
+            exit 1
+          fi
+          if grep -R '"type"[[:space:]]*:[[:space:]]*"forge:difference"' "$root/parts/builder" "$root/materials"; then
+            echo 'Found stale forge:difference ingredient in migrated recipes'
+            exit 1
+          fi
+          if grep -R '"item"[[:space:]]*:[[:space:]]*"minecraft:scute"' "$root/parts/builder" "$root/materials"; then
+            echo 'Found stale minecraft:scute item ID in migrated recipes'
             exit 1
           fi
 
@@ -101,5 +123,5 @@ jobs:
             echo 'No migration changes to commit.'
             exit 0
           fi
-          git commit -m 'Add 1.21 loadable recipe IDs'
+          git commit -m 'Keep Part Builder recipe migration 1.21-compatible'
           git push
