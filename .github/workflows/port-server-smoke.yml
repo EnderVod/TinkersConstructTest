@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source includes migrated 1.21 Part Builder and material recipe families through b64cad67.
+# Smoke source includes migrated 1.21 Part Builder/material recipes and rejects silent custom-recipe parse failures.
 on:
   push:
     branches:
@@ -103,8 +103,23 @@ jobs:
             sleep 1
           done
 
+          combined_log=$(mktemp)
+          cat server-console.log run/server/logs/latest.log 2>/dev/null > "$combined_log" || true
+
           if [ "$ready" -eq 1 ]; then
-            echo 'Tinkers dedicated server reached the ready state successfully.'
+            # Minecraft can reach the ready state while rejecting individual datapack recipes.
+            # Treat failures in the two recipe families currently under migration as a smoke failure.
+            if grep -E 'Parsing error loading recipe tconstruct:tools/(parts/builder|materials)/' "$combined_log" > migrated-recipe-errors.txt; then
+              echo 'Tinkers server reached ready state but rejected migrated Part Builder/material recipes:'
+              cat migrated-recipe-errors.txt
+              kill -TERM "$server_pid" 2>/dev/null || true
+              sleep 2
+              kill -KILL "$server_pid" 2>/dev/null || true
+              exit 1
+            fi
+
+            echo 'Tinkers dedicated server reached the ready state with no Part Builder/material recipe parse errors.'
+            grep -E 'Loaded [0-9]+ recipes' "$combined_log" | tail -n 1 || true
             kill -TERM "$server_pid" 2>/dev/null || true
             sleep 2
             kill -KILL "$server_pid" 2>/dev/null || true
@@ -132,4 +147,5 @@ jobs:
           path: |
             server-console.log
             run/server/logs/latest.log
+            migrated-recipe-errors.txt
           if-no-files-found: warn
