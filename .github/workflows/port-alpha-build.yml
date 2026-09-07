@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated through c360e733: NeoForge sprite source registration compile green.
+# Runtime source validated through 6fad2127: walking modifier previous-position fix compile green.
 on:
   push:
     branches:
