@@ -1,4 +1,4 @@
-name: Tinkers one-shot modifier worktable 1.21 batch
+name: Tinkers one-shot table UI cleanup 1.21 batch
 
 on:
   push:
@@ -21,40 +21,61 @@ jobs:
           ref: 1.21.1-neoforge
           fetch-depth: 0
 
-      - name: Apply verified Modifier Worktable 1.21 migrations
+      - name: Apply verified small table UI migrations
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/main/java/slimeknights/tconstruct/tables/block/entity/table/ModifierWorktableBlockEntity.java")
-          text = path.read_text(encoding="utf-8")
+          def patch(path_string, replacements, forbidden=()):
+              path = Path(path_string)
+              text = path.read_text(encoding="utf-8")
+              for label, old, new in replacements:
+                  count = text.count(old)
+                  if count != 1:
+                      raise RuntimeError(f"{path}: {label}: expected one match, found {count}: {old[:160]!r}")
+                  text = text.replace(old, new, 1)
+              for legacy in forbidden:
+                  if legacy in text:
+                      raise RuntimeError(f"{path}: legacy API remains: {legacy}")
+              path.write_text(text, encoding="utf-8")
 
-          def replace_once(old, new, label):
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f"{label}: expected exactly one match, found {count}: {old[:180]!r}")
-              text = text.replace(old, new, 1)
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/menu/slot/CraftingResultSlot.java",
+              [("craft event", "ForgeEventFactory.firePlayerCraftingEvent(this.player, stack, this.container);", "EventHooks.firePlayerCraftingEvent(this.player, stack, this.container);")],
+              ("ForgeEventFactory",))
 
-          replace_once("import net.minecraftforge.common.util.LazyOptional;\n", "", "remove LazyOptional")
-          replace_once("import net.neoforged.neoforge.items.ItemHandlerHelper;\n", "", "remove copy helper import")
-          replace_once("    this.itemHandlerCap = LazyOptional.of(() -> this.itemHandler);\n", "", "remove legacy capability")
-          replace_once(
-              "Optional<IModifierWorktableRecipe> recipe = level.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MODIFIER_WORKTABLE.get(), inventoryWrapper, level);",
-              "Optional<IModifierWorktableRecipe> recipe = level.getRecipeManager().getRecipeFor(TinkerRecipeTypes.MODIFIER_WORKTABLE.get(), inventoryWrapper, level).map(holder -> holder.value());",
-              "unwrap recipe holder")
-          replace_once("ItemStack.isSameItemSameTags(original, stack)", "ItemStack.isSameItemSameComponents(original, stack)", "component-aware equality")
-          replace_once("ForgeEventFactory.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);", "EventHooks.firePlayerCraftingEvent(player, resultItem, this.inventoryWrapper);", "NeoForge craft event")
-          replace_once(
-              "this.setItem(TINKER_SLOT, ItemHandlerHelper.copyStackWithSize(tinkerable, tinkerable.getCount() - shrinkToolSlot));",
-              "this.setItem(TINKER_SLOT, tinkerable.copyWithCount(tinkerable.getCount() - shrinkToolSlot));",
-              "1.21 stack copy")
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/block/entity/chest/PartChestBlockEntity.java",
+              [("component equality", "ItemStack.isSameItemSameTags(stack, this.getStackInSlot(i))", "ItemStack.isSameItemSameComponents(stack, this.getStackInSlot(i))")],
+              ("isSameItemSameTags",))
 
-          for legacy in ("LazyOptional", "itemHandlerCap", "isSameItemSameTags", "ForgeEventFactory", "ItemHandlerHelper.copyStackWithSize"):
-              if legacy in text:
-                  raise RuntimeError(f"Legacy Modifier Worktable API remains: {legacy}")
-          path.write_text(text, encoding="utf-8")
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/client/inventory/PartInfoPanelScreen.java",
+              [
+                ("remove ComponentContents import", "import net.minecraft.network.chat.ComponentContents;\n", ""),
+                ("pattern text empty check", "this.patternCost != null && this.patternCost.getContents() != ComponentContents.EMPTY", "this.patternCost != null && !this.patternCost.getString().isEmpty()"),
+                ("material text empty check", "this.materialValue != null && this.materialValue.getContents() != ComponentContents.EMPTY", "this.materialValue != null && !this.materialValue.getString().isEmpty()"),
+              ],
+              ("ComponentContents.EMPTY",))
+
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/client/inventory/CraftingStationScreen.java",
+              [("resource location factory", "new ResourceLocation(\"textures/gui/container/crafting_table.png\")", "ResourceLocation.withDefaultNamespace(\"textures/gui/container/crafting_table.png\")")],
+              ("new ResourceLocation(\"textures/gui/container/crafting_table.png\")",))
+
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/SlotButtonItem.java",
+              [("remove final render override", """  @Override\n  public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {\n    super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);\n  }\n\n""", "")],
+              ("public void render(GuiGraphics",))
+
+          patch(
+              "src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java",
+              [
+                ("editable state via visibility", "} else if (!textField.isEditable()) {", "} else if (!textField.visible) {"),
+                ("remove obsolete EditBox tick", "    this.textField.tick();\n", ""),
+              ],
+              ("isEditable()", "textField.tick()"))
           PY
 
       - name: Commit verified batch
@@ -66,8 +87,13 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/main/java/slimeknights/tconstruct/tables/block/entity/table/ModifierWorktableBlockEntity.java
-          git commit -m "Port Modifier Worktable APIs to 1.21"
+          git add src/main/java/slimeknights/tconstruct/tables/menu/slot/CraftingResultSlot.java \
+                  src/main/java/slimeknights/tconstruct/tables/block/entity/chest/PartChestBlockEntity.java \
+                  src/main/java/slimeknights/tconstruct/tables/client/inventory/PartInfoPanelScreen.java \
+                  src/main/java/slimeknights/tconstruct/tables/client/inventory/CraftingStationScreen.java \
+                  src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/SlotButtonItem.java \
+                  src/main/java/slimeknights/tconstruct/tables/client/inventory/TinkerStationScreen.java
+          git commit -m "Port small table UI APIs to 1.21"
           git push origin HEAD:1.21.1-neoforge
 
       - name: Dispatch full port compile
