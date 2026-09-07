@@ -1,0 +1,78 @@
+name: Tinkers Equipment Slot Count Fix
+
+on:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-equipment-slot-count.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tinkers port
+        uses: actions/checkout@v4
+        with:
+          ref: 1.21.1-neoforge
+
+      - name: Replace six-slot caches with dynamic equipment slot count
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'src/main/java/slimeknights/tconstruct/library/tools/context/EquipmentContext.java': [
+                  ('new boolean[6]', 'new boolean[EquipmentSlot.values().length]'),
+                  ('new IToolStackView[6]', 'new IToolStackView[EquipmentSlot.values().length]'),
+                  ('new ArrayList<>(6)', 'new ArrayList<>(EquipmentSlot.values().length)'),
+              ],
+              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/SlotInChargeModule.java': [
+                  ('new int[6]', 'new int[EquipmentSlot.values().length]'),
+              ],
+              'src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java': [
+                  ('new UUID[6]', 'new UUID[EquipmentSlot.values().length]'),
+              ],
+              'src/main/java/slimeknights/tconstruct/library/modifiers/data/ModifierMaxLevel.java': [
+                  ('tracks all 6 slots', 'tracks all equipment slots'),
+                  ('new float[6]', 'new float[EquipmentSlot.values().length]'),
+              ],
+          }
+
+          for filename, pairs in replacements.items():
+              path = Path(filename)
+              text = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f'Expected pattern {old!r} missing from {filename}')
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+
+          # Guard the EquipmentSlot-filter-flag caches we just migrated against another hard-coded six-slot array.
+          for filename in replacements:
+              text = Path(filename).read_text(encoding='utf-8')
+              if 'getFilterFlag()' in text and any(token in text for token in ('new boolean[6]', 'new IToolStackView[6]', 'new int[6]', 'new UUID[6]', 'new float[6]')):
+                  raise SystemExit(f'Hard-coded six-slot cache remains in {filename}')
+          PY
+
+      - name: Commit equipment slot migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No equipment slot changes needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/main/java/slimeknights/tconstruct/library/tools/context/EquipmentContext.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/technical/SlotInChargeModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/modules/behavior/AttributeModule.java \
+            src/main/java/slimeknights/tconstruct/library/modifiers/data/ModifierMaxLevel.java
+          git commit -m 'Support Minecraft 1.21 equipment slot count'
+          git push origin HEAD:1.21.1-neoforge
