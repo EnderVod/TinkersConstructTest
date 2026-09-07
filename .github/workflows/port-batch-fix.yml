@@ -26,50 +26,40 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           root = Path('src/main/java/slimeknights/tconstruct')
           material = root / 'library/tools/definition/ModifiableArmorMaterial.java'
           text = material.read_text(encoding='utf-8')
 
-          old = '  public static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};'
-          new = '''  public static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};
-  /** The four humanoid armor item types. Minecraft 1.21 also has BODY for animal armor, which Tinkers does not model. */
-  public static final ArmorItem.Type[] ARMOR_TYPES = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};'''
-          if text.count(old) != 1:
+          old_slots = '  public static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD};'
+          new_slots = old_slots + '\n  /** The four humanoid armor item types. Minecraft 1.21 also has BODY for animal armor, which Tinkers does not model. */\n  public static final ArmorItem.Type[] ARMOR_TYPES = {ArmorItem.Type.HELMET, ArmorItem.Type.CHESTPLATE, ArmorItem.Type.LEGGINGS, ArmorItem.Type.BOOTS};'
+          if text.count(old_slots) != 1:
               raise RuntimeError('ARMOR_SLOTS anchor mismatch')
-          text = text.replace(old, new, 1)
+          text = text.replace(old_slots, new_slots, 1)
 
-          if text.count('ToolDefinition[] definitions = new ToolDefinition[4];') != 1:
+          old_array = 'ToolDefinition[] definitions = new ToolDefinition[4];'
+          if text.count(old_array) != 1:
               raise RuntimeError('armor definition array anchor mismatch')
-          text = text.replace('ToolDefinition[] definitions = new ToolDefinition[4];', 'ToolDefinition[] definitions = new ToolDefinition[ARMOR_TYPES.length];', 1)
+          text = text.replace(old_array, 'ToolDefinition[] definitions = new ToolDefinition[ARMOR_TYPES.length];', 1)
 
-          old = '''    for (ArmorItem.Type slot : slots) {
-      definitions[slot.ordinal()] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));
-    }'''
-          new = '''    for (ArmorItem.Type slot : slots) {
-      int index = slot.ordinal();
-      if (index >= definitions.length) {
-        throw new IllegalArgumentException("Unsupported non-humanoid armor type " + slot);
-      }
-      definitions[index] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));
-    }'''
-          if text.count(old) != 1:
+          old_loop = '    for (ArmorItem.Type slot : slots) {\n      definitions[slot.ordinal()] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));\n    }'
+          new_loop = '    for (ArmorItem.Type slot : slots) {\n      int index = slot.ordinal();\n      if (index >= definitions.length) {\n        throw new IllegalArgumentException("Unsupported non-humanoid armor type " + slot);\n      }\n      definitions[index] = ToolDefinition.create(id.withSuffix("_" + slot.getName()));\n    }'
+          if text.count(old_loop) != 1:
               raise RuntimeError('armor create loop mismatch')
-          text = text.replace(old, new, 1)
+          text = text.replace(old_loop, new_loop, 1)
 
-          if text.count('return create(id, equipSound, ArmorItem.Type.values());') != 1:
+          old_default = 'return create(id, equipSound, ArmorItem.Type.values());'
+          if text.count(old_default) != 1:
               raise RuntimeError('default armor type list mismatch')
-          text = text.replace('return create(id, equipSound, ArmorItem.Type.values());', 'return create(id, equipSound, ARMOR_TYPES);', 1)
+          text = text.replace(old_default, 'return create(id, equipSound, ARMOR_TYPES);', 1)
 
-          old = '    return armorDefinitions[slotType.ordinal()];'
-          new = '''    int index = slotType.ordinal();
-    return index < armorDefinitions.length ? armorDefinitions[index] : null;'''
-          if text.count(old) != 1:
+          old_lookup = '    return armorDefinitions[slotType.ordinal()];'
+          new_lookup = '    int index = slotType.ordinal();\n    return index < armorDefinitions.length ? armorDefinitions[index] : null;'
+          if text.count(old_lookup) != 1:
               raise RuntimeError('armor definition lookup mismatch')
-          text = text.replace(old, new, 1)
+          text = text.replace(old_lookup, new_lookup, 1)
           material.write_text(text, encoding='utf-8')
 
-          # All remaining Tinkers usages of Type.values() mean the four player armor pieces.
-          # In 1.21 values() also contains BODY, intended for animal body armor.
           replacement = 'slimeknights.tconstruct.library.tools.definition.ModifiableArmorMaterial.ARMOR_TYPES'
           changed = []
           count = 0
@@ -82,17 +72,14 @@ jobs:
                   count += hits
                   path.write_text(source.replace('ArmorItem.Type.values()', replacement), encoding='utf-8')
                   changed.append((str(path), hits))
+
           if count != 22:
               raise RuntimeError(f'Expected 22 remaining ArmorItem.Type.values() uses, found {count}: {changed}')
 
-          # Assert the old five-type iteration cannot re-enter these 4-slot systems.
-          leftovers = []
-          for path in root.rglob('*.java'):
-              if 'ArmorItem.Type.values()' in path.read_text(encoding='utf-8'):
-                  leftovers.append(str(path))
+          leftovers = [str(path) for path in root.rglob('*.java') if 'ArmorItem.Type.values()' in path.read_text(encoding='utf-8')]
           if leftovers:
               raise RuntimeError(f'Legacy ArmorItem.Type.values() remains: {leftovers}')
-          print(f'Patched {count + 1} ArmorItem.Type.values() call sites across Tinkers')
+          print(f'Patched {count + 1} armor type call sites across Tinkers')
           PY
 
       - name: Commit armor type migration
