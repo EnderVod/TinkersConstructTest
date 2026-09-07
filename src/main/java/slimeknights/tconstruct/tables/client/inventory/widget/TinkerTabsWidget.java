@@ -183,8 +183,8 @@ public class TinkerTabsWidget implements Renderable, GuiEventListener, Narratabl
         title = world.getBlockState(pos).getBlock().getName();
       }
 
-      // TODO: renderComponentTooltip->renderTooltip
-      graphics.renderComponentTooltip(parent.font, Lists.newArrayList(title), mouseX, mouseY);
+      // Screen.font is protected in 1.21.1; use Minecraft's public font instance instead.
+      graphics.renderComponentTooltip(parent.getMinecraft().font, Lists.newArrayList(title), mouseX, mouseY);
     }
   }
 
