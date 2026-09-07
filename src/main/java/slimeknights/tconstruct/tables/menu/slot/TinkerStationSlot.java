@@ -10,6 +10,7 @@ import slimeknights.tconstruct.tables.block.entity.table.TinkerStationBlockEntit
  * Class for common logic with tinker station input slots.
  * Slot coordinates are dynamically repositioned by TinkerStationScreen; Minecraft 1.21 requires the named x/y AT entries
  * so the final coordinate fields are transformed before the client screen updates the selected tool layout.
+ * The same runtime pass also validates the SmithingScreen transforms used by the armor-stand preview.
  */
 public class TinkerStationSlot extends Slot {
   private final LazyResultContainer craftResult;
