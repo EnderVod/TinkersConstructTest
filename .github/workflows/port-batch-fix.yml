@@ -63,8 +63,8 @@ jobs:
                           leftovers.append((str(path), old))
           if leftovers:
               raise RuntimeError(f'Legacy Forge condition IDs remain: {leftovers[:20]}')
-          if total < 550:
-              raise RuntimeError(f'Expected a broad stale-condition migration, only replaced {total} values')
+          if total != 317:
+              raise RuntimeError(f'Expected exactly 317 stale built-in condition IDs, found {total}')
           print(f'Migrated {total} condition codec IDs across {files} JSON files')
 
           worldgen = Path('src/main/java/slimeknights/tconstruct/world/data/WorldgenProvider.java')
