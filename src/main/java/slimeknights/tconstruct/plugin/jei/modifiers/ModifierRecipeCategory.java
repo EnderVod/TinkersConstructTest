@@ -27,6 +27,7 @@ import slimeknights.tconstruct.library.tools.SlotType.SlotCount;
 import slimeknights.tconstruct.library.tools.helper.ToolBuildHandler;
 import slimeknights.tconstruct.library.tools.item.IModifiable;
 import slimeknights.tconstruct.plugin.jei.TConstructJEIConstants;
+import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;
 import slimeknights.tconstruct.tools.TinkerModifiers;
 import slimeknights.tconstruct.tools.item.CreativeSlotItem;
 
@@ -109,19 +110,17 @@ public class ModifierRecipeCategory extends AbstractRecipeCategory<IDisplayModif
 
   @Override
   public void createRecipeExtras(IRecipeExtrasBuilder builder, IDisplayModifierRecipe recipe, IFocusGroup focuses) {
-    builder.addRecipeArrowWidget().setPosition(71, 33);
+    builder.addRecipeArrow().setPosition(71, 33);
     ModifierEntry result = recipe.getDisplayResult();
     Component requirementsError = result.getHook(ModifierHooks.REQUIREMENTS).requirementsError(result);
     if (requirementsError != null) {
-      builder.addDrawableWidget(requirements).setPosition(66, 58).setTooltip(requirementsError);
+      builder.addWidget(new RecipeTooltipWidget(requirements, 66, 58, requirementsError));
     }
     if (recipe.isIncremental()) {
-      builder.addDrawableWidget(incremental).setPosition(83, 59).setTooltip(TEXT_INCREMENTAL);
+      builder.addWidget(new RecipeTooltipWidget(incremental, 83, 59, TEXT_INCREMENTAL));
     }
     if (recipe.getSlots() == null) {
-      builder.addDrawableWidget(SLOTLESS)
-        .setPosition(102, 58)
-        .setTooltip(SlotIngredientRenderer.TEXT_FREE);
+      builder.addWidget(new RecipeTooltipWidget(SLOTLESS, 102, 58, SlotIngredientRenderer.TEXT_FREE));
     }
     Component levelText = getLevelText(recipe);
     if (levelText != null) {

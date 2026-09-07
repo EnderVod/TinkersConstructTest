@@ -67,7 +67,7 @@ public class AlloyRecipeCategory extends AbstractRecipeCategory<AlloyRecipe> {
 
   @Override
   public void createRecipeExtras(IRecipeExtrasBuilder builder, AlloyRecipe recipe, IFocusGroup focuses) {
-    builder.addDrawableWidget(arrow).setPosition(90, 21);
+    builder.addDrawable(arrow).setPosition(90, 21);
     builder.addText(Component.translatable(KEY_TEMPERATURE, recipe.getTemperature()), 139, 9)
       .setPosition(33, 5)
       .setColor(Color.GRAY.getRGB())

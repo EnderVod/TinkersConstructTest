@@ -57,7 +57,7 @@ public class EntityMeltingRecipeCategory extends AbstractRecipeCategory<EntityMe
 
   @Override
   public void createRecipeExtras(IRecipeExtrasBuilder builder, EntityMeltingRecipe recipe, IFocusGroup focuses) {
-    builder.addDrawableWidget(arrow).setPosition(71, 21);
+    builder.addDrawable(arrow).setPosition(71, 21);
     builder.addText(Component.literal(Float.toString(recipe.getDamage() / 2f)), 84, 9)
       .setPosition(0, 8)
       .setColor(Color.RED.getRGB())

@@ -19,6 +19,7 @@ import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.recipe.tinkerstation.building.ToolBuildingRecipe;
 import slimeknights.tconstruct.library.tools.item.IModifiableDisplay;
 import slimeknights.tconstruct.library.tools.layout.LayoutSlot;
+import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;
 import slimeknights.tconstruct.tools.TinkerTools;
 
 import java.util.ArrayList;
@@ -50,9 +51,9 @@ public class ToolBuildingCategory extends AbstractRecipeCategory<ToolBuildingRec
 
   @Override
   public void createRecipeExtras(IRecipeExtrasBuilder builder, ToolBuildingRecipe recipe, IFocusGroup focuses) {
-    builder.addRecipeArrowWidget().setPosition(74, 22);
+    builder.addRecipeArrow().setPosition(74, 22);
     if (recipe.requiresAnvil()) {
-      builder.addDrawableWidget(anvil).setPosition(76, 44).setTooltip(ANVIL);
+      builder.addWidget(new RecipeTooltipWidget(anvil, 76, 44, ANVIL));
     }
   }
 

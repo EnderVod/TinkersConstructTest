@@ -86,7 +86,7 @@ public class MaterialsCraftingExtension<T extends CraftingRecipe & MaterialsCraf
   }
 
   /** Sets the recipe in the builder */
-  public static void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, CraftingRecipe recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {
+  public static <R extends CraftingRecipe & MaterialsCraftingTableRecipe> void setRecipe(ICraftingCategoryExtension self, IRecipeLayoutBuilder builder, ICraftingGridHelper craftingGridHelper, R recipe, List<ItemStack> result, ItemStack plainResult, @Nullable int[] materialSlots) {
     builder.addInvisibleIngredients(RecipeIngredientRole.OUTPUT).addItemStack(plainResult);
 
     // apply ingredient stacks

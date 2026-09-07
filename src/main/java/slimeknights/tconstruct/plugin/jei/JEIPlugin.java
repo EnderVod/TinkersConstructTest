@@ -187,9 +187,9 @@ public class JEIPlugin implements IModPlugin {
   @SuppressWarnings("deprecation")
   @Override
   public void registerVanillaCategoryExtensions(IVanillaCategoryExtensionRegistration registry) {
-    registry.getCraftingCategory().addCategoryExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new);
-    registry.getCraftingCategory().addCategoryExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create);
-    registry.getCraftingCategory().addCategoryExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless);
+    registry.getCraftingCategory().addExtension(ShapedMaterialRecipe.class, ShapedMaterialExtension::new);
+    registry.getCraftingCategory().addExtension(ShapedMaterialsRecipe.class, ShapedMaterialsExtension::create);
+    registry.getCraftingCategory().addExtension(ShapelessMaterialsRecipe.class, MaterialsCraftingExtension::shapeless);
   }
 
   @Override

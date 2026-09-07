@@ -15,6 +15,7 @@ import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.recipe.worktable.IModifierWorktableRecipe;
 import slimeknights.tconstruct.plugin.jei.TConstructJEIConstants;
+import slimeknights.tconstruct.plugin.jei.util.RecipeTooltipWidget;
 import slimeknights.tconstruct.tables.TinkerTables;
 
 import java.util.List;
@@ -42,7 +43,7 @@ public class ModifierWorktableCategory extends AbstractRecipeCategory<IModifierW
     builder.addText(recipe.getTitle(), 115, 9)
       .setPosition(3, 2)
       .setColor(0x404040);
-    builder.addTooltipArea(0, 2, 121, 11).setTooltip(recipe.getDescription(null));
+    builder.addWidget(new RecipeTooltipWidget(0, 2, 121, 11, recipe.getDescription(null)));
   }
 
   @Override
