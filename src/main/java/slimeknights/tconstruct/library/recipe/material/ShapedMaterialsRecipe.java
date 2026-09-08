@@ -7,6 +7,7 @@ import lombok.Getter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.ItemStack;
@@ -317,6 +318,11 @@ public class ShapedMaterialsRecipe implements CraftingRecipe, MaterialsCraftingT
         }
         buffer.writeVarInt(index);
       }
+    }
+
+    @Override
+    public void toNetworkSafe(RegistryFriendlyByteBuf buffer, ShapedMaterialsRecipe recipe) {
+      toNetworkSafe((FriendlyByteBuf) buffer, recipe);
     }
   }
 }
