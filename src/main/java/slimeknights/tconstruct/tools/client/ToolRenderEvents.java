@@ -3,7 +3,6 @@ package slimeknights.tconstruct.tools.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.SheetedDecalTextureGenerator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -13,7 +12,6 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -31,7 +29,6 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
 import slimeknights.tconstruct.TConstruct;
 import slimeknights.tconstruct.common.TinkerTags;
 import slimeknights.tconstruct.library.tools.definition.module.ToolHooks;
@@ -94,7 +91,7 @@ public class ToolRenderEvents {
     // set up renderer
     LevelRenderer worldRender = event.getLevelRenderer();
     PoseStack matrices = event.getPoseStack();
-    MultiBufferSource.BufferSource buffers = worldRender.renderBuffers.bufferSource();
+    MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
     VertexConsumer vertexBuilder = buffers.getBuffer(RenderType.lines());
     matrices.pushPose();
 
@@ -153,14 +150,11 @@ public class ToolRenderEvents {
     // find breaking progress
     BlockHitResult blockTrace = (BlockHitResult)result;
     BlockPos target = blockTrace.getBlockPos();
-    BlockDestructionProgress progress = null;
-    for (Int2ObjectMap.Entry<BlockDestructionProgress> entry : Minecraft.getInstance().levelRenderer.destroyingBlocks.int2ObjectEntrySet()) {
-      if (entry.getValue().getPos().equals(target)) {
-        progress = entry.getValue();
-        break;
-      }
-    }
-    if (progress == null) {
+    // 1.21 exposes the local breaking stage through MultiPlayerGameMode.
+    // Avoid reaching into LevelRenderer.destroyingBlocks, which is private and
+    // no longer safely accessible through the old SRG access transformer.
+    int destroyStage = controller.getDestroyStage();
+    if (destroyStage < 0 || destroyStage >= ModelBakery.DESTROY_TYPES.size()) {
       return;
     }
     // determine extra blocks to highlight
@@ -178,8 +172,8 @@ public class ToolRenderEvents {
     // set up buffers
     PoseStack matrices = event.getPoseStack();
     matrices.pushPose();
-    MultiBufferSource.BufferSource vertices = event.getLevelRenderer().renderBuffers.crumblingBufferSource();
-    VertexConsumer vertexBuilder = vertices.getBuffer(ModelBakery.DESTROY_TYPES.get(progress.getProgress()));
+    MultiBufferSource.BufferSource vertices = Minecraft.getInstance().renderBuffers().crumblingBufferSource();
+    VertexConsumer vertexBuilder = vertices.getBuffer(ModelBakery.DESTROY_TYPES.get(destroyStage));
 
     // finally, render the blocks
     Camera renderInfo = Minecraft.getInstance().gameRenderer.getMainCamera();
