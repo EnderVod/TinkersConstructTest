@@ -1,0 +1,101 @@
+name: Port Tool Render Public API
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-tool-render-public-api.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Remove private LevelRenderer access
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/main/java/slimeknights/tconstruct/tools/client/ToolRenderEvents.java')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace('import it.unimi.dsi.fastutil.ints.Int2ObjectMap;\n', '')
+          text = text.replace('import net.minecraft.server.level.BlockDestructionProgress;\n', '')
+
+          old_buffers = 'MultiBufferSource.BufferSource buffers = worldRender.renderBuffers.bufferSource();'
+          new_buffers = 'MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();'
+          if old_buffers not in text:
+              raise SystemExit('Could not find highlight renderBuffers access')
+          text = text.replace(old_buffers, new_buffers)
+
+          old_progress = '''    BlockDestructionProgress progress = null;
+    for (Int2ObjectMap.Entry<BlockDestructionProgress> entry : Minecraft.getInstance().levelRenderer.destroyingBlocks.int2ObjectEntrySet()) {
+      if (entry.getValue().getPos().equals(target)) {
+        progress = entry.getValue();
+        break;
+      }
+    }
+    if (progress == null) {
+      return;
+    }
+'''
+          new_progress = '''    // 1.21 exposes the local breaking stage through MultiPlayerGameMode.
+    // Avoid reaching into LevelRenderer.destroyingBlocks, which is private and
+    // no longer safely accessible through the old SRG access transformer.
+    int destroyStage = controller.getDestroyStage();
+    if (destroyStage < 0 || destroyStage >= ModelBakery.DESTROY_TYPES.size()) {
+      return;
+    }
+'''
+          if old_progress not in text:
+              raise SystemExit('Could not find private destroyingBlocks scan')
+          text = text.replace(old_progress, new_progress)
+
+          old_crumbling = 'MultiBufferSource.BufferSource vertices = event.getLevelRenderer().renderBuffers.crumblingBufferSource();'
+          new_crumbling = 'MultiBufferSource.BufferSource vertices = Minecraft.getInstance().renderBuffers().crumblingBufferSource();'
+          if old_crumbling not in text:
+              raise SystemExit('Could not find crumbling renderBuffers access')
+          text = text.replace(old_crumbling, new_crumbling)
+
+          old_destroy_type = 'VertexConsumer vertexBuilder = vertices.getBuffer(ModelBakery.DESTROY_TYPES.get(progress.getProgress()));'
+          new_destroy_type = 'VertexConsumer vertexBuilder = vertices.getBuffer(ModelBakery.DESTROY_TYPES.get(destroyStage));'
+          if old_destroy_type not in text:
+              raise SystemExit('Could not find destruction progress texture lookup')
+          text = text.replace(old_destroy_type, new_destroy_type)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Validate public rendering APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=src/main/java/slimeknights/tconstruct/tools/client/ToolRenderEvents.java
+          grep -q 'controller.getDestroyStage()' "$file"
+          grep -q 'Minecraft.getInstance().renderBuffers().bufferSource()' "$file"
+          grep -q 'Minecraft.getInstance().renderBuffers().crumblingBufferSource()' "$file"
+          ! grep -q 'levelRenderer.destroyingBlocks' "$file"
+          ! grep -q '\.renderBuffers\.bufferSource' "$file"
+          ! grep -q '\.renderBuffers\.crumblingBufferSource' "$file"
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/slimeknights/tconstruct/tools/client/ToolRenderEvents.java
+          if git diff --cached --quiet; then
+            echo 'No tool render changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Use public 1.21 APIs for tool break rendering'
+          git push
