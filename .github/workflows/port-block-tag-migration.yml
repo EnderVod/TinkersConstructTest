@@ -41,8 +41,6 @@ jobs:
               return value
 
           def merge_tag(existing, incoming):
-              # Generated block tag JSON is normally {"replace": ..., "values": [...]};
-              # preserve any already-ported entries if a destination file exists.
               result = dict(incoming)
               if not isinstance(existing, dict):
                   return result
@@ -63,7 +61,6 @@ jobs:
           namespaces = {}
           for old_root in old_roots:
               namespace = old_root.parents[1].name
-              # Forge's common tag namespace was replaced by c: in NeoForge.
               dest_namespace = 'c' if namespace == 'forge' else namespace
               new_root = data_root / dest_namespace / 'tags' / 'block'
               copied = 0
@@ -101,7 +98,6 @@ jobs:
           set -euo pipefail
           root=src/generated/resources/data
 
-          # These two tags directly drive Pickadze/Mattock effectiveness and mining speed.
           test -f "$root/tconstruct/tags/block/mineable/pickadze.json"
           test -f "$root/tconstruct/tags/block/mineable/mattock.json"
           grep -q '#minecraft:mineable/pickaxe' "$root/tconstruct/tags/block/mineable/pickadze.json"
@@ -109,12 +105,10 @@ jobs:
           grep -q '#minecraft:mineable/shovel' "$root/tconstruct/tags/block/mineable/mattock.json"
           grep -q '#minecraft:logs' "$root/tconstruct/tags/block/mineable/mattock.json"
 
-          # Tinkers adds its blocks to vanilla mining tags; those contributions also need the 1.21 path.
           for file in mineable/pickaxe.json mineable/shovel.json mineable/axe.json; do
             test -f "$root/minecraft/tags/block/$file"
           done
 
-          # Forge common block tags are moved into NeoForge's c: namespace.
           test -d "$root/c/tags/block"
           if grep -R -q '"#forge:' "$root"/*/tags/block 2>/dev/null; then
             echo 'Stale #forge tag references remain in migrated 1.21 block-tag trees.'
@@ -133,7 +127,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'src/generated/resources/data/*/tags/block'
+          find src/generated/resources/data -type d -path '*/tags/block' -print0 | xargs -0 -r git add --
           if git diff --cached --quiet; then
             echo 'No block tag changes to commit.'
             exit 0
