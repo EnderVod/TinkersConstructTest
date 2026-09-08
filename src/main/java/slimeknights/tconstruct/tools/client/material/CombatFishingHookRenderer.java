@@ -151,12 +151,32 @@ public class CombatFishingHookRenderer extends EntityRenderer<CombatFishingHook>
       consumer = buffer.getBuffer(RenderType.lineStrip());
       lastPose = poseStack.last();
       for (int i = 0; i <= 16; i++) {
-        FishingHookRenderer.stringVertex(hookXOff, hookYOff, hookZOff, consumer, lastPose, i / 16f, (i + 1) / 16f);
+        stringVertex(hookXOff, hookYOff, hookZOff, consumer, lastPose, i / 16f, (i + 1) / 16f);
       }
 
       poseStack.popPose();
       super.render(hook, yaw, partialTicks, poseStack, buffer, packedLight);
     }
+  }
+
+  /** Local copy of vanilla fishing line generation; the vanilla helper is private in 1.21.1. */
+  private static void stringVertex(float xOff, float yOff, float zOff, VertexConsumer consumer, PoseStack.Pose pose, float fraction, float nextFraction) {
+    float x = xOff * fraction;
+    float y = yOff * (fraction * fraction + fraction) * 0.5F + 0.25F;
+    float z = zOff * fraction;
+    float nextX = xOff * nextFraction;
+    float nextY = yOff * (nextFraction * nextFraction + nextFraction) * 0.5F + 0.25F;
+    float nextZ = zOff * nextFraction;
+    float normalX = nextX - x;
+    float normalY = nextY - y;
+    float normalZ = nextZ - z;
+    float length = Mth.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+    if (length > 0.0F) {
+      normalX /= length;
+      normalY /= length;
+      normalZ /= length;
+    }
+    consumer.addVertex(pose.pose(), x, y, z).setColor(0, 0, 0, 255).setNormal(pose, normalX, normalY, normalZ);
   }
 
   @Override
