@@ -6,6 +6,7 @@ import lombok.Getter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.item.ItemStack;
@@ -128,6 +129,11 @@ public class ShapelessMaterialsRecipe implements CraftingRecipe, MaterialsCrafti
       SHAPELESS_RECIPE.toNetwork(buffer, recipe.recipe);
       buffer.writeByte(recipe.partCount);
       MATERIAL_FIELD.encode(buffer, recipe);
+    }
+
+    @Override
+    public void toNetworkSafe(RegistryFriendlyByteBuf buffer, ShapelessMaterialsRecipe recipe) {
+      toNetworkSafe((FriendlyByteBuf) buffer, recipe);
     }
   }
 }
