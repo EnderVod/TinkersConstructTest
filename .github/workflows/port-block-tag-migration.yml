@@ -1,0 +1,142 @@
+name: Port Block Tag Migration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1.21.1-neoforge
+    paths:
+      - .github/workflows/port-block-tag-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Migrate block tags to Minecraft 1.21 singular paths
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+
+          data_root = Path('src/generated/resources/data')
+          old_roots = sorted(data_root.glob('*/tags/blocks'))
+          if not old_roots:
+              raise SystemExit('No legacy tags/blocks trees found')
+
+          def migrate_value(value):
+              if isinstance(value, list):
+                  return [migrate_value(v) for v in value]
+              if isinstance(value, dict):
+                  return {k: migrate_value(v) for k, v in value.items()}
+              if isinstance(value, str) and value.startswith('#forge:'):
+                  return '#c:' + value[len('#forge:'):]
+              return value
+
+          def merge_tag(existing, incoming):
+              # Generated block tag JSON is normally {"replace": ..., "values": [...]};
+              # preserve any already-ported entries if a destination file exists.
+              result = dict(incoming)
+              if not isinstance(existing, dict):
+                  return result
+              old_values = existing.get('values')
+              new_values = incoming.get('values')
+              if isinstance(old_values, list) and isinstance(new_values, list):
+                  merged = []
+                  for entry in old_values + new_values:
+                      if entry not in merged:
+                          merged.append(entry)
+                  result['values'] = merged
+              if existing.get('replace') is True:
+                  result['replace'] = True
+              return result
+
+          file_count = 0
+          forge_refs = 0
+          namespaces = {}
+          for old_root in old_roots:
+              namespace = old_root.parents[1].name
+              # Forge's common tag namespace was replaced by c: in NeoForge.
+              dest_namespace = 'c' if namespace == 'forge' else namespace
+              new_root = data_root / dest_namespace / 'tags' / 'block'
+              copied = 0
+              for src in sorted(old_root.rglob('*.json')):
+                  rel = src.relative_to(old_root)
+                  dst = new_root / rel
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  raw = json.loads(src.read_text(encoding='utf-8'))
+
+                  def count_forge(v):
+                      if isinstance(v, list):
+                          return sum(count_forge(x) for x in v)
+                      if isinstance(v, dict):
+                          return sum(count_forge(x) for x in v.values())
+                      return int(isinstance(v, str) and v.startswith('#forge:'))
+
+                  forge_refs += count_forge(raw)
+                  migrated = migrate_value(raw)
+                  if dst.exists():
+                      existing = json.loads(dst.read_text(encoding='utf-8'))
+                      migrated = merge_tag(existing, migrated)
+                  dst.write_text(json.dumps(migrated, indent=2) + '\n', encoding='utf-8')
+                  file_count += 1
+                  copied += 1
+              namespaces[f'{namespace}->{dest_namespace}'] = copied
+
+          print(f'Migrated {file_count} legacy block tag files to tags/block')
+          print(f'Converted {forge_refs} legacy #forge tag references to #c')
+          for namespace, count in sorted(namespaces.items()):
+              print(f'  {namespace}: {count}')
+
+      - name: Validate mining and common block tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=src/generated/resources/data
+
+          # These two tags directly drive Pickadze/Mattock effectiveness and mining speed.
+          test -f "$root/tconstruct/tags/block/mineable/pickadze.json"
+          test -f "$root/tconstruct/tags/block/mineable/mattock.json"
+          grep -q '#minecraft:mineable/pickaxe' "$root/tconstruct/tags/block/mineable/pickadze.json"
+          grep -q '#minecraft:mineable/shovel' "$root/tconstruct/tags/block/mineable/pickadze.json"
+          grep -q '#minecraft:mineable/shovel' "$root/tconstruct/tags/block/mineable/mattock.json"
+          grep -q '#minecraft:logs' "$root/tconstruct/tags/block/mineable/mattock.json"
+
+          # Tinkers adds its blocks to vanilla mining tags; those contributions also need the 1.21 path.
+          for file in mineable/pickaxe.json mineable/shovel.json mineable/axe.json; do
+            test -f "$root/minecraft/tags/block/$file"
+          done
+
+          # Forge common block tags are moved into NeoForge's c: namespace.
+          test -d "$root/c/tags/block"
+          if grep -R -q '"#forge:' "$root"/*/tags/block 2>/dev/null; then
+            echo 'Stale #forge tag references remain in migrated 1.21 block-tag trees.'
+            grep -R '"#forge:' "$root"/*/tags/block | head -n 40
+            exit 1
+          fi
+
+          old_count=$(find "$root" -path '*/tags/blocks/*.json' -o -path '*/tags/blocks/*/*.json' | wc -l)
+          new_count=$(find "$root" -path '*/tags/block/*.json' -o -path '*/tags/block/*/*.json' | wc -l)
+          echo "Legacy block tags: $old_count; singular block tags now present: $new_count"
+          echo 'Validated Pickadze/Mattock and vanilla mining block-tag migration.'
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'src/generated/resources/data/*/tags/block'
+          if git diff --cached --quiet; then
+            echo 'No block tag changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Migrate block tags to 1.21 paths'
+          git push
