@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated with the 1.21 block-tag migration for tool effectiveness/mining speed, station repair/part swapping, and the Mantle recipe-ID codec bridge.
+# Package the 1.21 block-tag migration after green compile/server smoke validation for Pickadze/Mattock effectiveness and mining speed.
 on:
   push:
     branches:
@@ -13,14 +13,10 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: tinkers-1.21.1-alpha-build-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  assemble:
+  build-alpha:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Checkout Tinkers port
         uses: actions/checkout@v4
@@ -62,36 +58,26 @@ jobs:
           cp "$mantle_jar" libs/
           echo "Using Mantle dependency: $(basename "$mantle_jar")"
 
-      - name: Assemble Tinkers runtime
-        shell: bash
-        run: |
-          set -o pipefail
-          ./gradlew assemble --no-daemon --stacktrace 2>&1 | tee alpha-build.log
+      - name: Build Tinkers alpha
+        run: ./gradlew build --no-daemon --stacktrace
 
       - name: Collect runtime JAR
         shell: bash
         run: |
-          mkdir -p runtime-artifact
-          runtime_jar=$(find build/libs -maxdepth 1 -type f -name 'TinkersConstruct-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
-          if [ -z "$runtime_jar" ]; then
-            echo 'No Tinkers runtime JAR was produced.'
-            find build/libs -maxdepth 1 -type f -print || true
+          set -euo pipefail
+          mkdir -p alpha
+          jar=$(find build/libs -maxdepth 1 -type f -name 'TinkersConstruct-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+          if [ -z "$jar" ]; then
+            echo 'Could not find runtime Tinkers JAR.'
+            find build/libs -maxdepth 1 -type f -print
             exit 1
           fi
-          cp "$runtime_jar" runtime-artifact/
-          echo "Runtime candidate: $(basename "$runtime_jar")"
+          cp "$jar" alpha/
+          echo "Runtime alpha: $(basename "$jar")"
 
-      - name: Upload alpha runtime JAR
+      - name: Upload runtime alpha
         uses: actions/upload-artifact@v4
         with:
-          name: tinkers-1.21.1-alpha-runtime
-          path: runtime-artifact/*.jar
+          name: tinkers-1.21.1-alpha
+          path: alpha/*.jar
           if-no-files-found: error
-
-      - name: Upload alpha build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tinkers-1.21.1-alpha-build-log
-          path: alpha-build.log
-          if-no-files-found: warn
