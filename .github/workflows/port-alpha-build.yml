@@ -1,12 +1,18 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Package the 1.21 block-tag migration after green compile/server smoke validation for Pickadze/Mattock effectiveness and mining speed.
+# Package the current 1.21.1 NeoForge runtime against the latest green Mantle port.
 on:
   push:
     branches:
       - 1.21.1-neoforge
     paths:
       - .github/workflows/port-alpha-build.yml
+      - build.gradle
+      - gradle.properties
+      - settings.gradle
+      - src/main/java/**
+      - src/main/resources/**
+      - src/generated/resources/**
   workflow_dispatch:
 
 permissions:
