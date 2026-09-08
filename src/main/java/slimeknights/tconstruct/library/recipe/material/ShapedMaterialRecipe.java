@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
@@ -188,6 +189,11 @@ public class ShapedMaterialRecipe implements CraftingRecipe {
     public void toNetworkSafe(FriendlyByteBuf buffer, ShapedMaterialRecipe recipe) {
       SHAPED_RECIPE.toNetwork(buffer, recipe.recipe);
       MATERIAL_FIELD.encode(buffer, recipe);
+    }
+
+    @Override
+    public void toNetworkSafe(RegistryFriendlyByteBuf buffer, ShapedMaterialRecipe recipe) {
+      toNetworkSafe((FriendlyByteBuf) buffer, recipe);
     }
   }
 }
