@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Server Smoke Test
 
-# Smoke source includes corrected 1.21 vanilla/custom tool-building recipes, guide-book recipes, starting-book resources, and Part Builder/material recipes.
+# Smoke source includes corrected 1.21 vanilla/custom tool-building recipes, station repair/part swapping, guide-book recipes, starting-book resources, and Part Builder/material recipes.
 on:
   push:
     branches:
@@ -109,7 +109,7 @@ jobs:
           if [ "$ready" -eq 1 ]; then
             # Minecraft can reach the ready state while rejecting individual datapack entries.
             # Treat failures in the resource families currently under migration as smoke failures.
-            if grep -E 'Parsing error loading recipe tconstruct:tools/(parts/builder|materials|building)/|Parsing error loading recipe tconstruct:common/(materials_and_you|puny_smelting|mighty_smelting|fantastic_foundry|tinkers_gadgetry|encyclopedia)|([Ee]rror|[Ff]ailed|[Cc]ouldn.t).*tconstruct:(internal/starting_book|gameplay/starting_book)' "$combined_log" > migrated-resource-errors.txt; then
+            if grep -E 'Parsing error loading recipe tconstruct:tools/(parts/builder|materials|building)/|Parsing error loading recipe tconstruct:tables/(tinker_station_repair|crafting_table_repair|tinker_station_part_swapping|tool_material_swapping|ammo_part_swapping|throwing_axe_part_swapping)|Parsing error loading recipe tconstruct:common/(materials_and_you|puny_smelting|mighty_smelting|fantastic_foundry|tinkers_gadgetry|encyclopedia)|([Ee]rror|[Ff]ailed|[Cc]ouldn.t).*tconstruct:(internal/starting_book|gameplay/starting_book)' "$combined_log" > migrated-resource-errors.txt; then
               echo 'Tinkers server reached ready state but rejected migrated resources:'
               cat migrated-resource-errors.txt
               kill -TERM "$server_pid" 2>/dev/null || true
