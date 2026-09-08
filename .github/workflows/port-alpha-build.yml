@@ -58,8 +58,8 @@ jobs:
           cp "$mantle_jar" libs/
           echo "Using Mantle dependency: $(basename "$mantle_jar")"
 
-      - name: Build Tinkers alpha
-        run: ./gradlew build --no-daemon --stacktrace
+      - name: Assemble Tinkers alpha
+        run: ./gradlew assemble --no-daemon --stacktrace
 
       - name: Collect runtime JAR
         shell: bash
