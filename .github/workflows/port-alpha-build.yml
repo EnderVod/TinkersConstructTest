@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated with the 1.21 singular item-tag migration and public 1.21 tool-break rendering APIs, plus durability gating, table loot, cobblestone material input, recipe unlock advancements, and latest green Mantle.
+# Runtime source validated with 1.21 station repair/part-swapping recipes and Mantle recipe-ID codec bridge, plus durability/stat handling and earlier table/resource fixes.
 on:
   push:
     branches:
