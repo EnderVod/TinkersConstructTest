@@ -1,4 +1,4 @@
-name: Port Runtime Tool Fixes
+name: Tinkers 1.21.1 Runtime Validation
 
 on:
   workflow_dispatch:
@@ -7,196 +7,55 @@ on:
       - 1.21.1-neoforge
     paths:
       - .github/workflows/port-runtime-tools-fixes.yml
+      - src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java
+      - src/generated/resources/data/minecraft/tags/item/arrows.json
+      - src/generated/resources/data/tconstruct/recipe/tools/materials/string.json
+      - src/generated/resources/data/tconstruct/recipe/tools/armor/travelers/**
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  fix:
+  validate-runtime-migrations:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Tinkers port
         uses: actions/checkout@v4
-        with:
-          token: ${{ github.token }}
 
-      - name: Fix combat fishing hook renderer
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path('src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java')
-          text = path.read_text(encoding='utf-8')
-          old_call = 'FishingHookRenderer.stringVertex(hookXOff, hookYOff, hookZOff, consumer, lastPose, i / 16f, (i + 1) / 16f);'
-          if old_call not in text:
-              raise SystemExit('Expected private FishingHookRenderer.stringVertex call was not found')
-          text = text.replace(old_call, 'stringVertex(hookXOff, hookYOff, hookZOff, consumer, lastPose, i / 16f, (i + 1) / 16f);')
-
-          marker = '  @Override\n  public ResourceLocation getTextureLocation(CombatFishingHook pEntity) {'
-          helper = '''  /** Local copy of vanilla fishing-line segment generation. Vanilla made this helper private. */
-          private static void stringVertex(float xOff, float yOff, float zOff, VertexConsumer consumer, PoseStack.Pose pose, float fraction, float nextFraction) {
-            float x = xOff * fraction;
-            float y = yOff * (fraction * fraction + fraction) * 0.5F + 0.25F;
-            float z = zOff * fraction;
-            float nextX = xOff * nextFraction;
-            float nextY = yOff * (nextFraction * nextFraction + nextFraction) * 0.5F + 0.25F;
-            float nextZ = zOff * nextFraction;
-            float normalX = nextX - x;
-            float normalY = nextY - y;
-            float normalZ = nextZ - z;
-            float length = Mth.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
-            if (length > 0.0F) {
-              normalX /= length;
-              normalY /= length;
-              normalZ /= length;
-            }
-            consumer.addVertex(pose.pose(), x, y, z)
-              .setColor(0, 0, 0, 255)
-              .setNormal(pose, normalX, normalY, normalZ);
-          }
-
-'''
-          if marker not in text:
-              raise SystemExit('Could not find insertion point for fishing-line helper')
-          text = text.replace(marker, helper + marker, 1)
-          path.write_text(text, encoding='utf-8')
-
-      - name: Migrate all item tags to 1.21 singular paths
-        shell: python
-        run: |
-          from pathlib import Path
-          import json
-
-          data_root = Path('src/generated/resources/data')
-          old_roots = sorted(data_root.glob('*/tags/items'))
-          if not old_roots:
-              raise SystemExit('No legacy tags/items trees found')
-
-          def migrate_value(value):
-              if isinstance(value, list):
-                  return [migrate_value(v) for v in value]
-              if isinstance(value, dict):
-                  return {k: migrate_value(v) for k, v in value.items()}
-              if isinstance(value, str) and value.startswith('#forge:'):
-                  return '#c:' + value[len('#forge:'):]
-              return value
-
-          def merge_tag(existing, incoming):
-              result = dict(incoming)
-              if not isinstance(existing, dict):
-                  return result
-              old_values = existing.get('values')
-              new_values = incoming.get('values')
-              if isinstance(old_values, list) and isinstance(new_values, list):
-                  merged = []
-                  for entry in old_values + new_values:
-                      if entry not in merged:
-                          merged.append(entry)
-                  result['values'] = merged
-              if existing.get('replace') is True:
-                  result['replace'] = True
-              return result
-
-          count = 0
-          namespaces = {}
-          for old_root in old_roots:
-              namespace = old_root.parents[1].name
-              dest_namespace = 'c' if namespace == 'forge' else namespace
-              new_root = data_root / dest_namespace / 'tags' / 'item'
-              copied = 0
-              for src in sorted(old_root.rglob('*.json')):
-                  rel = src.relative_to(old_root)
-                  dst = new_root / rel
-                  dst.parent.mkdir(parents=True, exist_ok=True)
-                  incoming = migrate_value(json.loads(src.read_text(encoding='utf-8')))
-                  if dst.exists():
-                      incoming = merge_tag(json.loads(dst.read_text(encoding='utf-8')), incoming)
-                  dst.write_text(json.dumps(incoming, indent=2) + '\n', encoding='utf-8')
-                  count += 1
-                  copied += 1
-              namespaces[f'{namespace}->{dest_namespace}'] = copied
-
-          print(f'Migrated {count} legacy item-tag files to tags/item')
-          for namespace, copied in sorted(namespaces.items()):
-              print(f'  {namespace}: {copied}')
-
-      - name: Restore string material and travelers gear recipes
-        shell: python
-        run: |
-          from pathlib import Path
-          import json
-
-          def migrate_json(value):
-              if isinstance(value, list):
-                  return [migrate_json(v) for v in value]
-              if isinstance(value, dict):
-                  return {k: migrate_json(v) for k, v in value.items()}
-              if isinstance(value, str) and value.startswith('forge:'):
-                  return 'c:' + value[len('forge:'):]
-              return value
-
-          pairs = []
-          legacy_string = Path('src/generated/resources/data/tconstruct/recipes/tools/materials/string.json')
-          pairs.append((legacy_string, Path('src/generated/resources/data/tconstruct/recipe/tools/materials/string.json')))
-
-          legacy_travelers = Path('src/generated/resources/data/tconstruct/recipes/tools/armor/travelers')
-          for src in sorted(legacy_travelers.rglob('*.json')):
-              rel = src.relative_to(legacy_travelers)
-              pairs.append((src, Path('src/generated/resources/data/tconstruct/recipe/tools/armor/travelers') / rel))
-
-          for src, dst in pairs:
-              if not src.exists():
-                  raise SystemExit(f'Missing legacy recipe {src}')
-              dst.parent.mkdir(parents=True, exist_ok=True)
-              data = migrate_json(json.loads(src.read_text(encoding='utf-8')))
-              dst.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
-              print(f'{src} -> {dst}')
-
-      - name: Validate runtime fixes
-        shell: python
-        run: |
-          from pathlib import Path
-          import json
-
-          renderer = Path('src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java').read_text(encoding='utf-8')
-          if 'FishingHookRenderer.stringVertex(' in renderer:
-              raise SystemExit('Private vanilla fishing renderer call remains')
-          if 'private static void stringVertex(' not in renderer:
-              raise SystemExit('Local fishing-line helper is missing')
-
-          arrows = json.loads(Path('src/generated/resources/data/minecraft/tags/item/arrows.json').read_text(encoding='utf-8'))
-          if 'tconstruct:arrow' not in arrows.get('values', []):
-              raise SystemExit('Tinkers arrow is still absent from singular minecraft:arrows item tag')
-
-          common_string = Path('src/generated/resources/data/c/tags/item/string.json')
-          if not common_string.exists():
-              raise SystemExit('Migrated c:string compatibility tag is missing')
-
-          string_recipe = Path('src/generated/resources/data/tconstruct/recipe/tools/materials/string.json')
-          string_data = json.loads(string_recipe.read_text(encoding='utf-8'))
-          if string_data.get('ingredient', {}).get('tag') != 'c:string':
-              raise SystemExit(f'String material recipe did not migrate to c:string: {string_data!r}')
-
-          traveler_root = Path('src/generated/resources/data/tconstruct/recipe/tools/armor/travelers')
-          for name in ('goggles.json', 'chestplate.json', 'pants.json', 'boots.json'):
-              path = traveler_root / name
-              if not path.exists():
-                  raise SystemExit(f'Missing migrated travelers recipe {path}')
-              if 'forge:' in path.read_text(encoding='utf-8'):
-                  raise SystemExit(f'Legacy Forge tag remains in {path}')
-
-          print('Fishing renderer, arrow tag, string material, and travelers recipes are migrated.')
-
-      - name: Commit runtime fixes
+      - name: Validate migrated runtime assets
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java src/generated/resources/data
-          if git diff --cached --quiet; then
-            echo 'No runtime tool changes to commit.'
-            exit 0
-          fi
-          git commit -m 'Fix fishing, arrows, string material and travelers recipes'
-          git push
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          renderer_path = Path('src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java')
+          renderer = renderer_path.read_text(encoding='utf-8')
+          if 'FishingHookRenderer.stringVertex(' in renderer:
+              raise SystemExit('Private vanilla FishingHookRenderer.stringVertex call remains')
+          if 'private static void stringVertex(' not in renderer:
+              raise SystemExit('Local fishing-line stringVertex helper is missing')
+
+          arrows_path = Path('src/generated/resources/data/minecraft/tags/item/arrows.json')
+          arrows = json.loads(arrows_path.read_text(encoding='utf-8'))
+          if 'tconstruct:arrow' not in arrows.get('values', []):
+              raise SystemExit('Tinkers arrow is absent from minecraft:arrows')
+
+          string_recipe_path = Path('src/generated/resources/data/tconstruct/recipe/tools/materials/string.json')
+          string_recipe = json.loads(string_recipe_path.read_text(encoding='utf-8'))
+          string_tag = string_recipe.get('ingredient', {}).get('tag')
+          if string_tag != 'c:strings':
+              raise SystemExit(f'Expected common string tag c:strings, got {string_tag!r}')
+
+          traveler_root = Path('src/generated/resources/data/tconstruct/recipe/tools/armor/travelers')
+          expected = ('goggles.json', 'chestplate.json', 'pants.json', 'boots.json')
+          for name in expected:
+              path = traveler_root / name
+              if not path.is_file():
+                  raise SystemExit(f'Missing migrated travelers recipe: {path}')
+              text = path.read_text(encoding='utf-8')
+              if 'forge:' in text:
+                  raise SystemExit(f'Legacy Forge tag remains in {path}')
+
+          print('Runtime migration checks passed: fishing renderer, arrows, strings, and travelers recipes.')
+          PY
