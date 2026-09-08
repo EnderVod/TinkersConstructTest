@@ -8,6 +8,8 @@ on:
     paths:
       - .github/workflows/port-runtime-tools-fixes.yml
       - src/main/java/slimeknights/tconstruct/tools/client/material/CombatFishingHookRenderer.java
+      - src/main/java/slimeknights/tconstruct/tools/client/ToolRenderEvents.java
+      - src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/TinkerTabsWidget.java
       - src/generated/resources/data/minecraft/tags/item/arrows.json
       - src/generated/resources/data/tconstruct/recipe/tools/materials/string.json
       - src/generated/resources/data/tconstruct/recipe/tools/armor/travelers/**
@@ -36,6 +38,16 @@ jobs:
           if 'private static void stringVertex(' not in renderer:
               raise SystemExit('Local fishing-line stringVertex helper is missing')
 
+          tool_render_path = Path('src/main/java/slimeknights/tconstruct/tools/client/ToolRenderEvents.java')
+          tool_render = tool_render_path.read_text(encoding='utf-8')
+          if 'controller.getDestroyStage()' not in tool_render:
+              raise SystemExit('Block-damage renderer is not using the public 1.21 destroy-stage API')
+
+          tabs_path = Path('src/main/java/slimeknights/tconstruct/tables/client/inventory/widget/TinkerTabsWidget.java')
+          tabs = tabs_path.read_text(encoding='utf-8')
+          if 'parent.getMinecraft().font' not in tabs:
+              raise SystemExit('Tinker tabs tooltip is not using Minecraft public font access')
+
           arrows_path = Path('src/generated/resources/data/minecraft/tags/item/arrows.json')
           arrows = json.loads(arrows_path.read_text(encoding='utf-8'))
           if 'tconstruct:arrow' not in arrows.get('values', []):
@@ -57,5 +69,5 @@ jobs:
               if 'forge:' in text:
                   raise SystemExit(f'Legacy Forge tag remains in {path}')
 
-          print('Runtime migration checks passed: fishing renderer, arrows, strings, and travelers recipes.')
+          print('Known 1.21 runtime regressions and resource migrations validated successfully.')
           PY
