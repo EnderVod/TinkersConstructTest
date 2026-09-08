@@ -1,6 +1,6 @@
 name: Tinkers 1.21.1 Alpha Build
 
-# Runtime source validated with 1.21 station repair/part-swapping recipes and Mantle recipe-ID codec bridge, plus durability/stat handling and earlier table/resource fixes.
+# Runtime source validated with the 1.21 block-tag migration for tool effectiveness/mining speed, station repair/part swapping, and the Mantle recipe-ID codec bridge.
 on:
   push:
     branches:
